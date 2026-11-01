@@ -23,6 +23,7 @@ async function postJson(url, body, headers = {}, timeoutMs = TIMEOUT_MS) {
   try {
     const res = await fetch(url, {
       method: "POST",
+      redirect: "error",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -79,17 +80,18 @@ async function streamLines(res, onObject, isSse) {
 async function postStream(url, body, headers = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  });
-  if (!res.ok) {
-    clearTimeout(timer);
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
-  }
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST", redirect: "error",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+  } catch (err) { clearTimeout(timer); throw err; }
   return { res, done: () => clearTimeout(timer) };
 }
 
@@ -124,6 +126,8 @@ const ollama = {
     const { messages: fitted, dropped } = fit(messages, { tools });
     const body = {
       model: model || config.llm.ollamaModel,
+      // Interactive default: do not spend time generating hidden reasoning.
+      think: config.llm.ollamaThink,
       messages: toOllamaMessages(fitted),
       stream: Boolean(onDelta),
       options: { temperature: 0.4, num_ctx: ctx.numCtx, num_predict: ctx.numPredict },

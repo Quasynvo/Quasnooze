@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { startScheduler } from "./scheduler.js";
 import { nodeSupport } from "./runtime.js";
 import { startMcpTools } from "./mcp.js";
+import { startWindowsCompanion } from "./windows-companion.js";
 import { registerTool } from "./tools.js";
 
 const c = {
@@ -190,7 +191,11 @@ async function main() {
   console.log(c.dim(`   approvals: ${config.autoApprove ? "AUTO-APPROVE ON (risky)" : "ask in chat"}`));
   console.log(c.dim(`   data: ${config.dataDir}\n   ctrl-c to stop\n`));
 
+  const companion = config.desktopRequested ? startWindowsCompanion({ log }) : null;
+  if (companion) log.info("Windows companion started; microphone is muted. Enable local wake from its widget or tray.");
+
   const shutdown = () => {
+    companion?.stop();
     console.log(c.dim("\n🦞 pinching out…"));
     scheduler.stop();
     stopAll();

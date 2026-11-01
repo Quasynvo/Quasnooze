@@ -17,7 +17,9 @@ process.env.PINCH_AUTO_APPROVE = "false";
 
 const modelRequests = [];
 let tagsFail = false;
+let modelFailure = false, modelRedirect = false, redirectedRequests = 0;
 const modelServer = createServer(async (req, res) => {
+  if (req.url === "/redirect-target") { redirectedRequests++; return res.end("{}"); }
   if (req.url === "/api/tags") {
     res.writeHead(tagsFail ? 503 : 200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ models: [{ name: "fast:latest" }, { name: "coder:7b" }] }));
@@ -27,6 +29,8 @@ const modelServer = createServer(async (req, res) => {
   const body = JSON.parse(raw);
   modelRequests.push({ path: req.url, body });
   const local = req.url === "/api/chat";
+  if (local && modelFailure) { res.writeHead(404); return res.end(JSON.stringify({ error: "model not found" })); }
+  if (local && modelRedirect) { res.writeHead(302, { location: "/redirect-target" }); return res.end(); }
   const toolRound = local && body.messages.some((m) => m.role === "user" && m.content === "force-tool-loop") && !body.messages.some((m) => m.role === "tool");
   const message = toolRound
     ? { content: "", tool_calls: [{ function: { name: "calculator", arguments: { expression: "2+2" } } }] }
@@ -190,4 +194,35 @@ test("models: /model is shared by every channel without calling the LLM", async 
     await routeMessage({ channel: "web", text: "/model default", send: async () => {} });
     assert.equal(brain.active.provider, "mock");
   } finally { brain.resetModel(); }
+});
+
+
+test("a recovered model is not primed with old offline transport errors", async () => {
+  const { brain } = await import("../src/brain.js");
+  const { loadSession } = await import("../src/store.js");
+  try {
+    await brain.setModel({ provider: "ollama", model: "coder:7b" });
+    modelFailure = true;
+    const failure = await runAgent({ sessionId: "recover-offline", text: "hello" });
+    assert.equal(failure.error, "brain-unreachable");
+    assert.match(failure.text, /model not found/);
+    assert.equal(loadSession("recover-offline").messages.at(-1).error, "brain-unreachable");
+    modelFailure = false;
+    const recovered = await runAgent({ sessionId: "recover-offline", text: "try again" });
+    assert.equal(recovered.error, null);
+    assert.match(recovered.text, /local coder:7b/);
+    assert.ok(!modelRequests.at(-1).body.messages.some((m) => m.role === "assistant" && /brain is unreachable/.test(m.content)));
+    assert.equal(modelRequests.at(-1).body.think, false);
+  } finally { modelFailure = false; brain.resetModel(); }
+});
+
+test("model requests never follow redirects, in streaming or non-streaming mode", async () => {
+  const { brain } = await import("../src/brain.js");
+  try {
+    await brain.setModel({ provider: "ollama", model: "coder:7b" });
+    modelRedirect = true;
+    await assert.rejects(brain.chat([{ role: "user", content: "hello" }]));
+    await assert.rejects(brain.chat([{ role: "user", content: "hello" }], { onDelta() {} }));
+    assert.equal(redirectedRequests, 0);
+  } finally { modelRedirect = false; brain.resetModel(); }
 });
