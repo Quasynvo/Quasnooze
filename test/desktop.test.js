@@ -158,3 +158,10 @@ test("reminders arriving during an approval do not clear native gates or resume 
   assert.match((await request).text, /Reminder: Time to stretch/);
   assert.equal(native.messages.filter((m) => m.op === "reply").length, 1);
 });
+
+test("PowerShell compilation resolves installed GAC assembly locations, not bare speech DLL names", () => {
+  const script = readFileSync(new URL("../desktop/windows.ps1", import.meta.url), "utf8");
+  assert.match(script, /\[System\.Speech\.Recognition\.SpeechRecognitionEngine\]\.Assembly\.Location/);
+  assert.match(script, /-ReferencedAssemblies \$references/);
+  assert.doesNotMatch(script, /['"]System\.Speech\.dll['"]/);
+});
