@@ -18,46 +18,66 @@ alert is manually dismissed. A successful PR analysis validates the proposed
 source revision; default-branch alert closure requires merge and a subsequent
 `main` analysis.
 
-## Alert 1: branch protection — intentionally still open
+## Alert 1: branch protection — independent-review rollout
 
 [OpenSSF Scorecard's Branch-Protection finding](https://github.com/pinchfoundry/Pinch/security/code-scanning/1)
-is a repository-governance setting, not a JavaScript defect. Changing source alone
-cannot resolve it.
+is a repository-governance finding, not a JavaScript defect. It cannot be resolved
+by changing application code or dismissing the alert.
 
-An authenticated inspection found:
+### Owner-approved policy, 2026-11-02
 
-- `main` already has required, up-to-date CI checks and one required approving
-  review. Force pushes and branch deletion are prohibited.
-- Classic branch protection has stale-review dismissal enabled, but administrator
-  enforcement and last-push approval are disabled.
-- An additional active ruleset has stale-review dismissal disabled and requires
-  code-owner review, but there is no `CODEOWNERS` file. It also has role/app/deploy-key
-  bypasses. The two configurations should be reviewed together, not inferred from
-  one historical scanner message.
-- Only one collaborator currently has write/admin access. Other collaborators do
-  not have the access needed for independent required approvals.
+The owner superseded the earlier decision to defer stricter governance, selected
+`@kaitoayohama1` as an independent reviewer, explicitly approved granting Write
+access, and approved the one-reviewer policy below. GitHub confirmed that access
+change. `@RANJITHROSAN17` remains the administrator; no other collaborator's access
+was changed.
 
-The owner explicitly chose to retain the current practical merge policy and
-**defer stricter governance**, rather than silently block merges by removing the
-only maintainer's bypass. This change does not modify protection settings,
-collaborator access, bypass actors, Scorecard thresholds or alert state. The
-remaining finding is not dismissed, suppressed or called fixed.
+The accompanying repository-settings rollout is intended to enforce:
 
-### Before tightening the policy
+- One required independent approving review, including code-owner review once
+  this CODEOWNERS file is merged to the base branch.
+- Stale-review dismissal and approval of the most recent reviewable push in both
+  classic protection and the existing ruleset.
+- Classic administrator enforcement for `main`.
+- Existing up-to-date, required `test (22)`, `test (24)`, `test (26)` and `smoke`
+  checks, with their existing GitHub Actions app binding, unchanged.
+- Existing prohibitions on force push and branch deletion unchanged.
 
-1. Identify trusted independent reviewers and explicitly agree their repository
-   access. Do not grant permissions merely to improve a scanner score.
-2. Create a `CODEOWNERS` file using real, eligible reviewers or teams; verify their
-   access and review availability. A sole author's name does not create independent
-   review of that author's PRs.
-3. Reconcile classic protection and rulesets: stale-review dismissal, last-push
-   approval, required checks, review count, code-owner coverage and intentional
-   exceptions. Review bypass permissions individually rather than deleting them
-   without understanding automation and recovery requirements.
-4. If the project chooses the highest Scorecard tier, arrange at least two eligible
-   independent approvals and administrator enforcement. Accept the operational
-   cost before applying those requirements.
-5. Test the proposed policy with a harmless PR, retain an administrative recovery
-   path, then rerun Scorecard on the default branch and inspect its actual result.
+`.github/CODEOWNERS` names both verified eligible owners. This permits reciprocal
+review: the maintainer can review the independent reviewer's work, and the reviewer
+can review the maintainer's work. An author cannot approve their own PR; neither
+an approval by the last pusher nor a stale approval satisfies the new policy.
+The owner accepted that reviewer availability is now required to merge.
 
-The goal is an enforceable review process, not a cosmetic green dashboard.
+### Bypass review and remaining limits
+
+The existing `merge` ruleset targets **all branches**, not only `main`. It contains
+Write/Maintain/Admin role bypasses plus deploy-key and application bypass entries.
+The authenticated inventory returned no deploy keys and no organisation app
+installations. These unused-looking entries are not evidence of an active app's
+identity or future requirements. They are retained in this narrowly approved
+rollout: deleting role bypasses from the all-branch ruleset could also block ordinary
+feature-branch pushes. No broad ruleset scope or bypass change is hidden in this PR.
+
+Classic protection independently enforces the new review requirements on `main`,
+including administrators. A ruleset bypass is not an exception to an independently
+applicable classic protection rule. Nonetheless Scorecard can still penalise the
+presence of ruleset bypass actors, and the one-reviewer policy is deliberately not
+the maximum two-reviewer tier. A future main/release-specific ruleset and individually
+approved exception cleanup require a separate scope/automation review.
+
+### Verification and closure
+
+This source PR supplies CODEOWNERS but does not merge it. GitHub evaluates code
+owners from the PR's **base branch**, so existing PRs do not gain automatic code-owner
+coverage merely because this file exists on an unmerged branch. Request the named
+reviewer explicitly during this rollout.
+
+After applying settings, reread the actual protections, required checks, ruleset
+and reviewer permission; verify GitHub reports no CODEOWNERS syntax errors on the
+proposed branch; request an independent review; and run the Security workflow on
+`main`. Required approval is an expected blocker, not a reason to bypass or weaken
+the policy. This change does not merge any PR, remove protections, alter Scorecard
+thresholds, suppress rules or dismiss alerts. Do not call alert #1 fixed until a
+fresh default-branch analysis actually reports that result. CODEOWNERS coverage
+requires review and merge, followed by another default-branch scan.
