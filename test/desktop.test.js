@@ -132,7 +132,7 @@ test("command deck never requests browser speech recognition and safely renders 
   assert.doesNotMatch(html, /new (?:webkit)?SpeechRecognition|getUserMedia|innerHTML\s*=/);
   assert.match(html, /textContent=record|textContent=\(record/);
   assert.match(html, /sessionStorage.setItem/);
-  const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const source = html.match(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/i)[1];
   assert.doesNotThrow(() => new Function(source));
 });
 
