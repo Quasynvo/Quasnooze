@@ -37,6 +37,7 @@ ${c.coral("🦞 pinch")} — local, private, yours
 
   ${c.bold("pinch")}                 start Pinch (web panel + configured chat apps)
   ${c.bold("pinch setup")}           guided setup — brain, Telegram, Discord, Slack, WhatsApp, voice
+  ${c.bold("pinch desktop")}         Windows resident assistant; microphone starts muted
   ${c.bold("pinch doctor")}          verify configuration and connectivity
   ${c.bold("pinch chat")}            chat in the terminal
   ${c.bold("pinch ask")} "question"  one-shot answer
@@ -66,6 +67,9 @@ switch (command) {
   case "start":
   case "serve":
     run("src/index.js");
+    break;
+  case "desktop":
+    run("scripts/desktop.js", rest);
     break;
   case "audit":
     run("scripts/audit.js", rest);

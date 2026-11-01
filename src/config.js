@@ -5,6 +5,7 @@
  * `git clone && node src/index.js` works with no install step.
  */
 import { readFileSync, existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,8 @@ export function loadEnv(root = ROOT) {
 }
 
 const env = loadEnv();
+// Only the explicit Windows launcher enables the resident companion.
+const desktopRequested = process.platform === "win32" && process.env.PINCH_DESKTOP === "1";
 
 const list = (value) =>
   (value || "")
@@ -64,18 +67,20 @@ export const config = Object.freeze({
   ownerName: env.OWNER_NAME || "friend",
   timezone: env.OWNER_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
 
-  host: env.PINCH_HOST || "0.0.0.0",
+  desktopRequested,
+  host: desktopRequested ? "127.0.0.1" : env.PINCH_HOST || "0.0.0.0",
   // Was PINCH_HOST actually set? An empty key plus the *default* wildcard bind
   // is an accident; an explicit 0.0.0.0 is a decision, and the two deserve
   // different treatment at boot.
   hostExplicit: Boolean(env.PINCH_HOST),
   port: Number(env.PINCH_PORT || 7777),
-  authKey: env.PINCH_KEY || "",
+  authKey: env.PINCH_KEY || (desktopRequested ? randomBytes(32).toString("hex") : ""),
 
   llm: Object.freeze({
     provider: (env.LLM_PROVIDER || "ollama").toLowerCase(),
     ollamaUrl: (env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, ""),
     ollamaModel: env.OLLAMA_MODEL || "qwen2.5-coder:7b",
+    ollamaThink: bool(env.OLLAMA_THINK, false),
     openaiBaseUrl: (env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
     openaiKey: env.OPENAI_API_KEY || "",
     openaiModel: env.OPENAI_MODEL || "gpt-4o-mini",
@@ -86,7 +91,7 @@ export const config = Object.freeze({
   profilePath: env.PINCH_PROFILE || join(env.PINCH_DATA || join(ROOT, "data"), "profile.md"),
   // Set PINCH_GUARD=off to silence the post-reply honesty check (not advised).
   disableGuard: /^(0|false|off|no)$/i.test(env.PINCH_GUARD || ""),
-  autoApprove: bool(env.PINCH_AUTO_APPROVE, false),
+  autoApprove: desktopRequested ? false : bool(env.PINCH_AUTO_APPROVE, false),
   // Read-only shell commands run without a prompt; everything else still asks.
   // Off restores "ask for every shell command", which is the old behaviour.
   riskTiers: !["0", "false", "off", "no"].includes(String(env.PINCH_RISK_TIERS || "").toLowerCase()),

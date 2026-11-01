@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>A personal AI assistant that runs on your own computer.</b><br/>
-  It reads your code, runs commands, remembers you, sends you reminders, and runs the tasks you schedule.<br/>
+  Open everyday apps, find files, set reminders, ask questions — and approve sensitive actions yourself.<br/>
   You talk to it from Telegram, Discord, Slack, WhatsApp — or your phone's browser, by voice.
 </p>
 
@@ -31,9 +31,21 @@
   <a href="https://github.com/pinchfoundry/Pinch/discussions"><img alt="discussions" src="https://img.shields.io/badge/discussions-open-ff6a4d?logo=github" /></a>
 </p>
 
+## Windows: presence, not just another chat tab
+
+The new **resident-assistant preview** adds a native tray/widget, opt-in local **“Hey Pinch”**, local Windows speech, a talk hotkey and explicit action confirmations. Time, system status, bounded filename search and allowlisted app launches skip the language model. The command deck shows real native/mic/model state, results and approvals; the existing web conversation remains linked separately.
+
+After guided setup, run **`npm run desktop`** on Windows 10/11 with Node.js 22+. The microphone starts muted every time. Local reasoning uses loopback Ollama; there is no mandatory cloud audio or remote-model fallback in resident requests. **Real Windows microphone/startup behavior still needs hardware acceptance testing; this is not universal desktop automation or a finished Jarvis replacement.**
+
+![Pinch command deck — actual mock-service capture, no Windows host](docs/images/command-deck.png)
+
+[Setup, implemented commands, architecture, privacy, latency boundaries and verification →](docs/DESKTOP.md)
+
 ## Try it before connecting your accounts
 
 Clone the repository, enter its directory, and run `npm run demo` with Node.js 22+. This uses a **canned brain**: it demonstrates the interaction flow, not a real model’s reasoning quality. You do not need a bot token or cloud API key for that demo. **Demo mode disables the panel key and is not a security sandbox; keep it on a trusted local machine and do not expose or forward its port.**
+
+The default web home is now the command deck. Use **Conversation history** (`/index.html`) for the existing canned-brain conversation demo or normal web chat; native voice/app actions require the Windows launcher.
 
 For real use, follow the guided setup below, then run `npm run doctor` and `npm run brain`. Try a harmless read-only question before granting approvals for file changes or commands. Local inference is the default; optional cloud providers and messaging services have their own data boundaries. Read [the guide](docs/GUIDE.md) and [security limitations](docs/AUDIT.md) before exposing the panel or enabling powerful tools.
 
@@ -45,7 +57,7 @@ For real use, follow the guided setup below, then run `npm run doctor` and `npm 
 | **Kind** | Self-hosted personal AI assistant / agent gateway |
 | **Runs on** | Linux, macOS, Windows — Node.js 22+ |
 | **Model** | Local by default (Ollama); any OpenAI-compatible API optionally |
-| **Channels** | Telegram, Discord, Slack, WhatsApp, web panel (installable PWA) |
+| **Channels** | Telegram, Discord, Slack, WhatsApp, web panel (installable PWA); Windows resident preview |
 | **Tools** | See the [capability inventory](docs/CAPABILITIES.json) for implemented tools, boundaries and test evidence |
 | **Runtime dependencies** | Zero |
 | **Licence** | MIT — free, no account, no subscription |

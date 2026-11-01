@@ -192,7 +192,12 @@ export async function runAgent({
   const unattended = autonomy === "unattended";
   const startedAt = Date.now();
   const session = loadSession(sessionId);
-  const recent = session.messages.filter((m) => m.role === "user" || m.role === "assistant").slice(-24);
+  // A transport failure is UI/runtime evidence, not the assistant's persona.
+  // Do not prime a recovered model to keep claiming it is offline.
+  const recent = session.messages.filter((m) =>
+    (m.role === "user" || m.role === "assistant") &&
+    !(m.role === "assistant" && (m.error === "brain-unreachable" || /^🦞 My brain is unreachable/.test(m.content)))
+  ).slice(-24);
   // Only the last attachment-bearing message keeps its excerpt; older ones keep
   // the one-line "you attached X" note, which is enough to answer follow-ups
   // without carrying 2 KB of document per turn.
@@ -243,6 +248,7 @@ export async function runAgent({
   const trace = [];
   const toolOutputs = [];
   let finalText = "";
+  let brainFailed = false;
   let rounds = 0;
   let tokens = 0;
   let toolBudget = TOOL_OUTPUT_BUDGET;
@@ -272,6 +278,7 @@ export async function runAgent({
         },
       });
     } catch (err) {
+      brainFailed = true;
       finalText =
         `🦞 My brain is unreachable: ${err.message}\n\n` +
         `Check ${activeModel.provider} / ${activeModel.model}; for Ollama use \`ollama serve\` and pull the selected model.`;
@@ -422,7 +429,7 @@ export async function runAgent({
   const citations = validateCitations({ text: finalText, sources: listSources(sources) });
 
   let guard = { flags: [], clean: true };
-  if (!config.disableGuard && !/^🦞 My brain is unreachable/.test(finalText)) {
+  if (!config.disableGuard && !brainFailed) {
     guard = auditReply({
       reply: finalText,
       trace,
@@ -455,7 +462,7 @@ export async function runAgent({
     });
   }
 
-  appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags });
+  appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags, ...(brainFailed ? { error: "brain-unreachable" } : {}) });
 
   const ms = Date.now() - startedAt;
   record({
@@ -473,11 +480,12 @@ export async function runAgent({
     tools: trace.length,
     auto: autoRan,
     guardFlags: guard.flags.length,
-    error: /^🦞 My brain is unreachable/.test(finalText) ? "brain-unreachable" : null,
+    error: brainFailed ? "brain-unreachable" : null,
   });
 
   return {
     text: finalText,
+    error: brainFailed ? "brain-unreachable" : null,
     trace,
     sessionId,
     guard: guard.flags,

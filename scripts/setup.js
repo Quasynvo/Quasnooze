@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolveModelChoice } from "../src/model-choice.js";
 import { checkVoice } from "../src/voice.js";
 /**
  * scripts/setup.js — the guided onboarding.
@@ -281,11 +282,18 @@ async function setup() {
     const probe = await checkOllama(values.OLLAMA_URL);
     if (probe.ok) {
       ok(`Ollama is running — ${probe.models.length} model(s) installed`);
-      if (probe.models.length) hint(probe.models.slice(0, 6).join(", "));
-      values.OLLAMA_MODEL = await ask(
-        "Model",
-        values.OLLAMA_MODEL || probe.models[0] || "qwen2.5-coder:7b"
-      );
+      probe.models.forEach((name, index) => hint(`${index + 1}. ${name}`));
+      let selected = false;
+      while (!selected) {
+        try {
+          values.OLLAMA_MODEL = resolveModelChoice(
+            await ask("Model number or name", values.OLLAMA_MODEL || probe.models[0] || "qwen2.5-coder:7b"),
+            probe.models,
+            probe.models[0]
+          );
+          selected = true;
+        } catch (err) { warn(err.message); }
+      }
       if (!probe.models.includes(values.OLLAMA_MODEL)) {
         const pull = await confirm(`"${values.OLLAMA_MODEL}" is not installed. Pull it now? (~4GB)`, true);
         if (pull) {

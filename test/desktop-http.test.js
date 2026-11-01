@@ -1,0 +1,55 @@
+import { get } from "node:http";
+import test, { after } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const data = mkdtempSync(join(tmpdir(), "pinch-desktop-http-"));
+process.env.PINCH_DATA = data;
+process.env.PINCH_WORKSPACE = data;
+process.env.LLM_PROVIDER = "mock";
+process.env.PINCH_KEY = "desktop-test-key";
+const { createPinchServer } = await import("../src/server.js");
+const { ensureData } = await import("../src/store.js"); ensureData();
+const server = createPinchServer(); await new Promise(r => server.listen(0, "127.0.0.1", r));
+const base = `http://127.0.0.1:${server.address().port}`;
+const headers = { "x-pinch-key": "desktop-test-key", "content-type": "application/json" };
+after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); rmSync(data, { recursive: true, force: true }); });
+
+test("desktop API has the existing key, Origin, Host and cookie-only defenses", async () => {
+  assert.equal((await fetch(base + "/api/desktop")).status, 401);
+  assert.equal((await fetch(base + "/api/desktop", { headers: { cookie: "pinch_key=desktop-test-key" } })).status, 401);
+  assert.equal((await fetch(base + "/api/desktop", { headers: { ...headers, origin: "https://attacker.invalid" } })).status, 403);
+  const foreignHost = await new Promise((resolve, reject) => {
+    get(base + "/api/desktop", { headers: { ...headers, host: "attacker.invalid" } }, (response) => { response.resume(); resolve(response.statusCode); }).on("error", reject);
+  });
+  assert.equal(foreignHost, 403);
+  const response = await fetch(base + "/api/desktop", { headers });
+  assert.equal(response.status, 200); assert.equal((await response.json()).available, false);
+});
+
+test("desktop API validates request shape, methods, approvals and unavailable controls", async () => {
+  for (const body of [{}, [], { text: "x", control: "listen" }, { execute: "cmd.exe" }, { text: 123 }, { approval: { id: "x", allowed: "true" } }]) {
+    assert.equal((await fetch(base + "/api/desktop", { method: "POST", headers, body: JSON.stringify(body) })).status, 400);
+  }
+  assert.equal((await fetch(base + "/api/desktop", { method: "PUT", headers })).status, 405);
+  assert.equal((await fetch(base + "/api/desktop", { method: "POST", headers, body: JSON.stringify({ control: "listen" }) })).status, 503);
+  assert.equal((await fetch(base + "/api/desktop", { method: "POST", headers, body: JSON.stringify({ approval: { id: "foreign", allowed: true } }) })).status, 404);
+});
+
+test("desktop clock fast path works without inference or native processes", async () => {
+  const response = await fetch(base + "/api/desktop", { method: "POST", headers, body: JSON.stringify({ text: "what time is it" }) });
+  assert.equal(response.status, 200); const result = await response.json();
+  assert.equal(result.fastPath, true); assert.equal(result.ok, true); assert.match(result.text, /It is/);
+});
+
+test("command deck is served as a real local asset and contains no external runtime dependencies", async () => {
+  const response = await fetch(base + "/desktop.html", { headers });
+  assert.equal(response.status, 200); const html = await response.text();
+  const home = await fetch(base + "/", { headers });
+  assert.match(await home.text(), /Command Deck/);
+  assert.equal((await fetch(base + "/index.html", { headers })).status, 200);
+  assert.match(html, /Command Deck/); assert.match(html, /api\/desktop/);
+  assert.doesNotMatch(html, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
+});

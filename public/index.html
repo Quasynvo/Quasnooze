@@ -198,6 +198,7 @@
 </style>
 </head>
 <body>
+<a href="/desktop.html" style="position:fixed;bottom:12px;right:18px;z-index:30;color:#ffb18c;font:12px system-ui">Open command deck ↗</a>
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
@@ -356,7 +357,7 @@ function scrollDown() {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
-let wakeMode = localStorage.getItem("pinch.wake") === "1";
+let wakeMode = false; // Browser recognition requires a fresh opt-in per page load.
 let wakeRecognition = null;
 
 const MIC_LANG_KEY = "pinch.miclang";
@@ -411,8 +412,8 @@ $("mic").onclick = () => {
 
 /* ── "Hey Pinch" wake word: opt-in, page must stay open ───────────────────
    Runs the browser's own recogniser in continuous mode and matches the
-   trigger phrase locally on this device. Nothing is sent anywhere until a
-   command actually follows the wake word. Deliberately not always-on audio:
+   trigger phrase in transcripts. Browser speech may send audio to its vendor
+   even before a command; use the Windows companion for local recognition. Deliberately not always-on audio:
    it only exists while this tab is open and the toggle is on.            */
 const WAKE_RE = /^\s*(?:hey\s+|ok\s+|oi\s+)?pinch\b[\s,.]*/i;
 
@@ -451,6 +452,7 @@ function ensureWake() {
 }
 
 function setWake(on) {
+  if (on && !wakeMode && !confirm("Browser speech recognition may send microphone audio to the browser vendor. For local background wake listening, use npm run desktop on Windows. Enable browser recognition for this page only?")) return;
   wakeMode = on;
   localStorage.setItem("pinch.wake", on ? "1" : "0");
   $("wakeToggle").classList.toggle("on", on);

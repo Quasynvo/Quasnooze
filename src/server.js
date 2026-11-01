@@ -1,3 +1,4 @@
+import { desktop } from "./desktop.js";
 import { AUDIO_MAX_BYTES, AUDIO_TYPES, transcribeAudio } from "./voice.js";
 /**
  * server.js — Pinch's local HTTP surface: web panel, REST API, SSE stream.
@@ -313,6 +314,24 @@ async function handleApi(req, res, url) {
     });
   }
 
+  if (path === "/api/desktop") {
+    if (req.method === "GET") return json(res, 200, desktop.snapshot());
+    if (req.method !== "POST") return json(res, 405, { error: "Use GET or POST." });
+    const body = await readBody(req, 12_000);
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 1) return json(res, 400, { error: "Send exactly one text, control or approval field." });
+    try {
+      if (Object.hasOwn(body, "text")) return json(res, 200, await desktop.request(body.text));
+      if (Object.hasOwn(body, "control")) return json(res, 200, desktop.control(body.control));
+      if (Object.hasOwn(body, "approval")) {
+        const a = body.approval;
+        if (!a || typeof a.id !== "string" || typeof a.allowed !== "boolean") return json(res, 400, { error: "An approval needs an id and a boolean allowed." });
+        const ok = desktop.approve(a.id, a.allowed);
+        return json(res, ok ? 200 : 404, { ok });
+      }
+      return json(res, 400, { error: "Unknown desktop request." });
+    } catch (err) { return json(res, err.status || 500, { error: err.status ? err.message : "Desktop request failed." }); }
+  }
+
   if (path === "/api/models") {
     if (req.method === "GET") return json(res, 200, { ...(await brain.probe()), active: brain.active });
     if (req.method === "POST") {
@@ -426,6 +445,7 @@ async function handleApi(req, res, url) {
       });
       stream.send("final", {
         text: result.text,
+        error: result.error || null,
         trace: result.trace,
         guard: result.guard || [],
         // What the turn actually read, and which of it the reply cited. The panel
@@ -589,5 +609,5 @@ async function respond(req, res) {
     }
 
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
-    return await serveStatic(req, res, url.pathname === "/" ? "/index.html" : url.pathname);
+    return await serveStatic(req, res, url.pathname === "/" ? "/desktop.html" : url.pathname);
 }

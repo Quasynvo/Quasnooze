@@ -1,0 +1,260 @@
+// Windows/.NET Framework host. Local System.Speech only; no browser recognizer.
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Speech.Recognition;
+using System.Speech.Synthesis;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web.Script.Serialization;
+using System.Windows.Forms;
+using System.Runtime.InteropServices;
+
+public sealed class PinchWindow : Form {
+    public Action Hotkey;
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == 0x0312 && Hotkey != null) Hotkey();
+        base.WndProc(ref m);
+    }
+}
+
+public static class PinchCompanion {
+    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint key);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+    [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+    static readonly object OutputLock = new object();
+    static PinchWindow Window;
+    static Label State, Detail, Brand;
+    static TextBox Input;
+    static Button Wake, Allow, Deny;
+    static NotifyIcon Tray;
+    static SpeechRecognitionEngine Recognizer;
+    static SpeechSynthesizer Speaker;
+    static Prompt CurrentPrompt;
+    static Icon BrandIcon;
+    static bool WantWake, Quitting, Working;
+    static string Panel = "", Root = "", Node = "", Launcher = "", Approval = "", ApprovalText = "";
+    static readonly Color Coral = Color.FromArgb(255, 111, 82);
+
+    static void Emit(object value) { lock (OutputLock) { try { Console.Out.WriteLine(Json.Serialize(value)); Console.Out.Flush(); } catch (IOException) { } } }
+    static void Post(Action action) { if (Window != null && !Window.IsDisposed && Window.IsHandleCreated) Window.BeginInvoke(action); }
+    static string Value(Dictionary<string, object> m, string key) { object v; return m.TryGetValue(key, out v) && v != null ? Convert.ToString(v) : ""; }
+    static void Phase(string phase, string detail) {
+        State.Text = phase.ToUpperInvariant(); Detail.Text = detail;
+        Tray.Text = ("Pinch - " + phase).Substring(0, Math.Min(63, ("Pinch - " + phase).Length));
+    }
+    static void Voice(bool mic, string detail) { Emit(new { type = "voice", mic = mic, detail = detail }); }
+    static void StopRecognition() {
+        var old = Recognizer; Recognizer = null;
+        if (old != null) { try { old.RecognizeAsyncCancel(); } catch { } old.Dispose(); }
+        Voice(false, "Local microphone released");
+    }
+    static void StopSpeech() { CurrentPrompt = null; if (Speaker != null) Speaker.SpeakAsyncCancelAll(); }
+    static bool Consent() {
+        return MessageBox.Show(Window,
+            "Enable local microphone listening? Windows System.Speech will listen for 'Hey Pinch', then capture one request. Audio is not saved or sent by this component. Recognition needs an installed English desktop speech pack. A wake phrase is NOT authentication: nearby people or speakers can activate it. Use Mute at any time. Restarting Pinch starts muted.",
+            "Pinch - local microphone permission", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+    }
+    static void StartRecognition(bool capture) {
+        if (!WantWake || Working) return;
+        StopRecognition();
+        try {
+            var infos = SpeechRecognitionEngine.InstalledRecognizers();
+            var info = infos.FirstOrDefault(x => x.Culture.Name == "en-IN") ?? infos.FirstOrDefault(x => x.Culture.Name == "en-US") ?? infos.FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName == "en");
+            if (info == null) throw new InvalidOperationException("No English desktop speech recognizer. Install an English speech pack in Windows Settings, then restart Pinch. No cloud fallback is used.");
+            var rec = new SpeechRecognitionEngine(info); Recognizer = rec;
+            if (capture) rec.LoadGrammar(new DictationGrammar());
+            else {
+                var builder = new GrammarBuilder(); builder.Culture = info.Culture;
+                builder.Append(new Choices("hey pinch", "pinch")); rec.LoadGrammar(new Grammar(builder));
+            }
+            rec.InitialSilenceTimeout = TimeSpan.FromSeconds(8);
+            rec.BabbleTimeout = TimeSpan.FromSeconds(8);
+            rec.EndSilenceTimeout = TimeSpan.FromMilliseconds(650);
+            rec.SpeechRecognized += (s, e) => Post(() => {
+                if (!Object.ReferenceEquals(Recognizer, rec) || !WantWake || Working) return;
+                if (e.Result.Confidence < (capture ? 0.45 : 0.78)) return;
+                if (capture) {
+                    string text = e.Result.Text;
+                    if (text.Length == 0 || text.Length > 2000) return;
+                    StopRecognition(); Working = true; Phase("working", text); Emit(new { type = "command", text = text });
+                } else { StartRecognition(true); }
+            });
+            rec.RecognizeCompleted += (s, e) => Post(() => {
+                if (!Object.ReferenceEquals(Recognizer, rec)) return;
+                StopRecognition();
+                if (e.Error != null) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", "Check microphone permissions and your English desktop speech pack."); return; }
+                if (capture && WantWake && !Working) StartRecognition(false);
+            });
+            rec.SetInputToDefaultAudioDevice();
+            rec.RecognizeAsync(capture ? RecognizeMode.Single : RecognizeMode.Multiple);
+            Phase(capture ? "listening" : "armed", capture ? "I'm listening. Say one request; pause when finished." : Detail.Text);
+            Voice(true, "Local System.Speech - " + info.Culture.Name);
+            Emit(new { type = "state", phase = capture ? "listening" : "armed" });
+        } catch (Exception e) { StopRecognition(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); }
+    }
+    static void ToggleWake() {
+        if (WantWake) { WantWake = false; StopRecognition(); Wake.Text = "Enable local wake"; Phase("muted", "Microphone released. Type a command or enable local wake."); Emit(new { type = "state", phase = "muted" }); }
+        else if (Consent()) { WantWake = true; Wake.Text = "Mute microphone"; StartRecognition(false); }
+    }
+    static void ListenOnce() {
+        if (Working) { Phase("working", "The current request is still running. The microphone is paused."); return; }
+        StopSpeech();
+        if (!WantWake && !Consent()) return;
+        WantWake = true; Wake.Text = "Mute microphone"; StartRecognition(true);
+    }
+    static void Reply(string text, bool speak) {
+        Working = false; Approval = ""; Allow.Visible = Deny.Visible = false;
+        StopSpeech(); StopRecognition(); Phase("ready", text);
+        if (speak) {
+            try {
+                if (Speaker == null) {
+                    Speaker = new SpeechSynthesizer(); Speaker.SetOutputToDefaultAudioDevice();
+                    Speaker.SpeakCompleted += (s, e) => Post(() => { if (Object.ReferenceEquals(CurrentPrompt, e.Prompt)) { CurrentPrompt = null; if (WantWake && !Working) StartRecognition(false); } });
+                }
+                // Bounded local speech; never interpret SSML from a model.
+                string spoken = text.Substring(0, Math.Min(text.Length, 1200));
+                CurrentPrompt = Speaker.SpeakAsync(spoken);
+                State.Text = "SPEAKING"; Emit(new { type = "state", phase = "speaking" });
+                return;
+            } catch { Phase("ready - voice unavailable", text); }
+        }
+        if (WantWake) StartRecognition(false);
+    }
+    static bool ValidHttps(string url) {
+        Uri uri;
+        return url.Length <= 2000 && Uri.TryCreate(url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps && String.IsNullOrEmpty(uri.UserInfo);
+    }
+    static bool Confirm(string text) { return MessageBox.Show(Window, text, "Pinch - confirm action", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes; }
+    static void NativeAction(Dictionary<string, object> m) {
+        string id = Value(m, "id"), action = Value(m, "action"), result = "";
+        bool ok = false;
+        try {
+            long deadline; if (!Int64.TryParse(Value(m, "deadline"), out deadline)) throw new InvalidOperationException("Missing action deadline.");
+            Func<bool> expired = () => (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds > deadline;
+            if (expired()) throw new InvalidOperationException("Action expired; request it again.");
+            if (action == "clipboard") {
+                if (!Confirm("Read your current clipboard locally and speak it aloud? It may contain passwords or private text. It will not be sent to a model by this action.")) throw new InvalidOperationException("Clipboard access denied.");
+                if (expired()) throw new InvalidOperationException("Confirmation expired. Nothing was read.");
+                result = Clipboard.ContainsText() ? Clipboard.GetText() : "The clipboard has no text.";
+                result = result.Substring(0, Math.Min(16000, result.Length));
+            } else if (action == "url") {
+                string url = Value(m, "url");
+                if (!ValidHttps(url)) throw new InvalidOperationException("Only explicit HTTPS addresses without credentials are allowed.");
+                if (!Confirm("Open this address in your browser?\n\n" + url)) throw new InvalidOperationException("Opening the website was denied.");
+                if (expired()) throw new InvalidOperationException("Confirmation expired. Nothing was opened.");
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); result = "Opened " + url;
+            } else {
+                string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows), path;
+                switch (action) {
+                    case "calculator": path = Path.Combine(windows, "System32", "calc.exe"); break;
+                    case "notepad": path = Path.Combine(windows, "System32", "notepad.exe"); break;
+                    case "explorer": path = Path.Combine(windows, "explorer.exe"); break;
+                    default: throw new InvalidOperationException("App is not in the desktop allowlist.");
+                }
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = false }); result = "Opened " + action + ".";
+            }
+            ok = true;
+        } catch (Exception e) { result = e.Message; }
+        Emit(new { type = "result", id = id, ok = ok, text = result });
+    }
+    static void ShowDeck() {
+        // This URL is supplied only over the parent-owned pipe, never by a webpage.
+        if (Panel.Length > 0) Process.Start(new ProcessStartInfo(Panel) { UseShellExecute = true });
+    }
+    static void Startup() {
+        if (Root.Length == 0) return;
+        string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Pinch.lnk");
+        bool remove = File.Exists(shortcut);
+        if (!Confirm(remove ? "Remove Pinch from your Windows login startup?" : "Start Pinch when you sign in to Windows? It will still start with its microphone muted. This changes only your user's Startup folder.")) return;
+        try {
+            string args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + Path.Combine(Root, "desktop", "startup.ps1") + "\" -NodePath \"" + Node + "\" -Launcher \"" + Launcher + "\"" + (remove ? " -Remove" : "");
+            var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), args) { UseShellExecute = false, CreateNoWindow = true };
+            using (var process = Process.Start(start)) {
+                if (!process.WaitForExit(5000)) { process.Kill(); throw new InvalidOperationException("Startup update timed out."); }
+                if (process.ExitCode != 0) throw new InvalidOperationException("Startup could not be updated.");
+            }
+            Phase("startup", remove ? "Removed from Windows login startup." : "Will start at Windows login, with the microphone muted.");
+        } catch (Exception e) { Phase("startup failed", e.Message); }
+    }
+    static void Receive(string line) {
+        if (line.Length > 100000) return;
+        try {
+            var m = Json.Deserialize<Dictionary<string, object>>(line); string op = Value(m, "op");
+            switch (op) {
+                case "init":
+                    Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "PINCH  /  " + Value(m, "owner");
+                    try {
+                        using (var bitmap = new Bitmap(Path.Combine(Root, "public", "favicon-32.png"))) {
+                            var handle = bitmap.GetHicon(); BrandIcon = (Icon)Icon.FromHandle(handle).Clone(); DestroyIcon(handle); Window.Icon = BrandIcon; Tray.Icon = BrandIcon;
+                        }
+                    } catch { /* keep the generic OS icon if an asset is unavailable */ }
+                    break;
+                case "working": Working = true; StopRecognition(); StopSpeech(); Phase("working", "Local request in progress. Microphone paused."); break;
+                case "state": if (Value(m, "text").Length > 0) Detail.Text = Value(m, "text"); break;
+                case "approval": Approval = Value(m, "id"); ApprovalText = Value(m, "text"); Phase("permission required", ApprovalText); Allow.Visible = ApprovalText.Length <= 1000; Deny.Visible = true; if (ApprovalText.Length > 1000) Detail.Text = "Long action: review the full description and approve in the command deck. " + ApprovalText; Window.Show(); break;
+                case "reply": Reply(Value(m, "text"), Value(m, "speak").ToLowerInvariant() == "true"); break;
+                case "action": NativeAction(m); break;
+                case "mute": if (WantWake) ToggleWake(); break;
+                case "listen": ListenOnce(); break;
+                case "stop-voice": StopSpeech(); if (WantWake && !Working) StartRecognition(false); break;
+                case "show": Window.Show(); break;
+                case "quit": Quitting = true; Window.Close(); break;
+            }
+        } catch { Phase("attention", "An invalid companion message was refused."); }
+    }
+    static Button ButtonAt(string text, int x, int y, int width, Action click) {
+        var b = new Button { Text = text, Left = x, Top = y, Width = width, Height = 30, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, BackColor = Color.FromArgb(37, 31, 32) };
+        b.FlatAppearance.BorderColor = Color.FromArgb(78, 55, 51); b.Click += (s, e) => click(); Window.Controls.Add(b); return b;
+    }
+    static void Submit() {
+        string text = Input.Text.Trim(); if (Working || text.Length == 0 || text.Length > 2000) return;
+        Input.Clear(); Working = true; StopRecognition(); StopSpeech(); Phase("working", text); Emit(new { type = "command", text = text });
+    }
+    public static string SelfTest() {
+        if (!ValidHttps("https://example.com/") || ValidHttps("javascript:alert(1)") || ValidHttps("https://user:pass@example.com/") || ValidHttps("file:///C:/Windows")) throw new Exception("URL policy regression");
+        return "Companion compiled; URL policy passed. No microphone or UI was opened.";
+    }
+    public static void Run() {
+        Console.OutputEncoding = new UTF8Encoding(false); Console.InputEncoding = new UTF8Encoding(false);
+        Application.EnableVisualStyles();
+        Window = new PinchWindow { Text = "Pinch - resident assistant", Width = 470, Height = 345, FormBorderStyle = FormBorderStyle.FixedToolWindow, TopMost = true, BackColor = Color.FromArgb(19, 17, 19), ForeColor = Color.White, StartPosition = FormStartPosition.Manual, Font = new Font("Segoe UI", 10), ShowInTaskbar = false };
+        var area = Screen.PrimaryScreen.WorkingArea; Window.Location = new Point(area.Right - Window.Width - 20, area.Bottom - Window.Height - 20);
+        Brand = new Label { Text = "PINCH  /  DESKTOP COMPANION", Left = 20, Top = 16, Width = 420, ForeColor = Coral, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
+        State = new Label { Text = "MUTED", Left = 20, Top = 49, Width = 420, ForeColor = Color.FromArgb(239, 219, 205) };
+        Detail = new Label { Text = "Always here while running. Enable local wake when you're ready; the microphone starts off.", Left = 20, Top = 78, Width = 420, Height = 83, AutoEllipsis = true };
+        Input = new TextBox { Left = 20, Top = 171, Width = 330, MaxLength = 2000, BackColor = Color.FromArgb(35, 29, 31), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
+        Input.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Submit(); } };
+        Window.Controls.AddRange(new Control[] { Brand, State, Detail, Input });
+        ButtonAt("Run", 360, 169, 75, Submit);
+        Wake = ButtonAt("Enable local wake", 20, 210, 160, ToggleWake);
+        ButtonAt("Talk", 188, 210, 65, ListenOnce);
+        ButtonAt("Stop voice", 260, 210, 100, () => { StopSpeech(); if (WantWake && !Working) StartRecognition(false); });
+        ButtonAt("Deck", 367, 210, 68, ShowDeck);
+        Allow = ButtonAt("Allow once", 20, 253, 125, () => { if (Approval.Length > 0 && Confirm("Allow this exact action once?\n\n" + ApprovalText)) { Emit(new { type = "approval", id = Approval, allowed = true }); Approval = ""; Allow.Visible = Deny.Visible = false; } });
+        Deny = ButtonAt("Deny", 155, 253, 95, () => { if (Approval.Length > 0) Emit(new { type = "approval", id = Approval, allowed = false }); Approval = ""; Allow.Visible = Deny.Visible = false; });
+        Allow.Visible = Deny.Visible = false;
+        var shortcutHint = new Label { Text = "Ctrl+Alt+P to talk - local speech - no audio recording", Left = 20, Top = 291, Width = 425, ForeColor = Color.FromArgb(159, 144, 140), Font = new Font("Segoe UI", 8) }; Window.Controls.Add(shortcutHint);
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("Show Pinch", null, (s, e) => Window.Show());
+        menu.Items.Add("Mute / enable local wake", null, (s, e) => ToggleWake());
+        menu.Items.Add("Command deck", null, (s, e) => ShowDeck());
+        menu.Items.Add("Toggle start with Windows", null, (s, e) => Startup());
+        menu.Items.Add("Quit Pinch", null, (s, e) => { Emit(new { type = "quit" }); Quitting = true; Window.Close(); });
+        Tray = new NotifyIcon { Icon = SystemIcons.Application, Text = "Pinch - muted", Visible = true, ContextMenuStrip = menu };
+        Tray.DoubleClick += (s, e) => Window.Show();
+        Window.Hotkey = ListenOnce;
+        Window.FormClosing += (s, e) => { if (!Quitting) { e.Cancel = true; Window.Hide(); } };
+        Window.Shown += (s, e) => {
+            if (!RegisterHotKey(Window.Handle, 708, 0x0001 | 0x0002 | 0x4000, (uint)Keys.P)) shortcutHint.Text = "Shortcut unavailable - use Talk or the tray menu.";
+            Emit(new { type = "ready" });
+            Task.Run(() => { string line; while ((line = Console.In.ReadLine()) != null) { string copy = line; Post(() => Receive(copy)); } Post(() => { Quitting = true; Window.Close(); }); });
+        };
+        try { Application.Run(Window); }
+        finally { Quitting = true; StopRecognition(); StopSpeech(); if (Speaker != null) Speaker.Dispose(); Tray.Visible = false; Tray.Dispose(); if (BrandIcon != null) BrandIcon.Dispose(); UnregisterHotKey(Window.Handle, 708); }
+    }
+}
