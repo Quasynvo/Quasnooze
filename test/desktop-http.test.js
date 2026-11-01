@@ -50,6 +50,12 @@ test("command deck is served as a real local asset and contains no external runt
   const home = await fetch(base + "/", { headers });
   assert.match(await home.text(), /Command Deck/);
   assert.equal((await fetch(base + "/index.html", { headers })).status, 200);
-  assert.match(html, /Command Deck/); assert.match(html, /api\/desktop/);
+  assert.match(html, /Command Deck/);
+  assert.ok(html.includes('<script src="/desktop.js" defer></script>'));
+  const scriptResponse = await fetch(base + "/desktop.js", { headers });
+  assert.equal(scriptResponse.status, 200);
+  assert.match(scriptResponse.headers.get("content-type"), /javascript/);
+  const source = await scriptResponse.text();
+  assert.match(source, /api\/desktop/);
   assert.doesNotMatch(html, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
 });

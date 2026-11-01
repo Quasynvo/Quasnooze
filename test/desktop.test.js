@@ -1,5 +1,6 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
+import { Script } from "node:vm";
 import { mkdtemp, mkdir, writeFile, symlink, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -127,13 +128,15 @@ test("native child environment omits all model, messaging and instance credentia
   assert.deepEqual(companionEnv({ SystemRoot: "C:\\Windows", TEMP: "C:\\Temp", PINCH_KEY: "secret", OPENAI_API_KEY: "secret", TELEGRAM_TOKEN: "secret", PATH: "untrusted" }), { SystemRoot: "C:\\Windows", TEMP: "C:\\Temp" });
 });
 
-test("command deck never requests browser speech recognition and safely renders remote text", () => {
+test("command deck loads a local script, avoids browser speech, and safely renders remote text", () => {
   const html = readFileSync(new URL("../public/desktop.html", import.meta.url), "utf8");
-  assert.doesNotMatch(html, /new (?:webkit)?SpeechRecognition|getUserMedia|innerHTML\s*=/);
-  assert.match(html, /textContent=record|textContent=\(record/);
-  assert.match(html, /sessionStorage.setItem/);
-  const source = html.match(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/i)[1];
-  assert.doesNotThrow(() => new Function(source));
+  const source = readFileSync(new URL("../public/desktop.js", import.meta.url), "utf8");
+  assert.ok(html.includes('<script src="/desktop.js" defer></script>'));
+  // Check the actual JavaScript, not an HTML tag extracted with a filtering regexp.
+  assert.doesNotMatch(html + source, /new (?:webkit)?SpeechRecognition|getUserMedia|innerHTML\s*=/);
+  assert.match(source, /textContent=record|textContent=\(record/);
+  assert.match(source, /sessionStorage.setItem/);
+  assert.doesNotThrow(() => new Script(source, { filename: "desktop.js" }));
 });
 
 test("non-Windows desktop launcher refuses to pretend a native companion is running", { skip: process.platform === "win32" }, () => {
