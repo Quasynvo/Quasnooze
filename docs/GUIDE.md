@@ -990,3 +990,73 @@ Presets are subordinate user-role preferences, not system prompts or permission 
 They never replace the core system prompt, merge into runtime configuration, or disable
 code-enforced approvals and honesty checks. A model can still ignore or misinterpret a
 style request; request-body and safety regression tests are not a live tone-quality benchmark.
+
+## Local JavaScript tool plugins
+
+For an owner-reviewed tool that does not need a separate MCP server, set
+`PINCH_TOOLS_DIR` to a directory containing `.js` / `.mjs` modules and restart
+Pinch. Leave it empty to disable this feature. Server, desktop and terminal
+`ask`/`chat` load plugins before accepting turns; library users call
+`await loadLocalTools()` from `src/tools.js` explicitly.
+
+**These are executable Node.js modules, not sandboxed extensions.** Import-time
+code executes at startup before any in-chat approval and can access the process's
+files, credentials and network. Only install code you have reviewed and trust to
+load; do not download/install a plugin at a model's suggestion. Use a directory
+outside **all** `PINCH_WORKSPACE` roots, owned and writable only by you. The loader
+rejects workspace-contained directories and symlink plugin entries. With the
+default home-directory workspace, narrow `PINCH_WORKSPACE` to your project first
+and keep plugins in a separate directory. This is not an OS-level sandbox against
+another local process changing files concurrently.
+
+For example, put this 15-line module in `~/pinch-plugins/local-echo.mjs`:
+
+```js
+export default {
+  name: 'local_echo',
+  description: 'Echo a short message using a local plugin.',
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'Message to echo' },
+    },
+    required: ['text'],
+  },
+  // Approval is required unless the owner explicitly sets trusted: true.
+  async run({ text }) {
+    return { ok: true, output: `Local echo: ${text}` };
+  },
+};
+```
+
+Configure `.env` (use paths appropriate to your machine):
+
+```dotenv
+PINCH_WORKSPACE=~/projects/my-project
+PINCH_TOOLS_DIR=~/pinch-plugins
+```
+
+The default export must contain a valid tool `name` (1–64 letters, digits,
+underscores or dashes), a non-empty `description`, an object JSON Schema
+`parameters`, and `run(args, ctx)` returning `{ ok, output }`. `.mjs` is recommended;
+`.js` follows Node's module/package rules. Only top-level regular `.js`/`.mjs`
+files are loaded, in filename order. Restart to pick up changes; there is no hot
+reload. A duplicate name—including every built-in or previously registered tool—is
+refused. Missing directories, import errors and invalid contracts are logged and
+skipped without replacing existing tools. Arbitrary plugin code can still exit
+or block the process; it is not isolated or forcibly timed out.
+
+Every loaded plugin defaults to `dangerous: true`, even if it declares
+`dangerous: false`. Its calls use the existing in-chat approval gate and are
+refused by unattended tasks. The existing global `PINCH_AUTO_APPROVE` setting
+still applies to interactive turns: leave it off for per-call confirmation.
+An owner-reviewed read-only plugin may explicitly declare `trusted: true` to
+skip the gate; this also permits unattended calls. A trusted plugin can retain
+approval by additionally setting `dangerous: true`. Only literal boolean `true`
+counts as trust. Treat this opt-out as a permission grant; unlike built-in file
+tools, arbitrary plugin code is not automatically restricted to the workspace.
+
+The existing `PINCH_TOOLS` JSON command manifest and MCP integration remain
+available and unchanged. `node --test test/tools.test.js` covers module loading,
+collisions, trust defaults, workspace rejection, CLI startup, real approval,
+denial and unattended refusal.
