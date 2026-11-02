@@ -1,7 +1,6 @@
 {
-  "name": "pinch",
+  "name": "pinch-ai",
   "version": "1.0.0",
-  "private": true,
   "description": "Pinch \ud83e\udd9e \u2014 a private, local-first personal AI assistant you message from Telegram, Discord, Slack, WhatsApp or the browser, with voice on your phone.",
   "type": "module",
   "engines": {
@@ -50,5 +49,45 @@
       "becomes": 24,
       "reason": "Node 22 reaches end of life; engines.node moves to >=24 and 22 leaves the CI matrix."
     }
-  }
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "scripts/setup.js",
+    "scripts/braincheck.js",
+    "scripts/pair.js",
+    "scripts/service.js",
+    "scripts/supervise.js",
+    "scripts/audit.js",
+    "scripts/tech-radar.js",
+    "scripts/growth.js",
+    "scripts/demo.js",
+    "scripts/desktop.js",
+    "scripts/desktop-doctor.js",
+    "desktop/windows.ps1",
+    "desktop/Companion.cs",
+    "desktop/SpeechDoctor.cs",
+    "desktop/startup.ps1",
+    "LICENSE",
+    "README.md",
+    "!**/.env",
+    "!**/.env.*",
+    "!**/data/**",
+    "!**/test/**",
+    "!**/.github/**",
+    "!**/*.log",
+    "!**/*.tgz"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pinchfoundry/Pinch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pinchfoundry/Pinch/issues"
+  },
+  "homepage": "https://github.com/pinchfoundry/Pinch#readme"
 }

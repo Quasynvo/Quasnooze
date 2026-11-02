@@ -19,7 +19,7 @@ import { startScheduler } from "./scheduler.js";
 import { nodeSupport } from "./runtime.js";
 import { startMcpTools } from "./mcp.js";
 import { startWindowsCompanion } from "./windows-companion.js";
-import { registerTool } from "./tools.js";
+import { registerTool, loadLocalTools } from "./tools.js";
 
 const c = {
   coral: (s) => `\x1b[38;5;209m${s}\x1b[0m`,
@@ -83,6 +83,9 @@ async function main() {
   // existed. Tools have to be settled before anything can ask for them.
   // A server that fails to start is skipped, not fatal.
   let mcp = { stop: async () => {} };
+
+  const localTools = await loadLocalTools({ log });
+  if (localTools.registered.length) log.info(`local tools: ${localTools.registered.join(", ")}`);
 
   // Your own tools, from a JSON manifest. Registered beside MCP for the same
   // reason: before listen(), so nothing can ask for the tool list before it is

@@ -66,6 +66,38 @@ For real use, follow the guided setup below, then run `npm run doctor` and `npm 
 | **Landing page** | https://pinchfoundry.github.io/Pinch/ |
 | **Source** | [github.com/pinchfoundry/Pinch](https://github.com/pinchfoundry/Pinch) |
 
+## npm package release preparation
+
+The package metadata is prepared for **`pinch-ai`**, exposing the **`pinch`** command.
+This change does **not** publish a release: use the Git checkout instructions below
+until a maintainer has published and verified the package. Do not install the
+unrelated `pinch` package expecting this project.
+
+After a release, the intended commands are `npm install -g pinch-ai`, then
+`pinch setup` and `pinch`. The executable name remains `pinch`.
+
+The publish allowlist contains the runtime source, web assets, explicitly named
+CLI scripts and Windows companion files, plus the README, license and npm-required
+package metadata. Tests, repository automation, local `data/`, `.env` files and
+backups are excluded, including inside allowed directories. Setup can generate
+configuration without shipping `.env.example`. Existing package-relative config
+and state paths are unchanged; this does not migrate data to a user-level directory.
+
+Before publishing, run:
+
+```sh
+npm pack --dry-run --json
+node --test test/cli.test.js
+node scripts/audit.js
+```
+
+The CLI tests enforce a compressed tarball smaller than 1,000,000 bytes, seed
+synthetic local state in a temporary copy to verify exclusions, and exercise
+`--version` and a mock-provider `ask` from the extracted tarball without installing
+dependencies or contacting a model. Review the packlist before every release;
+never place real credentials in source files or public assets. Publishing to npm
+is a separate maintainer-authorized release step.
+
 ## Install it in two commands
 
 ```bash
