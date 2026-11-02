@@ -4,12 +4,18 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const marker = body => [...String(body || '').matchAll(/<!-- roadmap:([^\s]+) -->/g)].map(match => match[1]);
+export function isContributorIssue(issue) {
+  if (issue.pull_request || String(issue.state).toLowerCase() !== 'open') return false;
+  const labels = (issue.labels || []).map(label => typeof label === 'string' ? label : label.name);
+  return marker(issue.body).length > 0 || String(issue.body || '').includes('<!-- growth:fingerprint:') || labels.some(label => ['growth', 'help wanted', 'good first issue'].includes(label));
+}
+export function countContributorIssues(issues) { return issues.filter(isContributorIssue).length; }
 export function selectQueue(roadmap, issues) {
   const history = issues.filter(issue => !issue.pull_request);
   const seen = new Set(history.flatMap(issue => marker(issue.body)));
   const open = history.filter(issue => String(issue.state).toLowerCase() === 'open' && marker(issue.body).length);
   const items = roadmap.items || [];
-  let count = open.length;
+  let count = countContributorIssues(history);
   let easy = open.filter(issue => marker(issue.body).some(id => items.some(item => item.id === id && item.difficulty === 'easy'))).length;
   const totalCap = roadmap.meta?.open_curated_cap ?? 4, easyCap = roadmap.meta?.open_easy_cap ?? 3;
   const picked = [];

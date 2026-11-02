@@ -106,7 +106,10 @@ const cap = doc.meta?.open_easy_cap ?? 3;
 if (easyReady > cap) {
   fail(`too many 'easy' items in status ready/filed: ${easyReady} > cap ${cap}. Move the rest to backlog.`);
 }
-if (readyCount > cap + 1) {
+const totalCap = doc.meta?.open_curated_cap ?? cap + 1;
+if (!Number.isInteger(totalCap) || totalCap < 1 || totalCap > 10) fail("open_curated_cap must be an integer from 1 to 10");
+if (!Number.isInteger(cap) || cap < 0 || cap > totalCap) fail("open_easy_cap must be an integer between zero and open_curated_cap");
+if (readyCount > totalCap) {
   fail(`too many filing candidates: ${readyCount}. Keep the open queue small enough to answer.`);
 }
 

@@ -18,9 +18,10 @@
       "Only ready/backlog entries with complete bodies and auto_file not false are ever filed.",
       "latest_release   -> the tag the close comment cites; empty means the bot will not close anything it filed",
       "auto_file: false -> explicit maintainer gate; never filed automatically even if body is complete.",
-      "Ready tasks are preferred; complete ungated backlog tasks replenish available slots. Historical markers prevent re-filing closed work."
+      "Ready tasks are preferred; complete ungated backlog tasks replenish available slots. Historical markers prevent re-filing closed work.",
+      "Maintainer authorized up to 10 open contributor tasks total, not 10 new issues daily; roadmap and growth publishers share the ceiling."
     ],
-    "open_curated_cap": 4
+    "open_curated_cap": 10
   },
   "items": [
     {
@@ -365,6 +366,144 @@
       ],
       "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
       "body": "## Context\n\nManual gate: require readiness, recovery and state work (012\u2013014) acceptance. Test existing workflows rather than introducing broad OS automation.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NEXT workstream. Existing features must be preserved.\n\n## What to change\n\nManual gate: require readiness, recovery and state work (012\u2013014) acceptance. Test existing workflows rather than introducing broad OS automation.\n\n## Acceptance criteria\n\n- [ ] Validate first local turn, mute/wake/talk/stop, bounded file lookup, approved app launch and reminder/failure recovery.\n- [ ] Use consenting users and synthetic/consented data; separate physical hardware observations from mocks and coached from unassisted success.\n- [ ] Verify visible mic/permission states, denial handling and keyboard/accessibility paths; clipboard stays out of model history by default.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u20138 developer-days plus hardware/user access (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-019-growth-state-normalization",
+      "title": "fix(growth): normalize GitHub OPEN/CLOSED issue states before planning",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~1\u20132 days",
+      "files": [
+        "scripts/growth.js",
+        "test/growth.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Confirmed deterministic planner bug**, not a feature proposal. At baseline 7337971, plan() filters existing issues using state === \"open\". gh issue list --json uses uppercase OPEN/CLOSED, while REST uses lowercase. A synthetic call with one OPEN growth issue, maxOpen:1 and a qualifying candidate returns decision:file and \"0 already open\". No GitHub write is needed to reproduce. collectDemand(), decide() and historyFor() also compare raw state; audit them without changing demand/dedupe semantics. The shared board guard is separate: this task repairs the growth-specific cap and demand/history semantics.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [scripts/growth.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/scripts/growth.js)\n- [test/growth.test.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/test/growth.test.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Add a failing-before-fix fixture for uppercase OPEN with maxOpen:1; expected skip, actual baseline file.\n- [ ] Normalize state at a tested boundary or consistently at every consumer; keep unknown states conservative and PRs excluded.\n- [ ] Cover lowercase/uppercase open and closed inputs, recent/old open fingerprints, demand annotation, no duplicate specs, and both per-growth and shared board caps.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~1\u20132 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n\n## Minimal reproduction (no network writes)\n\n```sh\nnode --input-type=module <<'JS'\nimport {plan, candidate} from './scripts/growth.js';\nconst c = candidate({kind:'tests',fingerprint:'uppercase-state-fixture',title:'fixture',impact:4,confidence:3,demand:2,effort:1,what:'fixture',why:'fixture',where:['test/growth.test.js'],guard:'fixture',cost:'fixture',risk:'fixture'});\nconsole.log(plan([c], [{number:999,state:'OPEN',body:'',labels:[{name:'growth'}]}], {maxOpen:1,quota:1}).decision);\nJS\n```\n\nBaseline observed: `file`. Expected: `skip` because one growth issue is already open against a cap of one. Confirmed under Node 22 on this checkout; not a physical Windows test. The shared 10-task board cap does not repair this smaller growth-specific cap.\n"
+    },
+    {
+      "id": "pinch-020-structured-action-preview",
+      "title": "feat(approvals): structured action previews without weakening approval gates",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20134 days",
+      "files": [
+        "src/agent.js",
+        "src/runtime.js",
+        "public/desktop.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Feature proposal**, not a confirmed permission bypass. Existing agent approvals send id and a description; action results/traces already exist. Add a bounded structured preview contract so people can see the concrete target and expected effect before allowing an action. This is a precursor to the roadmap action timeline, not the whole persistent timeline or cancellation project.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [src/agent.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/agent.js)\n- [src/runtime.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/runtime.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Define tool/action, target, risk rationale, effect summary and redaction fields; unsupported previews honestly say unknown.\n- [ ] Preserve approval IDs, session/channel scoping, deny behavior, unattended blocks and all current tool policies.\n- [ ] Render untrusted preview text safely, cap lengths, redact secret canaries, and test approval/deny/stale IDs using mocks; no raw command or clipboard persistence.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20134 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
+    },
+    {
+      "id": "pinch-021-retention-plan-preview",
+      "title": "feat(privacy): read-only retention plan with explicit data categories",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20133 days",
+      "files": [
+        "src/store.js",
+        "src/config.js",
+        "src/cli.js",
+        "test/export-cost.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Feature proposal** for a read-only retention preview, not a claim that existing deletion is absent. store.js already has deleteSession(); telemetry already rotates. Make retention policy understandable before adding automatic deletion. This issue must not implement a scheduler or actually delete data.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [src/store.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/store.js)\n- [src/config.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/config.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Report bounded category counts, approximate sizes, age-based candidates and policy exclusions with an injected clock.\n- [ ] Use existing configured paths/resolvers; never follow paths outside the data root, and never read credentials or message contents into reports.\n- [ ] Separate sessions, memory, reminders, schedules and telemetry; default policies are off, report limitations, and prove zero filesystem mutation with fixtures.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20133 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
+    },
+    {
+      "id": "pinch-022-retrieval-quality-corpus",
+      "title": "test(retrieval): add a labelled local corpus and quality evaluation report",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20134 days",
+      "files": [
+        "src/documents.js",
+        "src/citations.js",
+        "test/documents.test.js",
+        "test/citations.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Evaluation proposal**, not a measured retrieval failure. Pinch already has bounded incremental lexical/BM25 retrieval and source/citation checks. Add a reproducible labelled synthetic corpus to judge relevance, stale updates, no-answer queries and citations before proposing a new retrieval engine. Distinct from #85 end-to-end readiness/timing infrastructure.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [src/documents.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/documents.js)\n- [src/citations.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/citations.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Use versioned synthetic fixtures with known relevant passages, changed/deleted files and no-answer cases; no private corpus or model download.\n- [ ] Report recall@k and rank metric definitions, counts and failures; separately test citation provenance versus answer faithfulness.\n- [ ] Evaluate cold/warm bounded index behavior without changing defaults, claiming rival superiority or treating unrun model faithfulness as a passing metric.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20134 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
+    },
+    {
+      "id": "pinch-023-redacted-support-bundle",
+      "title": "feat(diagnostics): opt-in allowlisted local support bundle",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20134 days",
+      "files": [
+        "src/export.js",
+        "src/telemetry.js",
+        "src/config.js",
+        "test/export-cost.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Feature proposal**. Existing data export intentionally includes conversations/profile and is unsuitable as a default support attachment. Create a separate opt-in, local-only diagnostic artifact; do not overload personal-data export or duplicate #85 readiness probing. Read a supplied status snapshot when available, otherwise report unavailable.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [src/export.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/export.js)\n- [src/telemetry.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/telemetry.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Allowlist app/runtime/OS versions, non-sensitive readiness states and aggregate timings; omit prompts, responses, clipboard, audio, memory, profile, tokens and raw paths by default.\n- [ ] Provide a preview, explicit confirmation, byte/record limits and user-chosen destination; no network upload.\n- [ ] Use secret canaries and malformed/oversized telemetry fixtures; report redaction limitations and keep existing personal export behavior unchanged.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20134 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
+    },
+    {
+      "id": "pinch-024-desktop-accessibility-audit",
+      "title": "test(desktop): keyboard and assistive-technology acceptance matrix",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20133 days plus consented Windows access",
+      "files": [
+        "public/desktop.html",
+        "public/desktop.js",
+        "test/desktop-ui.test.js",
+        "docs/DESKTOP.md"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Evaluation/accessibility proposal**, not a confirmed accessibility defect. The shell already uses labelled inputs, native dialogs, status/live regions and focus handling. Test these actual controls rather than claiming accessibility is missing. This narrow surface audit can run independently of #86 recovery implementation and does not replace the broader five-journey study.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [public/desktop.html](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/public/desktop.html)\n- [public/desktop.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/public/desktop.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] Cover keyboard navigation, dialog focus entry/return, Escape/deny behavior, mic state changes and visible permission status; do not add shortcuts that arm the mic.\n- [ ] Add repeatable DOM/interaction regressions where feasible; static ARIA checks alone do not constitute a screen-reader pass.\n- [ ] Record a consented Windows keyboard/screen-reader check with environment, steps and actual observations; create defect followups only for reproduced failures. If unavailable, mark manual checks unperformed.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20133 days plus consented Windows access (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
+    },
+    {
+      "id": "pinch-025-static-tool-trust-inventory",
+      "title": "feat(tools): read-only capability and trust inventory without plugin execution",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "~2\u20134 days",
+      "files": [
+        "src/tools.js",
+        "src/custom-tools.js",
+        "src/mcp.js",
+        "src/cli.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\n**Feature proposal**, not an OS sandbox or a vulnerability claim. tools.js imports opted-in local JS plugins, custom-tools.js reads declarative command manifests and MCP has its own configuration. Expose an explicit read-only inventory so people can distinguish those trust models without calling a tool or importing a plugin simply to inspect it.\n\n## Evidence and scope\n\nCode inspected at commit `7337971114713b07dceae4ebfe399c6bec7c8bf4`:\n- [src/tools.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/tools.js)\n- [src/custom-tools.js](https://github.com/pinchfoundry/Pinch/blob/7337971114713b07dceae4ebfe399c6bec7c8bf4/src/custom-tools.js)\n\nThis is independent contributor work from the product roadmap; existing NOW issues #85\u2013#87 and gated NEXT tasks are not replaced. Avoid duplicating them.\n\n## Acceptance criteria\n\n- [ ] List bounded built-in/configured sources, declared risk/approval policy and disabled/uninspected states; do not promise installed equals trusted or sandboxed.\n- [ ] Inventory startup must not execute plugin modules, manifest commands or MCP requests. Unknown dynamic details remain unknown until separately enabled through existing consent paths.\n- [ ] Redact credential fields and personal paths, reject traversal/symlink escapes during bounded metadata reads, and test a side-effect canary plugin is never imported.\n- [ ] Independent review and full tests/audit pass; no hidden cloud dependency, automatic merge, weakened permission or unperformed measurement claims.\n\n## How to verify\n\n```sh\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests; include exact results and clearly mark hardware/user checks that were not performed.\n\n## Time estimate\n\n~2\u20134 days (estimate, not a deadline).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership, then open a small PR with `Closes #<issue-number>`. Use synthetic/consented fixtures. These are not automatically good-first-issue tasks.\n"
     }
   ]
 }

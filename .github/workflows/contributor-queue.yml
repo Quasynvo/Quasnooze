@@ -41,7 +41,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: contributor-queue
+  group: contributor-issue-publishing
   cancel-in-progress: false
 
 jobs:

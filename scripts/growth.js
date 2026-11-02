@@ -33,6 +33,7 @@
  *   node scripts/growth.js --existing f.json  # dedupe against `gh issue list --json …`
  *   node scripts/growth.js --no-coverage   # skip the (slow) coverage measurement
  */
+import { countContributorIssues } from './roadmap-queue.js';
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -592,7 +593,7 @@ function decide(cands, existing) {
  * Annotations are not counted against the quota — answering a human who already
  * asked is never the thing that makes a backlog noisy.
  */
-function plan(cands, existing, { quota = 1, maxOpen = MAX_OPEN, shard = null } = {}) {
+function plan(cands, existing, { quota = 1, maxOpen = MAX_OPEN, shard = null, boardCap = 10 } = {}) {
   const ranked = shard ? rankForShard(cands, shard) : [...cands].sort((a, b) => b.score - a.score || a.fingerprint.localeCompare(b.fingerprint));
   const open = existing.filter((i) => i.state === "open");
   const openGrowth = open.filter((i) => (i.labels || []).some((l) => (typeof l === "string" ? l : l.name) === LABEL));
@@ -614,6 +615,10 @@ function plan(cands, existing, { quota = 1, maxOpen = MAX_OPEN, shard = null } =
     }
     if (history) {
       skipped.push({ fingerprint: c.fingerprint, reason: `already filed as #${history.number}` });
+      continue;
+    }
+    if (countContributorIssues(existing) + files.length >= boardCap) {
+      skipped.push({ fingerprint: c.fingerprint, reason: `shared contributor cap reached (${boardCap})` });
       continue;
     }
     if (openGrowth.length + files.length >= maxOpen) {
@@ -836,7 +841,8 @@ function main() {
   const maxOpen = Math.max(HOURLY_MAX_OPEN, quota + 2);
   const hour = Number(opt("--hour", process.env.GROWTH_HOUR || new Date().getUTCHours()));
   const shard = flag("--no-shard") ? null : shardFor(hour);
-  const result = plan([...byKind.values()], existing, { quota, maxOpen, shard });
+  const boardCap = JSON.parse(readFileSync(join(ROOT, ".github/roadmap.json"), "utf8")).meta.open_curated_cap;
+  const result = plan([...byKind.values()], existing, { quota, maxOpen, shard, boardCap });
   result.maxOpen = maxOpen;
   result.shard = shard;
   result.quota = quota;
