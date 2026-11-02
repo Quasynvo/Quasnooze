@@ -1,6 +1,6 @@
 /**
  * Runtime support — when the Node version you are running stops being
- * patched, and what Pinch does about it.
+ * patched, and what Quasnooze does about it.
  *
  * The data here mirrors [docs/SUPPORT.md](../docs/SUPPORT.md), which in turn
  * mirrors endoflife.date. `npm run radar` is what keeps the three honest: it
@@ -67,7 +67,7 @@ export function nodeSupport(version = process.version, { now = new Date(), min =
         major,
         tier: "below-minimum",
         eol: null,
-        message: `Pinch needs Node ${min} or newer; you are running ${major}. Upgrade, or install an older Pinch.`,
+        message: `Quasnooze needs Node ${min} or newer; you are running ${major}. Upgrade, or install an older Quasnooze.`,
       };
     }
     return { major, tier: "unknown", eol: null, message: null };
@@ -87,7 +87,7 @@ export function nodeSupport(version = process.version, { now = new Date(), min =
       major,
       tier: "below-minimum",
       eol: row.eol,
-      message: `Pinch needs Node ${min} or newer; you are on ${major}, which stops being patched on ${row.eol}. See docs/SUPPORT.md.`,
+      message: `Quasnooze needs Node ${min} or newer; you are on ${major}, which stops being patched on ${row.eol}. See docs/SUPPORT.md.`,
     };
   }
 

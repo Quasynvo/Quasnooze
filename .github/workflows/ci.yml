@@ -52,15 +52,15 @@ jobs:
           PINCH_PORT: "7777"
           PINCH_WORKSPACE: ${{ github.workspace }}
         run: |
-          node src/index.js > /tmp/pinch.log 2>&1 &
+          node src/index.js > /tmp/quasnooze.log 2>&1 &
           for i in $(seq 1 30); do
             curl -sf http://localhost:7777/api/health > /dev/null && break
             sleep 1
           done
-          cat /tmp/pinch.log
+          cat /tmp/quasnooze.log
 
       - name: Panel is served
-        run: curl -sf http://localhost:7777/ | grep -q "Pinch"
+        run: curl -sf http://localhost:7777/ | grep -q "Quasnooze"
 
       - name: Health endpoint reports a brain
         run: |
@@ -141,8 +141,8 @@ jobs:
 
       - name: A symlink cannot walk out of the workspace
         run: |
-          mkdir -p /tmp/pinch-ws-trap && ln -sfn /etc /tmp/pinch-ws-trap/escape
-          PINCH_WORKSPACE=/tmp/pinch-ws-trap node --input-type=module -e "
+          mkdir -p /tmp/quasnooze-ws-trap && ln -sfn /etc /tmp/quasnooze-ws-trap/escape
+          QUASNOOZE_WORKSPACE=/tmp/quasnooze-ws-trap node --input-type=module -e "
             import { resolveInWorkspace, SafePathError } from './src/tools.js';
             try {
               console.log('allowed:', resolveInWorkspace('escape/passwd'));

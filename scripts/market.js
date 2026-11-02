@@ -10,19 +10,19 @@
  *
  * How the comparison works:
  *
- *   1. Pinch's own capabilities come from docs/CAPABILITIES.json, where each
+ *   1. Quasnooze's own capabilities come from docs/CAPABILITIES.json, where each
  *      claim carries evidence — a file or symbol. A capability with no evidence
  *      is not counted as "have".
  *   2. Competitor features come from their README, which is where these
  *      projects list what they do. Feature bullets are matched against the
  *      keyword lists in that same file.
- *   3. Coverage = how many competitors document a capability Pinch lacks. Three
+ *   3. Coverage = how many competitors document a capability Quasnooze lacks. Three
  *      or more is a pattern; one is one project's opinion.
  *
  * What it deliberately does not do: rank, recommend, or write code. It produces
  * a table with sources and stops. The scoring happens in growth.js, where the
  * "one person, one laptop, zero dependencies" constraints are applied — several
- * of the biggest gaps here are things Pinch has decided not to do, and the
+ * of the biggest gaps here are things Quasnooze has decided not to do, and the
  * report says so rather than pretending they are backlog.
  *
  * Usage:
@@ -47,7 +47,7 @@ const CACHE = join(ROOT, "docs", "market-snapshot.json");
 
 /**
  * The comparison set, and why each one is here. Chosen to be the projects a
- * person actually evaluates against Pinch: local-first assistants that run on
+ * person actually evaluates against Quasnooze: local-first assistants that run on
  * your own machine, plus the two hosted products everyone measures by. A
  * different set gives a different answer — that is why the list is explicit and
  * short enough to argue about.
@@ -65,7 +65,7 @@ const SOURCES = [
   { repo: "FlowiseAI/Flowise", why: "visual agent builder", kind: "platform" },
 ];
 
-/* ──────────────────────────── Pinch's own claim ─────────────────────────── */
+/* ──────────────────────────── Quasnooze's own claim ─────────────────────────── */
 
 function loadCapabilities() {
   const file = join(ROOT, "docs", "CAPABILITIES.json");
@@ -87,7 +87,7 @@ function loadCapabilities() {
 async function fetchReadme(repo) {
   const url = `https://raw.githubusercontent.com/${repo}/HEAD/README.md`;
   const res = await fetch(url, {
-    headers: { "user-agent": "pinch-market-research" },
+    headers: { "user-agent": "quasnooze-market-research" },
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) throw new Error(`${repo}: HTTP ${res.status}`);
@@ -140,7 +140,7 @@ export function compare(caps, sources) {
 }
 
 /**
- * Gaps worth proposing: Pinch lacks it, and the market has converged on it.
+ * Gaps worth proposing: Quasnooze lacks it, and the market has converged on it.
  *
  * `adjacent` is the interesting middle — "partial" means the capability exists
  * but is a shadow of what everyone else ships, which is usually cheaper to
@@ -151,7 +151,7 @@ export function gaps(rows, { share = 0.4 } = {}) {
     .filter((r) => r.status !== "have")
     // The policy gate is the most important line in this file. Without it the
     // researcher happily reports that four of six competitors support multiple
-    // accounts — true, and irrelevant, because Pinch is one person on one
+    // accounts — true, and irrelevant, because Quasnooze is one person on one
     // laptop. A gap the product has decided not to close is not a backlog item,
     // and a bot that proposes it is a bot that has not read the brief.
     .filter((r) => r.policy === "in-scope")
@@ -218,7 +218,7 @@ async function main() {
     return;
   }
 
-  console.log(`\n🦞 market — ${TODAY}`);
+  console.log(`\n✦ market — ${TODAY}`);
   console.log(`   ${sources.filter((s) => s.ok !== false).length}/${sources.length} sources read\n`);
 
   if (failed.length) {
@@ -226,7 +226,7 @@ async function main() {
     console.log("");
   }
 
-  const head = "capability".padEnd(30) + "pinch".padEnd(10) + "market".padEnd(9) + "policy";
+  const head = "capability".padEnd(30) + "quasnooze".padEnd(10) + "market".padEnd(9) + "policy";
   console.log("  " + head);
   console.log("  " + "─".repeat(head.length + 8));
   for (const r of rows) {
@@ -241,7 +241,7 @@ async function main() {
     console.log(`  ${String(g.opportunity).padStart(3)}  ${g.kind.padEnd(15)} ${g.name}`);
     console.log(`       covered by ${g.coveredBy.map((c) => c.repo.split("/")[1]).join(", ")}`);
   }
-  console.log("\n  Nothing here is a decision. docs/CAPABILITIES.json records what Pinch has chosen not to do.\n");
+  console.log("\n  Nothing here is a decision. docs/CAPABILITIES.json records what Quasnooze has chosen not to do.\n");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

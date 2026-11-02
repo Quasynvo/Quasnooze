@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * scripts/pair.js — "pinch pair"
+ * scripts/pair.js — "quasnooze pair"
  *
  * Prints the exact URL to open on your phone, as a QR code when the optional
  * qrcode-terminal package is installed. The QR is generated locally; the key
@@ -26,7 +26,7 @@ const port = readPort(env.PINCH_PORT);
 const key = env.PINCH_KEY || "";
 
 const C = {
-  coral: (s) => `\x1b[38;5;209m${s}\x1b[0m`,
+  coral: (s) => `\x1b[38;5;87m${s}\x1b[0m`,
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
   gold: (s) => `\x1b[38;5;214m${s}\x1b[0m`,
@@ -46,7 +46,7 @@ const lan = addresses();
 const url = `http://${lan[0] || "localhost"}:${port}${key ? `?key=${key}` : ""}`;
 
 console.log(`
-${C.coral("🦞  Pair your phone")}
+${C.coral("✦  Pair your phone")}
 
    1. Phone and this machine must be on the same Wi-Fi.
    2. Scan this, or type the URL. The key is remembered in a cookie.
@@ -74,8 +74,8 @@ console.log(
   key
     ? C.dim(
         qrcode
-          ? "   the QR above already includes your key.\n   no camera? append ?key=… — it is the PINCH_KEY line in .env\n"
-          : "   add ?key=… to that URL — it is the PINCH_KEY line in .env\n   (npm i qrcode-terminal shows a QR with the key baked in)\n"
+          ? "   the QR above already includes your key.\n   no camera? append ?key=… — it is the QUASNOOZE_KEY line in .env\n"
+          : "   add ?key=… to that URL — it is the QUASNOOZE_KEY line in .env\n   (npm i qrcode-terminal shows a QR with the key baked in)\n"
       )
     : ""
 );
@@ -85,10 +85,10 @@ for (const addr of lan.slice(1)) {
 }
 
 if (!key) {
-  console.log(`\n   ${C.gold("▲")} No PINCH_KEY set — anyone on this network can use Pinch.`);
-  console.log(C.dim("     Run `npm run setup` (or set PINCH_KEY in .env) before opening it on a shared network.\n"));
+  console.log(`\n   ${C.gold("▲")} No QUASNOOZE_KEY set — anyone on this network can use Quasnooze.`);
+  console.log(C.dim("     Run `npm run setup` (or set QUASNOOZE_KEY in .env) before opening it on a shared network.\n"));
 }
 if (!existsSync(join(ROOT, ".env"))) {
   console.log(`   ${C.gold("▲")} No .env yet — run \`npm run setup\` first.\n`);
 }
-console.log(C.dim("   Start Pinch with `npm start`, then open the URL on your phone.\n"));
+console.log(C.dim("   Start Quasnooze with `npm start`, then open the URL on your phone.\n"));

@@ -1,7 +1,7 @@
 /**
  * ws.js — a ~120 line RFC 6455 WebSocket *client*.
  *
- * Node 20 has no stable global WebSocket, and Pinch refuses to pull in a
+ * Node 20 has no stable global WebSocket, and Quasnooze refuses to pull in a
  * dependency tree just to listen to Discord. This implements exactly what the
  * Discord gateway needs: client masking, text frames, fragmentation, ping/pong,
  * close, and reconnect. It is not a general-purpose server implementation.

@@ -25,7 +25,7 @@ Each one was fixed by changing the code, not by loosening the query.
 | `js/unused-local-variable` ×5 | `test/agent.test.js`, `scripts/service.js`, `scripts/audit.js`, `src/prompt.js` | dead imports and bindings | removed |
 | `js/double-escaping` | `src/tools.js` `decode()` | decoding `&amp;` first meant `&amp;lt;` came back out as `<` — an escape hatch through the sanitiser | decode to a **fixed point**, decode `&amp;` **last**, never decode `&lt;`/`&gt;` |
 | `js/incomplete-multi-character-sanitization` | `src/tools.js` | residual `<`/`>` after one pass | same fixed-point loop; a fuzz property now asserts `md()` never emits `<script`, `on*=`, or `javascript:` |
-| `js/clear-text-logging` | `src/index.js` banner | the banner printed a fragment of `PINCH_KEY` | banner prints the URL only |
+| `js/clear-text-logging` | `src/index.js` banner | the banner printed a fragment of `QUASNOOZE_KEY` | banner prints the URL only |
 | `js/file-system-race` ×3 | `src/server.js` static files, `src/tools.js` grep, `scripts/setup.js` `.env` backup | `stat`/`existsSync` then use | one `open()` + bounded `read()`; grep reads at most 400 kB through a single descriptor; backup tolerates `ENOENT` |
 | `js/file-system-race` | `scripts/setup.js` profile write | read for display, write later | read without a probe; write to a temp file and `rename` |
 | `js/clear-text-logging` ×3 | `scripts/pair.js` | the terminal printed the keyed pairing URL, then the port straight out of the env object | the key now exists only inside the QR payload; `--show-key` was removed; the port is parsed to an integer first |

@@ -339,7 +339,7 @@ const mock = {
         : "";
       return {
         content:
-          `🦞 (mock brain) **${last.name}** returned:\n\n${String(last.content).slice(0, 1200)}${attribution}\n\n` +
+          `✦ (mock brain) **${last.name}** returned:\n\n${String(last.content).slice(0, 1200)}${attribution}\n\n` +
           `A real model would now explain this, decide the next step, or write the fix. ` +
           `The tool chain, permissions and memory you just saw are the real thing.`,
         toolCalls: [],
@@ -391,7 +391,7 @@ const mock = {
       }
     }
     const canned =
-      `🦞 (mock brain) I heard: "${text.slice(0, 200)}".\n\n` +
+      `✦ (mock brain) I heard: "${text.slice(0, 200)}".\n\n` +
       `No real model is configured yet, so this is a canned reply used to prove the plumbing works.\n` +
       `Point LLM_PROVIDER at Ollama or an OpenAI-compatible endpoint and I'll actually think.`;
     if (onDelta) {
@@ -481,13 +481,13 @@ export async function modelCommand(text) {
         await brain.setModel({ provider: prefixed ? prefixed[1] : "ollama", model: prefixed ? prefixed[2] : requested });
       }
       const active = brain.active;
-      return `🦞 Active model: ${active.provider} / ${active.model}. Applies globally to new turns; .env is unchanged.`;
-    } catch (err) { return `🦞 Model unchanged: ${err.message}`; }
+      return `✦ Active model: ${active.provider} / ${active.model}. Applies globally to new turns; .env is unchanged.`;
+    } catch (err) { return `✦ Model unchanged: ${err.message}`; }
   }
   const models = await brain.probe();
   const active = brain.active;
   const local = models.ollama.ok ? models.ollama.models.join(", ") || "none installed" : "unavailable";
-  return `🦞 Active model: ${active.provider} / ${active.model}\nLocal Ollama models: ${local}\nUse /model <local-name>, /model openai/<name> (configured endpoint; may send history remotely), or /model default. Changes apply globally to new turns and reset on restart.`;
+  return `✦ Active model: ${active.provider} / ${active.model}\nLocal Ollama models: ${local}\nUse /model <local-name>, /model openai/<name> (configured endpoint; may send history remotely), or /model default. Changes apply globally to new turns and reset on restart.`;
 }
 
 export const brain = {

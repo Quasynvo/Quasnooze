@@ -131,7 +131,7 @@ jobs:
           DECISION="$(jq -r .decision /tmp/decision.json)"
           echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
           {
-            echo "### 🦞 Growth loop — $DECISION"
+            echo "### ✦ Growth loop — $DECISION"
             echo
             echo "**$(jq -r .reason /tmp/decision.json)**"
             echo
@@ -202,7 +202,7 @@ jobs:
 
           SUMMARY="$(jq -r '.applied.summary' /tmp/manager.json)"
           BRANCH="growth/fix-${APPLIED}-$(date -u +%Y%m%d)"
-          git config user.name "pinch-growth[bot]"
+          git config user.name "quasnooze-growth[bot]"
           git config user.email "growth@users.noreply.github.com"
           git checkout -b "$BRANCH"
           git add -A

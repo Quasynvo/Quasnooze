@@ -22,16 +22,16 @@ const { nodeSupport, recommendedNode, NODE_MIN, NODE_LIFECYCLE } = await import(
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
 test("the policy in package.json and the table in code agree", () => {
-  assert.equal(NODE_MIN, Number(pkg.pinch.node.min), "engines and pinch.node.min disagree");
-  assert.equal(String(pkg.pinch.node.dropMinAt), NODE_LIFECYCLE[pkg.pinch.node.min].eol,
+  assert.equal(NODE_MIN, Number(pkg.quasnooze.node.min), "engines and quasnooze.node.min disagree");
+  assert.equal(String(pkg.quasnooze.node.dropMinAt), NODE_LIFECYCLE[pkg.quasnooze.node.min].eol,
     "the documented drop date is not the upstream end-of-life date");
-  assert.ok(pkg.pinch.node.dropMinAt > new Date().toISOString().slice(0, 10),
+  assert.ok(pkg.quasnooze.node.dropMinAt > new Date().toISOString().slice(0, 10),
     "the drop date has passed — this policy needs updating (that is what the radar is for)");
 });
 
 test("the documented drop date matches docs/SUPPORT.md", () => {
   const doc = readFileSync(join(root, "docs", "SUPPORT.md"), "utf8");
-  assert.match(doc, new RegExp(pkg.pinch.node.dropMinAt), "SUPPORT.md does not mention the drop date");
+  assert.match(doc, new RegExp(pkg.quasnooze.node.dropMinAt), "SUPPORT.md does not mention the drop date");
 });
 
 test("running the minimum supported version is supported, with an upgrade plan", () => {

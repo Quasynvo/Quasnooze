@@ -168,6 +168,6 @@ export function renderGuardNote(flags) {
   return (
     `\n\n---\n🛡️ **Code check:** the reply above needs a second look.\n` +
     lines.join("\n") +
-    `\n_Pinch checks claims against what actually ran — this one did not line up._`
+    `\n_Quasnooze checks claims against what actually ran — this one did not line up._`
   );
 }

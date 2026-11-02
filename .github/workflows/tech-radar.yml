@@ -51,7 +51,7 @@ jobs:
               gh issue comment "$NUM" --body "Refreshed $(date -u +%Y-%m-%d): $ACTIONABLE item(s) to decide on. Nothing changes automatically — this is a list of decisions, not a changelog."
               echo "updated issue #$NUM"
             else
-              gh issue create --title "🦞 Tech radar (auto-updated weekly)" --body "$BODY"
+              gh issue create --title "✦ Tech radar (auto-updated weekly)" --body "$BODY"
             fi
           elif [ -n "$NUM" ]; then
             # A clean sweep closes the issue rather than leaving a stale list open.
@@ -68,7 +68,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### 🦞 Tech radar"
+            echo "### ✦ Tech radar"
             echo
             cat /tmp/radar.md || echo "the report was not produced this week"
           } >> "$GITHUB_STEP_SUMMARY"

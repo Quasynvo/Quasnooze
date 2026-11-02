@@ -1,6 +1,6 @@
 # Channel setup, in detail
 
-Each channel is independent. Enable one, or all five. Pinch boots with whatever is configured.
+Each channel is independent. Enable one, or all five. Quasnooze boots with whatever is configured.
 
 ## Telegram — recommended first channel (~2 minutes)
 
@@ -11,14 +11,14 @@ Each channel is independent. Enable one, or all five. Pinch boots with whatever 
 5. `npm run setup` → Telegram step → paste both.
 
 **Why the allowlist matters.** A bot username is public. Without `TELEGRAM_ALLOWED_IDS`,
-anyone who finds your bot could drive your laptop. Pinch's default is to refuse everyone
+anyone who finds your bot could drive your laptop. Quasnooze's default is to refuse everyone
 and echo their id back so you can add it deliberately.
 
 **Approvals** arrive as inline ✅ / ❌ buttons. Tapping calls
 `/api/approve` under the hood via the callback handler.
 
 **Privacy note.** Telegram is a cloud service; messages pass through Telegram's servers.
-Pinch's *processing* is local, but the transport is not. If that matters, use the web panel
+Quasnooze's *processing* is local, but the transport is not. If that matters, use the web panel
 or WhatsApp/Signal-style transports you trust.
 
 ## Discord (~5 minutes)
@@ -32,7 +32,7 @@ or WhatsApp/Signal-style transports you trust.
 5. Enable **Developer Mode** (Settings → Advanced), right-click your channel → **Copy Channel ID**.
 6. `DISCORD_BOT_TOKEN=…` and `DISCORD_CHANNEL_IDS=…` in `.env`.
 
-Pinch uses its **own WebSocket client** (`src/channels/ws.js`) — no `discord.js`, no
+Quasnooze uses its **own WebSocket client** (`src/channels/ws.js`) — no `discord.js`, no
 dependency tree, about 120 lines implementing exactly the RFC 6455 client features the
 gateway needs, including resume.
 
@@ -46,7 +46,7 @@ gateway needs, including resume.
    (`C0123456789`, visible in the channel URL or via right-click → Copy link).
 5. `SLACK_BOT_TOKEN=…`, `SLACK_CHANNEL_IDS=…`.
 
-Pinch polls `conversations.history` every ~3.5 s rather than using Socket Mode — no public
+Quasnooze polls `conversations.history` every ~3.5 s rather than using Socket Mode — no public
 URL, no second token, and it replies in-thread when the conversation is threaded.
 
 ## WhatsApp (optional, unofficial)
@@ -64,8 +64,8 @@ terminal the first time; scan it with **WhatsApp → Settings → Linked devices
 - WhatsApp's Terms of Service prohibit automating a personal account. Enforcement is
   automated and unappealable; numbers get banned.
 - Use a **secondary SIM**. Do not risk the number your life runs on.
-- Messages transit WhatsApp's servers. Pinch's processing is local; the transport is not.
-- The bridge is the most fragile part of Pinch because it chases a moving target.
+- Messages transit WhatsApp's servers. Quasnooze's processing is local; the transport is not.
+- The bridge is the most fragile part of Quasnooze because it chases a moving target.
 
 If those trade-offs are unacceptable — and for most people they should be — use Telegram,
 which offers the same "message my assistant from my phone" experience officially.
@@ -80,9 +80,9 @@ Open `http://<host>:7777?key=YOUR_KEY` once per device. The key is stored in a c
 
 Tip: put the panel behind [Tailscale](https://tailscale.com) if you want it reachable
 outside your home network without exposing a port to the internet. Do **not** port-forward
-Pinch directly to the public internet.
+Quasnooze directly to the public internet.
 
-### Pairing: `pinch pair`
+### Pairing: `quasnooze pair`
 
 Prints the LAN URL with the key attached, plus a QR code generated **locally** by
 `qrcode-terminal` (`npm i qrcode-terminal`). The QR is never sent to a third-party QR service —
@@ -90,7 +90,7 @@ that would be an amusing way to hand your access key to someone else.
 
 ### Wake word
 
-The 👂 toggle in the panel header enables "Hey Pinch". It uses the browser's own recogniser in
+The 👂 toggle in the panel header enables "Hey Quasnooze". It uses the browser's own recogniser in
 continuous mode to match the phrase while the tab is open. Browser speech recognition may send
 microphone audio to the browser vendor even before a command follows the wake word, so the toggle
 asks for explicit consent and points at the Windows companion for recognition that stays on the

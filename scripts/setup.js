@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { parseSetupEnv, renderSetupEnv } from "../src/setup-env.js";
 import { resolveModelChoice } from "../src/model-choice.js";
 import { checkVoice } from "../src/voice.js";
 /**
@@ -11,7 +12,7 @@ import { checkVoice } from "../src/voice.js";
  *  • never overwrite a value you already have — it is offered as the default;
  *  • verify tokens against the real API before saving, so you find out now
  *    rather than at 2am wondering why the bot is silent;
- *  • do not require anything. Every step is skippable; Pinch boots with an
+ *  • do not require anything. Every step is skippable; Quasnooze boots with an
  *    almost-empty .env;
  *  • no dependencies — plain readline.
  */
@@ -31,7 +32,7 @@ const EXAMPLE_PATH = join(ROOT, ".env.example");
 /* ────────────────────────────── pretty output ──────────────────────────── */
 
 const C = {
-  coral: (s) => `\x1b[38;5;209m${s}\x1b[0m`,
+  coral: (s) => `\x1b[38;5;87m${s}\x1b[0m`,
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
   teal: (s) => `\x1b[38;5;79m${s}\x1b[0m`,
@@ -54,30 +55,12 @@ function section(title, blurb) {
 /* ─────────────────────────────── env parsing ───────────────────────────── */
 
 function parseEnvFile(path) {
-  if (!existsSync(path)) return {};
-  const out = {};
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (m) out[m[1]] = m[2];
-  }
-  return out;
+  return existsSync(path) ? parseSetupEnv(readFileSync(path, "utf8")) : {};
 }
 
 function renderEnv(values) {
   const example = existsSync(EXAMPLE_PATH) ? readFileSync(EXAMPLE_PATH, "utf8") : "";
-  if (!example) {
-    return Object.entries(values).map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
-  }
-  // Keep the hand-written comments from .env.example, swap in real values.
-  return example
-    .split(/\r?\n/)
-    .map((line) => {
-      const m = /^([A-Z0-9_]+)=/.exec(line);
-      if (!m) return line;
-      const key = m[1];
-      return key in values ? `${key}=${values[key]}` : line;
-    })
-    .join("\n");
+  return renderSetupEnv(example, values);
 }
 
 /* ─────────────────────────────── prompting ─────────────────────────────── */
@@ -250,7 +233,7 @@ async function setup() {
 
   console.log(C.coral(`
    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-      🦞  ${C.bold("P I N C H")} ${C.dim("setup")}
+      ✦  ${C.bold("P I N C H")} ${C.dim("setup")}
    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀`));
   console.log(`
    Seven short steps. Everything is optional except your name and a brain.
@@ -259,7 +242,7 @@ async function setup() {
 `);
 
   /* 1 ─ identity ───────────────────────────────────────────────────────── */
-  section("1/7 · Who am I working for?", "Just so Pinch knows what to call you.");
+  section("1/7 · Who am I working for?", "Just so Quasnooze knows what to call you.");
   values.OWNER_NAME = await ask("Your name", values.OWNER_NAME || "friend");
   const guessTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   values.OWNER_TIMEZONE = await ask("Timezone", values.OWNER_TIMEZONE || guessTz);
@@ -267,7 +250,7 @@ async function setup() {
   /* 2 ─ brain ──────────────────────────────────────────────────────────── */
   section("2/7 · The brain", "The model that does the thinking. Local is private and free.");
   const provider = await choose(
-    "How should Pinch think?",
+    "How should Quasnooze think?",
     [
       { label: "Ollama (local)", hint: "— private, free, recommended" },
       { label: "OpenAI-compatible API", hint: "— OpenAI, Groq, LM Studio, vLLM, OpenRouter" },
@@ -314,7 +297,7 @@ async function setup() {
       warn(`Ollama is not reachable at ${values.OLLAMA_URL} (${probe.error})`);
       hint("Install: https://ollama.com  →  then run `ollama serve` in another terminal.");
       values.OLLAMA_MODEL = await ask("Model to use once it is running", values.OLLAMA_MODEL || "qwen2.5-coder:7b");
-      hint(`nobody home yet — Pinch still boots, and will tell you clearly when the brain is down.`);
+      hint(`nobody home yet — Quasnooze still boots, and will tell you clearly when the brain is down.`);
     }
   } else if (provider.label.startsWith("OpenAI")) {
     values.LLM_PROVIDER = "openai";
@@ -323,7 +306,7 @@ async function setup() {
     const key = await ask("API key (stored only in .env)", values.OPENAI_KEY ? "•••• (keep)" : "");
     if (key && !key.includes("••••")) values.OPENAI_API_KEY = key;
     values.OPENAI_MODEL = await ask("Model", values.OPENAI_MODEL || "gpt-4o-mini");
-    if (values.OPENAI_API_KEY) ok("key saved — Pinch will call this endpoint only when you talk to it");
+    if (values.OPENAI_API_KEY) ok("key saved — Quasnooze will call this endpoint only when you talk to it");
     else warn("no key set — set OPENAI_API_KEY later or the brain will error");
   } else {
     values.LLM_PROVIDER = "mock";
@@ -331,13 +314,13 @@ async function setup() {
   }
 
   /* 3 ─ workspace ──────────────────────────────────────────────────────── */
-  section("3/7 · Where may Pinch work?", "Reading, writing and shell commands are confined to these folders.");
-  hint(`current: ${values.PINCH_WORKSPACE || "(your home directory)"}`);
-  const ws = await ask("Workspace root(s), comma separated", values.PINCH_WORKSPACE || "");
-  if (ws) values.PINCH_WORKSPACE = ws;
+  section("3/7 · Where may Quasnooze work?", "Reading, writing and shell commands are confined to these folders.");
+  hint(`current: ${values.QUASNOOZE_WORKSPACE || "(your home directory)"}`);
+  const ws = await ask("Workspace root(s), comma separated", values.QUASNOOZE_WORKSPACE || "");
+  if (ws) values.QUASNOOZE_WORKSPACE = ws;
 
   /* 4 ─ chat apps ──────────────────────────────────────────────────────── */
-  section("4/7 · Chat apps", "Message Pinch from the apps you already use. Skip any you don't want.");
+  section("4/7 · Chat apps", "Message Quasnooze from the apps you already use. Skip any you don't want.");
 
   // Telegram
   console.log(`\n  ${C.bold("Telegram")} ${C.dim("— easiest, ~2 minutes")}`);
@@ -435,7 +418,7 @@ async function setup() {
   }
 
   /* 5 ─ about you ─────────────────────────────────────────────────────── */
-  section("5/7 · Tell Pinch about you", "Written once, read every turn, never invented beyond.");
+  section("5/7 · Tell Quasnooze about you", "Written once, read every turn, never invented beyond.");
   hint("Like an about-me note. One fact per line, blank line to finish.");
   hint("Example: Name: Ranjith · City: Chennai · Work: ML engineer at Accenture");
   const existingProfile = join(ROOT, "data", "profile.md");
@@ -474,7 +457,7 @@ async function setup() {
   }
 
   /* 6 ─ voice ──────────────────────────────────────────────────────────── */
-  section("6/7 · Voice", "Talking to Pinch from your phone.");
+  section("6/7 · Voice", "Talking to Quasnooze from your phone.");
   hint("The web panel has a mic button that uses your phone's own speech engine:");
   hint("· iPhone/iPad — Safari (iOS 14.5+), tap 🎙️, speak, it sends automatically");
   hint("· Android   — Chrome, tap 🎙️, speak, it sends automatically");
@@ -487,21 +470,21 @@ async function setup() {
   if (whisper) values.WHISPER_URL = whisper;
 
   /* 6 ─ security ──────────────────────────────────────────────────────── */
-  section("7/7 · Locking it down", "Pinch listens on your LAN so your phone can reach it.");
-  values.PINCH_PORT = await ask("Port", values.PINCH_PORT || "7777");
-  values.PINCH_HOST = "0.0.0.0";
-  if (!values.PINCH_KEY) values.PINCH_KEY = randomBytes(18).toString("hex");
+  section("7/7 · Locking it down", "Quasnooze listens on your LAN so your phone can reach it.");
+  values.QUASNOOZE_PORT = await ask("Port", values.QUASNOOZE_PORT || "7777");
+  values.QUASNOOZE_HOST = "0.0.0.0";
+  if (!values.QUASNOOZE_KEY) values.QUASNOOZE_KEY = randomBytes(18).toString("hex");
   const keepKey = await confirm(
-    `Keep the generated access key (${values.PINCH_KEY.slice(0, 6)}…)? Without one, anyone on your Wi-Fi can use Pinch.`,
+    `Keep the generated access key (${values.QUASNOOZE_KEY.slice(0, 6)}…)? Without one, anyone on your Wi-Fi can use Quasnooze.`,
     true
   );
-  if (!keepKey) values.PINCH_KEY = "";
+  if (!keepKey) values.QUASNOOZE_KEY = "";
 
   const autoApprove = await confirm(
-    "Let Pinch run shell commands and write files WITHOUT asking each time? (not recommended)",
-    values.PINCH_AUTO_APPROVE === "true"
+    "Let Quasnooze run shell commands and write files WITHOUT asking each time? (not recommended)",
+    values.QUASNOOZE_AUTO_APPROVE === "true"
   );
-  values.PINCH_AUTO_APPROVE = autoApprove ? "true" : "false";
+  values.QUASNOOZE_AUTO_APPROVE = autoApprove ? "true" : "false";
 
   /* ── write ───────────────────────────────────────────────────────────── */
   // Copy rather than check-then-copy: if there is no .env, ENOENT tells us so
@@ -525,7 +508,7 @@ async function setup() {
 
 async function doctor(values = parseEnvFile(ENV_PATH)) {
   section("Verifying", "Actually calls each service — no guesses.");
-  const port = values.PINCH_PORT || "7777";
+  const port = values.QUASNOOZE_PORT || "7777";
 
   const rows = [];
   rows.push(await checkVoice(values.WHISPER_URL));
@@ -579,8 +562,8 @@ async function doctor(values = parseEnvFile(ENV_PATH)) {
     values.WHATSAPP_ENABLED === "true" ? "whatsapp: enabled (unofficial — use a secondary number)" : "whatsapp: disabled",
   ]);
 
-  rows.push([values.PINCH_KEY ? "ok" : "warn", values.PINCH_KEY ? "access key: set" : "access key: EMPTY — anyone on your network can use Pinch"]);
-  rows.push([values.PINCH_AUTO_APPROVE === "true" ? "warn" : "ok", values.PINCH_AUTO_APPROVE === "true" ? "approvals: AUTO (pinch can act without asking)" : "approvals: ask in chat"]);
+  rows.push([values.QUASNOOZE_KEY ? "ok" : "warn", values.QUASNOOZE_KEY ? "access key: set" : "access key: EMPTY — anyone on your network can use Quasnooze"]);
+  rows.push([values.QUASNOOZE_AUTO_APPROVE === "true" ? "warn" : "ok", values.QUASNOOZE_AUTO_APPROVE === "true" ? "approvals: AUTO (Quasnooze can act without asking)" : "approvals: ask in chat"]);
 
   const paint = { ok: C.green("✔"), warn: C.gold("▲"), fail: C.red("✖"), skip: C.dim("·") };
   for (const [level, message] of rows) console.log(`  ${paint[level]} ${message}`);
@@ -591,8 +574,8 @@ ${C.coral("━".repeat(4))} ${C.bold("Ready")}
 
    ${C.bold("npm start")}   ${C.dim("or: node src/index.js")}
 
-   panel on this machine   ${C.bold(`http://localhost:${port}`)}${values.PINCH_KEY ? `?key=${values.PINCH_KEY}` : ""}
-   panel from your phone   ${C.bold(url)}${values.PINCH_KEY ? `?key=${values.PINCH_KEY}` : ""}
+   panel on this machine   ${C.bold(`http://localhost:${port}`)}${values.QUASNOOZE_KEY ? `?key=${values.QUASNOOZE_KEY}` : ""}
+   panel from your phone   ${C.bold(url)}${values.QUASNOOZE_KEY ? `?key=${values.QUASNOOZE_KEY}` : ""}
 
    ${C.dim("Open the phone link once on each device — the key is remembered in a cookie.")}
    ${C.dim("Then: Add to Home Screen, tap 🎙️, and just talk.")}

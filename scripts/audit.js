@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pinch self-check — `npm run audit`
+ * Quasnooze self-check — `npm run audit`
  *
  * Runs the adversarial probes from docs/AUDIT.md against *this* checkout, on
  * *this* machine, with no model and no network. It answers one question:
@@ -433,7 +433,7 @@ if (JSON_OUT) {
   console.log(JSON.stringify({ ok: exitCode === 0, passed: passed.length, failed: failed.length, warned: warned.length, skipped: skipped.length, checks: results }, null, 2));
 } else {
   console.log("");
-  console.log(c.bold("  🦞 Pinch self-check") + c.dim(`  ${new Date().toISOString().slice(0, 16).replace("T", " ")}`));
+  console.log(c.bold("  ✦ Quasnooze self-check") + c.dim(`  ${new Date().toISOString().slice(0, 16).replace("T", " ")}`));
   console.log(c.dim("  ─────────────────────────────────────────────────────────────────────"));
   const width = Math.max(...results.map((r) => r.title.length)) + 2;
   for (const r of results) {

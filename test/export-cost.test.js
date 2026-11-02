@@ -16,7 +16,7 @@ ensureData();
 
 /* ───────────────────────── export ──────────────────────────────────────── */
 
-test("an export carries every kind of thing Pinch knows about you", () => {
+test("an export carries every kind of thing Quasnooze knows about you", () => {
   remember("deploys happen on Fridays");
   appendMessage("s-export-1", { role: "user", content: "hello" });
   appendMessage("s-export-1", { role: "assistant", content: "hi" });

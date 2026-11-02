@@ -34,7 +34,7 @@ test('connection loss clears stale native CONNECTED status, disables controls, a
   assert.equal(ui.element('micState').textContent,'UNKNOWN');
   assert.equal(ui.element('audioMeter').value,0);
   assert.match(ui.element('audioLabel').textContent,/UNKNOWN/);
-  assert.match(ui.element('notice').textContent,/Cannot reach the Pinch service/);
+  assert.match(ui.element('notice').textContent,/Cannot reach the Quasnooze service/);
   for(const id of ['listenButton','muteButton','stopButton','runButton','allow','deny']) assert.equal(ui.element(id).disabled,true);
   online=true;await ui.refresh();
   assert.equal(ui.element('nativeStatus').textContent,'CONNECTED');

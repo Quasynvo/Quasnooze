@@ -6,7 +6,7 @@
  * MCP is the right answer for someone else's tools. It is a heavy answer for the
  * one command you already run by hand every morning.
  *
- * A manifest is JSON. Pinch never `import()`s, `eval()`s or otherwise executes a
+ * A manifest is JSON. Quasnooze never `import()`s, `eval()`s or otherwise executes a
  * manifest — it reads a command *you* wrote, gives it a name and a description,
  * and lets the model fill in arguments you declared. So the trust boundary is:
  * you author the command, the model supplies data, and a human approves every
@@ -90,7 +90,7 @@ function assertOutsideWorkspace(exePath, workspaceRoots) {
     if (exePath === prefix || exePath.startsWith(prefix.endsWith(sep) ? prefix : prefix + sep)) {
       throw new ManifestError(
         `executable ${exePath} is inside the workspace (${prefix}), which the agent can write to. ` +
-          "Move it outside PINCH_WORKSPACE, or the model could replace it between calls.",
+          "Move it outside QUASNOOZE_WORKSPACE, or the model could replace it between calls.",
       );
     }
   }
@@ -212,7 +212,7 @@ function readManifest(path) {
 }
 
 /**
- * Turn one manifest entry into a Pinch tool.
+ * Turn one manifest entry into a Quasnooze tool.
  *
  * Throws `ManifestError` for anything unusable; the caller logs and skips, the
  * same way a failing MCP server is skipped rather than stopping the boot.

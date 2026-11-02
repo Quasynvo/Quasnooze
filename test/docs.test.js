@@ -108,8 +108,8 @@ test("the allowlist size the guide claims is the size it is", () => {
   assert.equal(readers.length, 11, `plain readers: ${readers.join(" ")}`);
 });
 
-test("every command in the CLI table exists in bin/pinch.js", () => {
-  const cli = readFileSync(resolve(root, "bin/pinch.js"), "utf8");
+test("every command in the CLI table exists in bin/quasnooze.js", () => {
+  const cli = readFileSync(resolve(root, "bin/quasnooze.js"), "utf8");
   const start = guide.indexOf("## Command line");
   const end = guide.indexOf("\n## ", start + 10);
   const section = guide.slice(start, end);
@@ -119,7 +119,7 @@ test("every command in the CLI table exists in bin/pinch.js", () => {
     const m = line.match(/^\|\s*`([^`]+)`\s*\|/);
     if (!m) continue;
     const cmd = m[1].trim().split(/\s+/);
-    if (cmd[0] !== "pinch") continue;
+    if (cmd[0] !== "quasnooze") continue;
     if (cmd[1]) documented.push(cmd[1].replace(/[^a-z-]/g, ""));
   }
   assert.ok(documented.includes("export") && documented.includes("cost"), "export/cost left the table");
@@ -146,10 +146,10 @@ test("the documented export and cost commands run", () => {
   `]).toString();
   const env = { ...process.env, PINCH_DATA: data, LLM_PROVIDER: "mock", PINCH_KEY: "" };
 
-  const help = execFileSync(process.execPath, [resolve(root, "bin/pinch.js"), "help"], { env }).toString();
-  assert.match(help, /pinch export/, "the help text does not mention the documented export command");
-  assert.match(help, /pinch cost/, "the help text does not mention the documented cost command");
+  const help = execFileSync(process.execPath, [resolve(root, "bin/quasnooze.js"), "help"], { env }).toString();
+  assert.match(help, /quasnooze export/, "the help text does not mention the documented export command");
+  assert.match(help, /quasnooze cost/, "the help text does not mention the documented cost command");
 
-  const cost = execFileSync(process.execPath, [resolve(root, "bin/pinch.js"), "cost", "7"], { env }).toString();
+  const cost = execFileSync(process.execPath, [resolve(root, "bin/quasnooze.js"), "cost", "7"], { env }).toString();
   assert.match(cost, /No turns recorded/, "cost on an empty store should say so, not invent numbers");
 });

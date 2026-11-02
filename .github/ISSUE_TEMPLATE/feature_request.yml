@@ -5,13 +5,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Two things to know before filing: Pinch takes **no new runtime dependencies** by design,
+        Two things to know before filing: Quasnooze takes **no new runtime dependencies** by design,
         and every capability that changes your machine must sit behind the approval gate.
   - type: textarea
     id: problem
     attributes:
       label: The problem
-      description: What are you trying to do that Pinch makes hard today?
+      description: What are you trying to do that Quasnooze makes hard today?
     validations:
       required: true
   - type: textarea

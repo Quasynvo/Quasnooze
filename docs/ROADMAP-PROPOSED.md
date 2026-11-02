@@ -1,3 +1,5 @@
+> **Historical proposal/evidence:** this document records the earlier Pinch-era proposal and its own checks. For the adopted Quasnooze / Quasynvo identity and current compatibility rules, see [the rebrand guide](REBRANDING.md). Historical names, source links and results below are preserved rather than rewritten as new evidence.
+
 # Pinch — proposed evidence-led product upgrade roadmap
 
 **Status: proposal only.** Review date: **2026-11-03**. No feature, release, permissions change, issue filing, or replacement of the curated roadmap is authorized by this document.

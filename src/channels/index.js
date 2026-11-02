@@ -2,7 +2,7 @@
  * channels/index.js — boot every configured chat app, report which are live.
  *
  * A channel that fails to start (bad token, missing module) is logged and
- * skipped: the rest of Pinch keeps working. Losing Telegram must never take
+ * skipped: the rest of Quasnooze keeps working. Losing Telegram must never take
  * the web panel down with it.
  */
 import { config } from "../config.js";

@@ -3,7 +3,7 @@
  * actually read.
  *
  * The product question: every comparable assistant lets you drop a PDF, a
- * screenshot or a spreadsheet into the chat and ask about it. Pinch could not.
+ * screenshot or a spreadsheet into the chat and ask about it. Quasnooze could not.
  * This closes that gap without adding a dependency, a service, or a new way to
  * reach the shell.
  *
@@ -361,7 +361,7 @@ export function extract(buffer, name = "") {
         ...base,
         text: "",
         images: [],
-        note: truncated ? "PDF extraction was incomplete or exceeded safety limits." : "this PDF has no extractable text — it is probably a scan. Pinch does not do OCR; attach a screenshot instead and use a vision model.",
+        note: truncated ? "PDF extraction was incomplete or exceeded safety limits." : "this PDF has no extractable text — it is probably a scan. Quasnooze does not do OCR; attach a screenshot instead and use a vision model.",
       };
     }
     return { ...base, text, images: [], note: truncated || !pages ? "partial" : null, truncated: Boolean(truncated) };
@@ -381,7 +381,7 @@ export function extract(buffer, name = "") {
       ...base,
       text: "",
       images: [buffer.toString("base64")],
-      note: "images are passed to the model, not parsed. Without a vision-capable model Pinch will say it cannot see it.",
+      note: "images are passed to the model, not parsed. Without a vision-capable model Quasnooze will say it cannot see it.",
     };
   }
 
@@ -393,7 +393,7 @@ export function extract(buffer, name = "") {
     return { ...base, text: "", images: [], note: "that is a zip archive — only .docx can be read without a dependency" };
   }
 
-  return { ...base, text: "", images: [], note: "unrecognised binary — Pinch reads text, PDF, DOCX and images" };
+  return { ...base, text: "", images: [], note: "unrecognised binary — Quasnooze reads text, PDF, DOCX and images" };
 }
 
 function safe(fn) {

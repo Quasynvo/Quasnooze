@@ -2,10 +2,10 @@
 
 ## Reporting a vulnerability
 
-Pinch runs shell commands on your machine for a living, so a real vulnerability
+Quasnooze runs shell commands on your machine for a living, so a real vulnerability
 here is worth reporting privately rather than in an issue.
 
-**Use GitHub's private reporting:** [Security → Report a vulnerability](https://github.com/pinchfoundry/Pinch/security/advisories/new).
+**Use GitHub's private reporting:** [Security → Report a vulnerability](https://github.com/Quasynvo/Quasnooze/security/advisories/new).
 That opens a draft advisory only you and the maintainer can see.
 
 If you would rather not use GitHub, open an issue that says *only* "security

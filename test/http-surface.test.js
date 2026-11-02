@@ -1,5 +1,5 @@
 /**
- * Regression tests for the HTTP surface — the half of Pinch that the original
+ * Regression tests for the HTTP surface — the half of Quasnooze that the original
  * test suite never touched.
  *
  * Findings covered (see docs/AUDIT.md):

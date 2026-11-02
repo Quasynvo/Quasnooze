@@ -1,10 +1,10 @@
 name: Deploy landing page
 
 # GitHub Pages is configured with build_type "workflow", which means nothing deploys until a
-# workflow actually does it. There wasn't one, so https://pinchfoundry.github.io/Pinch/ has
+# workflow actually does it. There wasn't one, so https://quasynvo.github.io/Quasnooze/ has
 # been serving a 404 since it was enabled.
 #
-# This publishes site/ and nothing else. The application itself is never deployed — Pinch is
+# This publishes site/ and nothing else. The application itself is never deployed — Quasnooze is
 # a program you run on your own machine, and putting a personal assistant on a public URL
 # would be the opposite of the point.
 

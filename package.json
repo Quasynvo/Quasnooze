@@ -1,12 +1,13 @@
 {
-  "name": "pinch-ai",
+  "name": "@quasynvo/quasnooze",
   "version": "1.0.0",
-  "description": "Pinch \ud83e\udd9e \u2014 a private, local-first personal AI assistant you message from Telegram, Discord, Slack, WhatsApp or the browser, with voice on your phone.",
+  "description": "Quasnooze by Quasynvo \u2014 a local-first personal AI assistant with a cosmic sloth companion, everyday tools and visible permissions.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "bin": {
+    "quasnooze": "./bin/quasnooze.js",
     "pinch": "./bin/pinch.js"
   },
   "scripts": {
@@ -42,14 +43,6 @@
     "mcp"
   ],
   "license": "MIT",
-  "pinch": {
-    "node": {
-      "min": 22,
-      "dropMinAt": "2027-04-30",
-      "becomes": 24,
-      "reason": "Node 22 reaches end of life; engines.node moves to >=24 and 22 leaves the CI matrix."
-    }
-  },
   "files": [
     "bin/",
     "src/",
@@ -62,6 +55,7 @@
     "scripts/audit.js",
     "scripts/tech-radar.js",
     "scripts/growth.js",
+    "scripts/roadmap-queue.js",
     "scripts/demo.js",
     "scripts/desktop.js",
     "scripts/desktop-doctor.js",
@@ -84,10 +78,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pinchfoundry/Pinch.git"
+    "url": "git+https://github.com/Quasynvo/Quasnooze.git"
   },
   "bugs": {
-    "url": "https://github.com/pinchfoundry/Pinch/issues"
+    "url": "https://github.com/Quasynvo/Quasnooze/issues"
   },
-  "homepage": "https://github.com/pinchfoundry/Pinch#readme"
+  "homepage": "https://github.com/Quasynvo/Quasnooze#readme",
+  "quasnooze": {
+    "node": {
+      "min": 22,
+      "dropMinAt": "2027-04-30",
+      "becomes": 24,
+      "reason": "Node 22 reaches end of life; engines.node moves to >=24 and 22 leaves the CI matrix."
+    }
+  }
 }

@@ -177,17 +177,17 @@ test("binary is not mistaken for text", () => {
 });
 
 test("utf-8 with accents and emoji is still text", () => {
-  const text = Buffer.from("naïve café 🦞 — ok", "utf8");
+  const text = Buffer.from("naïve café ✦ — ok", "utf8");
   assert.equal(looksLikeText(text), true);
-  assert.equal(extract(text, "note.txt").text, "naïve café 🦞 — ok");
+  assert.equal(extract(text, "note.txt").text, "naïve café ✦ — ok");
 });
 
 /* ────────────────────────────────── PDF ────────────────────────────────── */
 
 test("text is extracted from a Flate-compressed PDF", () => {
-  const pdf = makePdf(["Pinch reads this", "and this second line"]);
+  const pdf = makePdf(["Quasnooze reads this", "and this second line"]);
   const { text } = pdfText(pdf);
-  assert.match(text, /Pinch reads this/);
+  assert.match(text, /Quasnooze reads this/);
   assert.match(text, /and this second line/);
 });
 

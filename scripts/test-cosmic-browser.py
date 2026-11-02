@@ -13,7 +13,7 @@ class Handler(SimpleHTTPRequestHandler):
   self.send_response(code);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps(obj).encode())
  def do_GET(self):
   if self.path.startswith('/api/'):
-   if state['auth'] and self.headers.get('x-pinch-key')!='test-only-key':return self.reply({},401)
+   if state['auth'] and (self.headers.get('x-quasnooze-key') or self.headers.get('x-pinch-key'))!='test-only-key':return self.reply({},401)
    return self.reply({'provider':'mock','model':'browser-fixture'} if self.path=='/api/health' else state['native'])
   super().do_GET()
  def do_POST(self):

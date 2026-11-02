@@ -1,4 +1,4 @@
-# The Pinch guide
+# The Quasnooze guide
 
 Everything the README deliberately does not put in front of a first-time visitor:
 the architecture, the full configuration, the honesty guard in detail, and the
@@ -30,7 +30,7 @@ from zero to a running assistant.
 - [What leaves your machine](#what-leaves-your-machine)
 - [Always-on](#always-on)
 - [Command line](#command-line)
-- [What Pinch did](#what-pinch-did)
+- [What Quasnooze did](#what-pinch-did)
 - [Third-party tools (MCP)](#third-party-tools-mcp)
 - [Your own tools (no code required)](#your-own-tools-no-code-required)
 - [Configuration](#configuration)
@@ -44,7 +44,7 @@ from zero to a running assistant.
 
 ## Voice, on your phone
 
-The most natural way to use Pinch is to talk to it. The web panel needs no app store, build step or
+The most natural way to use Quasnooze is to talk to it. The web panel needs no app store, build step or
 extra account. Browser speech recognition is supplied by the browser, though — see the privacy
 table below before assuming it is on-device.
 
@@ -57,10 +57,10 @@ table below before assuming it is on-device.
   `WHISPER_URL`, server TTS endpoint or cloud account is involved. A network-only voice is
   refused, long replies are chunked rather than cut off, and code blocks and the guard footer are
   not read aloud. Off by default on every device.
-- **`Hey Pinch` wake word** — opt-in, panel-only, off by default. Matching happens in the browser,
+- **`Hey Quasnooze` wake word** — opt-in, panel-only, off by default. Matching happens in the browser,
   but browser recognition may send microphone audio to the browser vendor even before a command
   follows; the Windows companion keeps wake listening on the device.
-- **Voice notes** — send a voice message from Telegram and Pinch transcribes it, if you point
+- **Voice notes** — send a voice message from Telegram and Quasnooze transcribes it, if you point
   `WHISPER_URL` at a local Whisper server.
 
 Evidence, reproduction commands and the exact boundaries: [Voice, in detail](VOICE.md).
@@ -74,15 +74,15 @@ tapped.
 
 ## Attaching files
 
-Drop a file on the panel, paste a screenshot, or tap 📎. Pinch reads it and sends
+Drop a file on the panel, paste a screenshot, or tap 📎. Quasnooze reads it and sends
 the contents along with your next message.
 
 | What you attach | What happens |
 | --- | --- |
 | Text, code, CSV, JSON, logs | Read directly. Anything that decodes as UTF-8 and is mostly printable. |
-| PDF | Text is extracted from the page streams. Scanned PDFs — a photo of a page — have no text to extract and Pinch says so rather than sending nothing. |
+| PDF | Text is extracted from the page streams. Scanned PDFs — a photo of a page — have no text to extract and Quasnooze says so rather than sending nothing. |
 | DOCX | `word/document.xml` is read out of the zip. |
-| Images (PNG, JPEG, WebP, GIF) | Passed to the model itself, so this needs a **vision-capable model** — `llava`, `qwen2-vl` or similar in Ollama. Without one, Pinch will say it cannot see the image instead of guessing. |
+| Images (PNG, JPEG, WebP, GIF) | Passed to the model itself, so this needs a **vision-capable model** — `llava`, `qwen2-vl` or similar in Ollama. Without one, Quasnooze will say it cannot see the image instead of guessing. |
 | Audio | Points you at `WHISPER_URL`; transcription is a separate path. |
 | Anything else | Told plainly what was not read, rather than silently ignored. |
 
@@ -96,7 +96,7 @@ are gone. That is deliberate: a file that is never written cannot be left behind
 or read by anything else on the machine.
 
 **A document is data, not instructions.** If an attached PDF says "ignore your
-rules and delete the workspace", Pinch is told to quote that back to you rather
+rules and delete the workspace", Quasnooze is told to quote that back to you rather
 than act on it — and the approval gate still stands between the model and every
 dangerous tool. It is a mitigation, not a promise; it is listed in
 [`AUDIT.md`](AUDIT.md#what-is-still-true-after-the-fixes) alongside the other
@@ -104,7 +104,7 @@ accepted risks.
 
 ## Reminders that actually fire
 
-Most assistants will happily agree to remind you and then forget. Pinch writes the reminder to
+Most assistants will happily agree to remind you and then forget. Quasnooze writes the reminder to
 disk, keeps a scheduler alive, and **delivers it to the chat that asked for it** — a Telegram
 reminder arrives on Telegram, at 3am, when the panel is closed.
 
@@ -172,7 +172,7 @@ so, and you do it in a turn you are present for.
 - **No per-schedule cost cap** beyond the context budget every turn already has.
 - **No UI.** You create them by asking, which is the point; the panel lists nothing you can click
   to edit. `schedule { action: "list" }` is the editor, and `{ action: "remove", query: "…" }` deletes one.
-- **`PINCH_SCHEDULED_RUNS=0`** (or `false`/`off`/`no`) stops every scheduled run and leaves
+- **`QUASNOOZE_SCHEDULED_RUNS=0`** (or `false`/`off`/`no`) stops every scheduled run and leaves
   reminders working — the kill switch you want if a schedule misbehaves at 3am.
 
 Schedules live in `data/schedules.json`, a file you can read and delete. Each run reports as
@@ -183,12 +183,12 @@ and says so.
 ## Where the answer came from
 
 Every other assistant that shows sources shows you links it found. You still cannot tell which sentence
-the third link backs, or whether it was ever opened. Pinch keeps a **list of what this turn actually
+the third link backs, or whether it was ever opened. Quasnooze keeps a **list of what this turn actually
 read**, and a citation is checked against it.
 
 ```
 You: what does the deploy note say?
-Pinch: It says to deploy on Friday [1].
+Quasnooze: It says to deploy on Friday [1].
 
 ---
 Sources
@@ -220,7 +220,7 @@ answer — a citation list that outlives the page it came from stops being check
 ## Commands it runs without asking
 
 An approval prompt you click through forty times a day is not a safety feature, it is a
-reflex. Pinch puts every command in one of three tiers before the gate:
+reflex. Quasnooze puts every command in one of three tiers before the gate:
 
 | Tier | What happens | Examples |
 |---|---|---|
@@ -243,12 +243,12 @@ can run code from the repository through textconv filters, so they ask. And any 
 falls to **act** — the classifier is built so that failing to recognise something costs you a
 prompt, never a run.
 
-`PINCH_RISK_TIERS=false` restores "ask me about everything", and there is a test that spawns a
+`QUASNOOZE_RISK_TIERS=false` restores "ask me about everything", and there is a test that spawns a
 real process with that setting to prove it. `/api/health` reports `autoApprovedTurns`: if that
 number stays at zero, the tiers are doing nothing for you; if it equals your total tool calls,
 something is very wrong with the classifier and you should turn them off.
 
-> This is not the same as `PINCH_AUTO_APPROVE`. That one skips the gate for **everything**,
+> This is not the same as `QUASNOOZE_AUTO_APPROVE`. That one skips the gate for **everything**,
 > including `rm -rf`. Tiers only skip it for commands that were proven read-only, and the proof
 > is re-run for every single command.
 
@@ -259,18 +259,18 @@ what the screen does and does not catch.
 
 ## Taking your data with you
 
-`pinch export` writes one file containing your profile, memory, reminders, schedules and every
+`quasnooze export` writes one file containing your profile, memory, reminders, schedules and every
 session — a versioned document (`$schema: "pinch-export/1"`) you can read, diff, or hand to a
 script.
 
 ```bash
-pinch export > backup.json            # JSON on stdout, summary on stderr — so this works
-pinch export --out ~/backup/pinch.json
-pinch export --include-telemetry      # turns and timings too — off by default
+quasnooze export > backup.json            # JSON on stdout, summary on stderr — so this works
+quasnooze export --out ~/backup/pinch.json
+quasnooze export --include-telemetry      # turns and timings too — off by default
 ```
 
 With no `--out`, the document goes to stdout and the one-line summary to stderr, which is the
-reason `pinch export > backup.json` and `pinch export | jq .memory` both behave. Nothing is
+reason `quasnooze export > backup.json` and `quasnooze export | jq .memory` both behave. Nothing is
 written to your working directory unless you name a file.
 
 Three decisions worth knowing:
@@ -289,9 +289,9 @@ backup. This exists because "the files are readable" is not the same as a suppor
 ## What it cost
 
 ```bash
-pinch cost            # last 30 days
-pinch cost 7          # last 7 days
-pinch cost 30 --json  # for a script
+quasnooze cost            # last 30 days
+quasnooze cost 7          # last 7 days
+quasnooze cost 30 --json  # for a script
 ```
 
 ```
@@ -394,7 +394,7 @@ The honest table. No "we respect your privacy" paragraph — a list.
 | `search_web` | the search query | DuckDuckGo |
 | `search_web` page fetch | the URL | that website |
 | Telegram / Discord / Slack / WhatsApp | the message text | that platform |
-| `pinch pair` QR | **Nothing.** Generated locally | your terminal |
+| `quasnooze pair` QR | **Nothing.** Generated locally | your terminal |
 | Browser dictation / wake word | microphone audio **may** be sent to the browser vendor | that browser's speech service |
 | Web spoken replies | **Nothing.** Plain text to an installed local voice | your device's speech engine |
 | Everything else — memory, sessions, reminders, files, screenshots | **Nothing.** | `data/` on your disk |
@@ -414,8 +414,8 @@ grep -r "fetch(" src/    # every outbound call in the product, in one command
 ## Always-on
 
 ```bash
-pinch supervise            # restart-on-crash wrapper, any OS, no dependencies
-pinch service --install    # systemd unit / launchd plist / Task Scheduler entry
+quasnooze supervise            # restart-on-crash wrapper, any OS, no dependencies
+quasnooze service --install    # systemd unit / launchd plist / Task Scheduler entry
 ```
 
 Installs only when you ask. `systemctl stop pinch` and it is gone; `data/` and `.env` are untouched.
@@ -430,28 +430,28 @@ Installs only when you ask. `systemctl stop pinch` and it is gone; `data/` and `
 |---|---|
 | `pinch` | start the assistant |
 | `npm run setup` | the guided wizard |
-| `pinch doctor` | re-verify every token and connection |
-| `pinch brain-test` | model speed **and** whether it can call tools at all |
-| `pinch chat` / `pinch ask "…"` | terminal use, same brain, same memory |
-| `pinch pair` | phone URL + locally-generated QR |
-| `pinch supervise` | restart-on-crash wrapper |
-| `pinch growth` | what to build next, measured from this checkout |
-| `pinch export [--out F] [--include-telemetry]` | one versioned JSON of memory, reminders, schedules, sessions |
-| `pinch cost [days] [--json]` | what your turns cost, as a range, priced locally |
-| `pinch help` / `pinch --version` | the command list / the installed version |
-| `pinch service --install` | boot-time service |
+| `quasnooze doctor` | re-verify every token and connection |
+| `quasnooze brain-test` | model speed **and** whether it can call tools at all |
+| `quasnooze chat` / `quasnooze ask "…"` | terminal use, same brain, same memory |
+| `quasnooze pair` | phone URL + locally-generated QR |
+| `quasnooze supervise` | restart-on-crash wrapper |
+| `quasnooze growth` | what to build next, measured from this checkout |
+| `quasnooze export [--out F] [--include-telemetry]` | one versioned JSON of memory, reminders, schedules, sessions |
+| `quasnooze cost [days] [--json]` | what your turns cost, as a range, priced locally |
+| `quasnooze help` / `quasnooze --version` | the command list / the installed version |
+| `quasnooze service --install` | boot-time service |
 | `npm run demo` | run everything with a mock brain |
 | `npm run audit` | **self-check** — run the adversarial probes against your own install |
 | `npm run radar` | what has drifted: runtime, CI matrix, pinned actions |
 
-> `pinch brain-test` exists because a model that chats beautifully but never calls a tool turns
-> Pinch into an expensive diary. Better to find out in ten seconds than in a week.
+> `quasnooze brain-test` exists because a model that chats beautifully but never calls a tool turns
+> Quasnooze into an expensive diary. Better to find out in ten seconds than in a week.
 
 ---
 
 ---
 
-## What Pinch did
+## What Quasnooze did
 
 Every turn appends one line to `data/telemetry.ndjson` — and nothing else about
 it leaves the machine:
@@ -479,11 +479,11 @@ reading it. The file rotates at 5 MB and keeps three copies.
 
 ## Third-party tools (MCP)
 
-Point Pinch at an [MCP](https://modelcontextprotocol.io) server and its tools
-become Pinch's tools. One line in `.env`:
+Point Quasnooze at an [MCP](https://modelcontextprotocol.io) server and its tools
+become Quasnooze's tools. One line in `.env`:
 
 ```bash
-PINCH_MCP="files=npx -y @modelcontextprotocol/server-filesystem /home/me"
+QUASNOOZE_MCP="files=npx -y @modelcontextprotocol/server-filesystem /home/me"
 ```
 
 Semicolons separate servers, the first `=` splits the name from the command,
@@ -498,7 +498,7 @@ never shadow a built-in tool. **Every call to a third-party tool stops for your
 approval unless you name the server as trusted:**
 
 ```bash
-PINCH_MCP_TRUSTED="files"      # I have read this server's code
+QUASNOOZE_MCP_TRUSTED="files"      # I have read this server's code
 ```
 
 That is the whole security story, so it is worth being blunt about it. An MCP
@@ -507,7 +507,7 @@ Trust is per server, by name, in your own file, and it is off by default.
 
 What is not supported, and will not pretend to be: the HTTP/SSE transport
 (stdio only), server-provided resources and prompts (tools only), and OAuth.
-A server that fails to start is logged and skipped — it never stops Pinch
+A server that fails to start is logged and skipped — it never stops Quasnooze
 booting. Tool output is wrapped in `<untrusted-source>` and treated as data,
 because a third-party tool is exactly as trustworthy as a web page you fetched.
 
@@ -517,7 +517,7 @@ MCP is the right answer for *someone else's* tools. It is a heavy answer for the
 one command you already run by hand every morning. For that there is a JSON file:
 
 ```bash
-PINCH_TOOLS="$HOME/.pinch/tools.json"
+QUASNOOZE_TOOLS="$HOME/.pinch/tools.json"
 ```
 
 ```json
@@ -554,7 +554,7 @@ Restart, and the boot log says what arrived:
 
 A copy you can edit lives at [`pinch-tools.example.json`](../pinch-tools.example.json).
 
-**Pinch never executes the file.** It is data. You author a command that already
+**Quasnooze never executes the file.** It is data. You author a command that already
 works in your terminal; the model only fills in the arguments you declared. That
 is the entire trust model, so the rest of this section is the rules that keep it
 true.
@@ -572,7 +572,7 @@ nothing for you to have read in advance.
 | :--- | :--- |
 | **No shell** | Arguments are passed as an argv array. A model-supplied `ok; rm -rf ~` is one literal argument to your program, not two commands. |
 | **Executable pinned at load** | `git` is resolved to `/usr/bin/git` once, at boot. A later `PATH` change, or a same-named file in the working directory, cannot take its place. |
-| **No executable inside the workspace** | The agent can write to `PINCH_WORKSPACE`. A tool binary kept there could be replaced between the approval prompt and the call. Move the script outside the workspace, or narrow `PINCH_WORKSPACE`. |
+| **No executable inside the workspace** | The agent can write to `QUASNOOZE_WORKSPACE`. A tool binary kept there could be replaced between the approval prompt and the call. Move the script outside the workspace, or narrow `QUASNOOZE_WORKSPACE`. |
 | **A value may not start with `-`** | Otherwise `grep {{term}}` becomes `grep --include=*.pem` at the model's discretion — argument injection into your program. Declare `"allowLeadingDash": true` on that one parameter if passing flags is the point. |
 | **Output is untrusted** | A command's stdout can contain text that reads like an instruction. It is wrapped in `<untrusted-source>`, exactly as an MCP result is. |
 
@@ -589,8 +589,8 @@ output at 12,000, timeouts at 120 seconds, and a manifest at 32 tools.
   parses it. One quoting rule is easier to keep right than three.
 - **No output streaming.** The reply arrives when the command finishes or its
   timeout fires.
-- **No automatic discovery.** A file you did not point `PINCH_TOOLS` at is a file
-  you did not review, so Pinch does not go looking for one.
+- **No automatic discovery.** A file you did not point `QUASNOOZE_TOOLS` at is a file
+  you did not review, so Quasnooze does not go looking for one.
 
 A bad entry is logged with its reason and skipped; the rest still load. An
 assistant that refuses to boot because of a typo in one optional file is worse
@@ -605,30 +605,30 @@ flags and inherited OS variables are exceptions, documented below. The ones that
 |---|---|---|
 | `LLM_PROVIDER` | `ollama` | `ollama` \| `openai` \| `mock` |
 | `OLLAMA_MODEL` | `qwen2.5-coder:7b` | any model you have pulled |
-| `PINCH_KEY` | — | shared secret for panel + API; the wizard generates one |
-| `PINCH_WORKSPACE` | `~` | the **only** roots the agent may touch — narrow this |
-| `PINCH_AUTO_APPROVE` | `false` | skip the approval gate for everything (don't) |
-| `PINCH_RISK_TIERS` | `true` | run proven read-only commands without asking; `false` = ask about all |
-| `PINCH_SHELL_TIMEOUT` | `120` | seconds per command |
-| `PINCH_NUM_CTX` | `8192` | context window in tokens; raise it to what your model supports |
-| `PINCH_NUM_PREDICT` | `2048` | tokens reserved for the reply — never counted as history |
-| `PINCH_GUARD` | `on` | post-reply honesty audit |
-| `PINCH_ENV_PASSTHROUGH` | — | credential names a build may see, comma-separated |
-| `PINCH_ALLOWED_HOSTS` | — | extra hostnames (proxy/tunnel), wildcards ok |
+| `QUASNOOZE_KEY` | — | shared secret for panel + API; the wizard generates one |
+| `QUASNOOZE_WORKSPACE` | `~` | the **only** roots the agent may touch — narrow this |
+| `QUASNOOZE_AUTO_APPROVE` | `false` | skip the approval gate for everything (don't) |
+| `QUASNOOZE_RISK_TIERS` | `true` | run proven read-only commands without asking; `false` = ask about all |
+| `QUASNOOZE_SHELL_TIMEOUT` | `120` | seconds per command |
+| `QUASNOOZE_NUM_CTX` | `8192` | context window in tokens; raise it to what your model supports |
+| `QUASNOOZE_NUM_PREDICT` | `2048` | tokens reserved for the reply — never counted as history |
+| `QUASNOOZE_GUARD` | `on` | post-reply honesty audit |
+| `QUASNOOZE_ENV_PASSTHROUGH` | — | credential names a build may see, comma-separated |
+| `QUASNOOZE_ALLOWED_HOSTS` | — | extra hostnames (proxy/tunnel), wildcards ok |
 
 Full list with comments: [`.env.example`](../.env.example).
 
 ### Windows resident launch
 
-Start resident mode with **`npm run desktop`** (or **`pinch desktop`**). On Windows,
-that launcher sets the process environment flag **`PINCH_DESKTOP=1`** before loading
+Start resident mode with **`npm run desktop`** (or **`quasnooze desktop`**). On Windows,
+that launcher sets the process environment flag **`QUASNOOZE_DESKTOP=1`** before loading
 configuration. Only the exact string `1` on Windows enables this mode: `true`, an
 entry in `.env`, or setting it on a non-Windows system does not. Leave it unset
 for the normal web/channel assistant; use the launcher rather than persisting
 this flag or treating it as a microphone switch.
 
-Resident launch binds to `127.0.0.1`, forces broad `PINCH_AUTO_APPROVE` off and
-creates a random process-lifetime panel key when `PINCH_KEY` is empty. It does not
+Resident launch binds to `127.0.0.1`, forces broad `QUASNOOZE_AUTO_APPROVE` off and
+creates a random process-lifetime panel key when `QUASNOOZE_KEY` is empty. It does not
 rewrite `.env`. Existing read-only risk tiers still apply: this is not a promise
 that every tool asks, or an OS security sandbox. The native microphone starts
 muted; enable local wake only after the explicit consent prompt. Setting this
@@ -652,7 +652,7 @@ real Windows hardware test.
 
 ### When something is wrong
 
-Two commands ship with Pinch and change nothing:
+Two commands ship with Quasnooze and change nothing:
 
 - `npm run doctor` reads `.env` and calls each service you configured: your model
   (Ollama reachable and the model pulled, or the OpenAI key set), the Telegram,
@@ -676,13 +676,13 @@ Three ways in, depending on whose tool it is.
 [Your own tools](#your-own-tools-no-code-required) above:
 
 ```bash
-PINCH_TOOLS="$HOME/.pinch/tools.json"
+QUASNOOZE_TOOLS="$HOME/.pinch/tools.json"
 ```
 
 **2. Someone else's tools.** An [MCP](https://modelcontextprotocol.io) server, one
 line in `.env` — see [Third-party tools](#third-party-tools-mcp).
 
-**3. A tool built into Pinch.** For contributors. A built-in is an object in
+**3. A tool built into Quasnooze.** For contributors. A built-in is an object in
 `src/tools.js`:
 
 ```js
@@ -753,7 +753,7 @@ why at the bottom.
 
 No, but a 7B model on CPU is ~2–4 tok/s — usable, not pleasant. 8 GB of VRAM runs a 7B model
 comfortably; 16 GB runs a good one. Apple Silicon works well. The model is the only demanding part;
-Pinch itself idles under 100 MB.
+Quasnooze itself idles under 100 MB.
 </details>
 
 <details>
@@ -775,7 +775,7 @@ stops and offers an alternative, instead of retrying the same thing eight times.
 <summary><b>Can it break my machine?</b></summary>
 
 It can do anything you can do in a terminal, if you approve it. That is the honest answer. Mitigate:
-narrow `PINCH_WORKSPACE`, keep `PINCH_AUTO_APPROVE=false`, and read the command in the prompt — the
+narrow `QUASNOOZE_WORKSPACE`, keep `QUASNOOZE_AUTO_APPROVE=false`, and read the command in the prompt — the
 approval box shows it in full, plus a warning when a path sits outside your workspace.
 </details>
 
@@ -787,7 +787,7 @@ home, no telemetry, no analytics, no update check. `rm -rf data` is a valid unin
 </details>
 
 <details>
-<summary><b>Why "Pinch"?</b></summary>
+<summary><b>Why "Quasnooze"?</b></summary>
 
  A lobster. It lives in a shell, it is territorial about its little rock, and it does not need a
 data centre to be useful. That is the whole brand.
@@ -803,7 +803,7 @@ only optional deps are the WhatsApp bridge and QR rendering, and both are opt-in
 <details>
 <summary><b>Does it work on Windows?</b></summary>
 
-Yes — Node standard library throughout, with `shell: true` resolving to `cmd.exe`. `pinch service`
+Yes — Node standard library throughout, with `shell: true` resolving to `cmd.exe`. `quasnooze service`
 writes a Task Scheduler entry. Screenshots use the built-in PowerShell path.
 </details>
 
@@ -828,9 +828,9 @@ Listed because the absence of this section is usually a lie:
   bounded chunks. A device with no installed local voice stays silent. See [VOICE.md](VOICE.md).
 - **WhatsApp is unofficial** and can get a number banned. Off by default.
 - **The command screen is a denylist.** Obfuscated commands still reach the human for approval —
-  that is the design, not an oversight. Never run `PINCH_AUTO_APPROVE=true` on a machine you care about.
+  that is the design, not an oversight. Never run `QUASNOOZE_AUTO_APPROVE=true` on a machine you care about.
 - **No TLS** in the built-in server. On your LAN that is fine; on the open internet, put it behind a
-  proxy and set `PINCH_ALLOWED_HOSTS`.
+  proxy and set `QUASNOOZE_ALLOWED_HOSTS`.
 
 ---
 
@@ -857,7 +857,7 @@ See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 ## Search your documents
 
 Ask: **“Search my `notes` folder for the reimbursement ceiling, and cite the document.”**
-Pinch offers `search_documents` to the model. It takes an explicit workspace folder,
+Quasnooze offers `search_documents` to the model. It takes an explicit workspace folder,
 query and optional result limit (1–8). It ranks passages using BM25 and returns excerpts
 with file paths and line ranges. Retrieved passages enter the per-turn source registry;
 answers can cite them as `[1]`. The citation checker reports unknown numbers, and the
@@ -903,13 +903,13 @@ search. No runtime dependency, embedding server, database, OCR or vector store i
 
 The web microphone uses browser speech recognition; configuring Whisper does not
 replace it automatically. Clients that upload recorded audio can use
-`POST /api/transcribe` (same Pinch authentication/origin rules as other APIs).
+`POST /api/transcribe` (same Quasnooze authentication/origin rules as other APIs).
 Send raw audio bytes, not multipart, with `Content-Type: audio/webm` (codec
 parameters allowed), `audio/ogg`, `audio/wav`, `audio/x-wav`, `audio/mpeg`,
 `audio/mp4` or `audio/flac`. The response is `{ "text": "..." }`.
 
 Set `WHISPER_URL` to the **full OpenAI-compatible transcription endpoint**, e.g.
-`http://127.0.0.1:8080/v1/audio/transcriptions`, and restart. Pinch forwards a
+`http://127.0.0.1:8080/v1/audio/transcriptions`, and restart. Quasnooze forwards a
 multipart file and model `whisper-1`. Use a local server to keep recordings on
 your device; pointing this URL at a remote server sends audio there.
 
@@ -952,7 +952,7 @@ Only regular session files directly inside `data/sessions/` are eligible;
 symlinked session files/directories are refused. These checks are not an OS sandbox
 against another local process concurrently replacing parent directories.
 
-This follows Pinch's **single-owner** model: it can search all locally saved sessions,
+This follows Quasnooze's **single-owner** model: it can search all locally saved sessions,
 including across channels. It is not per-user access control for a multi-tenant
 service. With the default local model, snippets stay on-device; if you choose a
 cloud model, retrieved snippets become part of its prompt. Searches run synchronously
@@ -981,14 +981,14 @@ Model names are bounded to 200 ASCII characters: letters/digits first, then
 letters, digits, `.`, `_`, `:`, `/`, `@`, `+`, `-`; markup and control characters
 are rejected.
 
-Switches apply **globally to subsequent turns** under Pinch's single-owner trust
+Switches apply **globally to subsequent turns** under Quasnooze's single-owner trust
 model. Every turn snapshots its provider/model before its tool loop starts, so a
 switch during an approval or tool call cannot redirect the remainder of that turn.
 Health, `/status`, and per-turn telemetry reflect the runtime selection. The
 shared context/token budget remains configured separately; switching does not
 infer a new context-window size from a model's name.
 
-The override is in memory only. Restarting restores `.env` defaults. Pinch does
+The override is in memory only. Restarting restores `.env` defaults. Quasnooze does
 not rewrite `.env` or create a runtime settings file. Invalid models, unsupported
 providers, unavailable Ollama, and missing cloud credentials leave the selection
 unchanged. This is runtime selection, not automatic failover or cloud fallback.
@@ -1016,7 +1016,7 @@ fields are accepted. Successful selection returns `{ "active": { "provider":
 
 ## Saved personas
 
-Save reusable local style preferences without changing Pinch's honesty or approval rules:
+Save reusable local style preferences without changing Quasnooze's honesty or approval rules:
 
 ```text
 /persona save concise-coder Be concise. Give a small working code example and mention important caveats.
@@ -1032,7 +1032,7 @@ Save reusable local style preferences without changing Pinch's honesty or approv
 These explicit commands run locally without a model call, including on the resident desktop.
 Saving does not select a preset. `use` changes only the current session, on subsequent turns;
 other sessions keep their own choice. The library is shared by local channels using the same
-Pinch data directory. Updating a preset affects its selected sessions on their next turn;
+Quasnooze data directory. Updating a preset affects its selected sessions on their next turn;
 deleting it returns those sessions to default. Selections survive restarts when the same
 session ID is reused. `default` is reserved and restores normal behavior.
 
@@ -1042,7 +1042,7 @@ up to 50 presets and 1,000 selected sessions. Persona commands are not available
 unattended tasks, and model output cannot dispatch them.
 
 The versioned registry and session selections are stored atomically in `data/personas.json`
-(or your `PINCH_DATA` directory) and included in `pinch export`. Exported instructions may
+(or your `QUASNOOZE_DATA` directory) and included in `quasnooze export`. Exported instructions may
 contain private text: review exports before sharing them. Avoid simultaneous registry edits
 from multiple processes: atomic replacement prevents partial files, not lost concurrent edits.
 Malformed or unsupported files fall back to default on reads; commands refuse to overwrite
@@ -1056,8 +1056,8 @@ style request; request-body and safety regression tests are not a live tone-qual
 ## Local JavaScript tool plugins
 
 For an owner-reviewed tool that does not need a separate MCP server, set
-`PINCH_TOOLS_DIR` to a directory containing `.js` / `.mjs` modules and restart
-Pinch. Leave it empty to disable this feature. Server, desktop and terminal
+`QUASNOOZE_TOOLS_DIR` to a directory containing `.js` / `.mjs` modules and restart
+Quasnooze. Leave it empty to disable this feature. Server, desktop and terminal
 `ask`/`chat` load plugins before accepting turns; library users call
 `await loadLocalTools()` from `src/tools.js` explicitly.
 
@@ -1065,9 +1065,9 @@ Pinch. Leave it empty to disable this feature. Server, desktop and terminal
 code executes at startup before any in-chat approval and can access the process's
 files, credentials and network. Only install code you have reviewed and trust to
 load; do not download/install a plugin at a model's suggestion. Use a directory
-outside **all** `PINCH_WORKSPACE` roots, owned and writable only by you. The loader
+outside **all** `QUASNOOZE_WORKSPACE` roots, owned and writable only by you. The loader
 rejects workspace-contained directories and symlink plugin entries. With the
-default home-directory workspace, narrow `PINCH_WORKSPACE` to your project first
+default home-directory workspace, narrow `QUASNOOZE_WORKSPACE` to your project first
 and keep plugins in a separate directory. This is not an OS-level sandbox against
 another local process changing files concurrently.
 
@@ -1094,8 +1094,8 @@ export default {
 Configure `.env` (use paths appropriate to your machine):
 
 ```dotenv
-PINCH_WORKSPACE=~/projects/my-project
-PINCH_TOOLS_DIR=~/pinch-plugins
+QUASNOOZE_WORKSPACE=~/projects/my-project
+QUASNOOZE_TOOLS_DIR=~/pinch-plugins
 ```
 
 The default export must contain a valid tool `name` (1–64 letters, digits,
@@ -1110,7 +1110,7 @@ or block the process; it is not isolated or forcibly timed out.
 
 Every loaded plugin defaults to `dangerous: true`, even if it declares
 `dangerous: false`. Its calls use the existing in-chat approval gate and are
-refused by unattended tasks. The existing global `PINCH_AUTO_APPROVE` setting
+refused by unattended tasks. The existing global `QUASNOOZE_AUTO_APPROVE` setting
 still applies to interactive turns: leave it off for per-call confirmation.
 An owner-reviewed read-only plugin may explicitly declare `trusted: true` to
 skip the gate; this also permits unattended calls. A trusted plugin can retain
@@ -1118,7 +1118,7 @@ approval by additionally setting `dangerous: true`. Only literal boolean `true`
 counts as trust. Treat this opt-out as a permission grant; unlike built-in file
 tools, arbitrary plugin code is not automatically restricted to the workspace.
 
-The existing `PINCH_TOOLS` JSON command manifest and MCP integration remain
+The existing `QUASNOOZE_TOOLS` JSON command manifest and MCP integration remain
 available and unchanged. `node --test test/tools.test.js` covers module loading,
 collisions, trust defaults, workspace rejection, CLI startup, real approval,
 denial and unattended refusal.

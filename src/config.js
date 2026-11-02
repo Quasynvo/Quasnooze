@@ -4,6 +4,7 @@
  * Deliberately dependency-free: a 40-line parser instead of dotenv, so
  * `git clone && node src/index.js` works with no install step.
  */
+import { normalizeBrandEnv } from "./brand-config.js";
 import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
@@ -36,12 +37,12 @@ export function parseEnv(text) {
 export function loadEnv(root = ROOT) {
   const file = join(root, ".env");
   const fromFile = existsSync(file) ? parseEnv(readFileSync(file, "utf8")) : {};
-  return { ...fromFile, ...process.env, __loadedFromFile: fromFile };
+  return { ...normalizeBrandEnv(fromFile), ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
 }
 
 const env = loadEnv();
 // Only the explicit Windows launcher enables the resident companion.
-const desktopRequested = process.platform === "win32" && process.env.PINCH_DESKTOP === "1";
+const desktopRequested = process.platform === "win32" && (process.env.QUASNOOZE_DESKTOP ?? process.env.PINCH_DESKTOP) === "1";
 
 const list = (value) =>
   (value || "")

@@ -71,7 +71,7 @@ async function runSchedules(now) {
       report = result.text;
     } catch (err) {
       ok = false;
-      report = `🦞 That scheduled task failed: ${err.message}`;
+      report = `✦ That scheduled task failed: ${err.message}`;
     }
 
     const seconds = Math.round((Date.now() - started) / 1000);
@@ -130,7 +130,7 @@ export function startScheduler(logger = console) {
     tick().catch((err) => log.warn?.(`scheduler: ${err.message}`));
   }, TICK_MS);
   timer.unref?.();
-  // Catch up immediately: a reminder that came due while Pinch was off.
+  // Catch up immediately: a reminder that came due while Quasnooze was off.
   tick().catch(() => {});
   // Soonest first — pendingReminders() is insertion order, so [0] was
   // whichever reminder was created first, not whichever fires first.

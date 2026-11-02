@@ -1,6 +1,6 @@
 # How this repository grows
 
-Pinch improves on a loop that runs **every hour**: a machine researches and
+Quasnooze improves on a loop that runs **every hour**: a machine researches and
 proposes, a human decides, the machine fixes what is mechanical. This page
 documents each part, the rate limit that keeps it from becoming noise, and the
 fence that keeps it from becoming dangerous.
@@ -66,7 +66,7 @@ Three things the researcher refuses to do:
 - **Propose against the product's identity.** Every capability carries a
   `policy`: `in-scope`, `settled`, or `out-of-scope`. Multi-user accounts are
   `out-of-scope` — four of six competitors ship them, and it is still not
-  backlog, because Pinch is one person on one laptop. A gap the product has
+  backlog, because Quasnooze is one person on one laptop. A gap the product has
   decided not to close is not a work item.
 - **Confuse partial with missing.** A `partial` capability (for example, file upload)
   is usually cheaper to close than a missing one and is scored accordingly. Voice used to be the

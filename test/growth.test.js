@@ -429,7 +429,7 @@ test("the bot's date comes from the caller, so a run is reproducible", () => {
 
 test("this repository's own CLI has no drift today", () => {
   // Dogfood: the collector that produced two false positives while it was being
-  // written now runs against the real bin/pinch.js and must keep its mouth shut.
+  // written now runs against the real bin/quasnooze.js and must keep its mouth shut.
   assert.deepEqual(collectCliDrift(), []);
 });
 
