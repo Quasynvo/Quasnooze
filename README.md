@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/demo.gif" width="100%" alt="Quasnooze by Quasynvo — illustrated cosmic assistant states: idle, thinking, opt-in listening and permission required" />
+  <img src="assets/quasnooze-showcase.gif" width="100%" alt="Quasnooze by Quasynvo — illustrated cosmic assistant states: idle, thinking, illustrative speaking and permission required" />
 </p>
 <h1 align="center">Quasnooze</h1>
 <p align="center"><b>Intelligence, in your orbit.</b><br>A local-first personal AI assistant by <a href="https://github.com/Quasynvo">Quasynvo</a>.<br>Your everyday tools. A cosmic sloth companion. Your permission, first.</p>
