@@ -1,7 +1,7 @@
 {
   "$comment": "Pinch's capability inventory. Every entry claims evidence — a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
   "$policy": "in-scope may be proposed. settled has been decided and is only shown so the decision stays visible. out-of-scope contradicts the product identity in .github/prompts/self-improvement.md; the researcher reports it and the proposer is forbidden from acting on it.",
-  "updated": "2026-11-02",
+  "updated": "2026-11-03",
   "capabilities": [
     {
       "id": "local-model",
@@ -445,15 +445,19 @@
         "presets",
         "prompt management"
       ],
-      "status": "implemented",
+      "status": "have",
       "policy": "in-scope",
       "evidence": [
         "src/store.js: atomic versioned personas.json library and session-scoped selections",
         "src/personas.js: explicit local /persona list/show/save/use/delete commands",
         "src/prompt.js: subordinate user-role style preference; core system prompt preserved",
         "src/export.js: personas and selections included in export",
-        "test/agent.test.js, test/personas.test.js, test/desktop.test.js: model requests, safety, persistence and commands"
-      ]
+        "test/agent.test.js: persona switching changes model requests while preserving system rules, approvals and honesty checks",
+        "test/personas.test.js: atomic persistence, cross-process reuse, session isolation, export, validation and corrupt-file protection",
+        "test/desktop.test.js: persona commands work locally without model inference",
+        "docs/GUIDE.md: Saved personas — command examples, limits and privacy boundaries"
+      ],
+      "note": "Named local style/instruction presets selected per session. Presets are subordinate user-role preferences, not system-prompt replacements; tool approvals and honesty checks remain independent. No live-model tone-quality benchmark is claimed."
     },
     {
       "id": "themes",

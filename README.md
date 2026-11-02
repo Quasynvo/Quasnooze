@@ -155,6 +155,25 @@ npm run demo
 
 You message it like a person, and it works like a very fast intern who has your laptop.
 
+## Saved prompts and personas
+
+Save reusable style instructions by sending these commands **in a conversation**
+(not as shell commands):
+
+```text
+/persona save concise-coder Be concise. Give small code examples and explain important caveats.
+/persona use concise-coder
+/persona list
+/persona use default
+```
+
+The library is local and shared, but each session chooses its own preset. Saving
+alone does not select it. Presets persist in `data/personas.json` (or `PINCH_DATA`)
+and are included in `pinch export`; review exports before sharing them. They never
+replace system rules or disable tool approvals and honesty checks. See the
+[full persona guide](docs/GUIDE.md#saved-personas) for editing, deletion, limits
+and examples including a daily planner and strict reviewer.
+
 ## How it works
 
 <p align="center">
