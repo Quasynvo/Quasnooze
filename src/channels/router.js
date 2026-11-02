@@ -79,7 +79,7 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
         `• read/write code and run commands (you approve each one)\n` +
         `• search the web, do maths, remember facts\n` +
         `• keep tasks, explain errors, plan projects\n\n` +
-        `Commands: /help · /reset (new session) · /status · /model\n` +
+        `Commands: /help · /reset (new session) · /status · /model · /persona\n` +
         `When I ask to run something, reply **yes** or **no**.`
     );
     return { handled: true, kind: "help" };

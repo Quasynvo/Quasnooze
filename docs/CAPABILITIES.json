@@ -435,10 +435,14 @@
         "presets",
         "prompt management"
       ],
-      "status": "missing",
+      "status": "implemented",
       "policy": "in-scope",
       "evidence": [
-        "src/prompt.js: one persona assembled at boot from OWNER_NAME and PINCH_PROFILE"
+        "src/store.js: atomic versioned personas.json library and session-scoped selections",
+        "src/personas.js: explicit local /persona list/show/save/use/delete commands",
+        "src/prompt.js: subordinate user-role style preference; core system prompt preserved",
+        "src/export.js: personas and selections included in export",
+        "test/agent.test.js, test/personas.test.js, test/desktop.test.js: model requests, safety, persistence and commands"
       ]
     },
     {

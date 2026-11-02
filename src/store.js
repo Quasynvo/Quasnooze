@@ -384,3 +384,73 @@ export function saveTask(task) {
   atomicWrite(TASKS_FILE, JSON.stringify(tasks.slice(0, 100), null, 2));
   return task;
 }
+
+/* ─────────────────── saved style personas (not security policy) ───────── */
+const PERSONAS_FILE = join(DATA, 'personas.json');
+const emptyPersonas = () => ({ version: 1, personas: [], selections: [] });
+function personaName(value) {
+  if (typeof value !== 'string' || !/^[a-z][a-z0-9_-]{0,39}$/.test(value) || value === 'default') throw new Error('Use a lowercase persona name (1–40 letters/digits/_/-), other than default.');
+  return value;
+}
+function personaSession(id) {
+  // Same identity as the session store, not a second namespace with aliases.
+  return sessionPath(id).slice(SESSIONS.length + 1, -5);
+}
+function validPersonaState(value) {
+  if (!value || value.version !== 1 || !Array.isArray(value.personas) || !Array.isArray(value.selections) || value.personas.length > 50 || value.selections.length > 1000 || Object.keys(value).some(k => !['version','personas','selections'].includes(k))) return false;
+  const names = new Set(), sessions = new Set();
+  for (const p of value.personas) {
+    if (!p || typeof p !== 'object' || Object.keys(p).some(k => !['name','instructions'].includes(k))) return false;
+    try { personaName(p.name); } catch { return false; }
+    if (names.has(p.name) || typeof p.instructions !== 'string' || !p.instructions.trim() || p.instructions.length > 2000) return false;
+    names.add(p.name);
+  }
+  for (const s of value.selections) {
+    if (!s || typeof s.sessionId !== 'string' || s.sessionId !== personaSession(s.sessionId) || !names.has(s.name) || sessions.has(s.sessionId) || Object.keys(s).some(k => !['sessionId','name'].includes(k))) return false;
+    sessions.add(s.sessionId);
+  }
+  return true;
+}
+export function loadPersonas({ strict = false } = {}) {
+  // Reload this small bounded registry: CLI/other processes can update presets.
+  const value = readJson(PERSONAS_FILE, null);
+  if (value === null && !existsSync(PERSONAS_FILE)) return emptyPersonas();
+  if (validPersonaState(value)) return value;
+  if (strict) throw new Error('personas.json is malformed or unsupported; repair/back it up before editing. It was not overwritten.');
+  return { ...emptyPersonas(), warning: 'personas.json is malformed or unsupported; default persona is in use.' };
+}
+function savePersonaState(state) {
+  if (!validPersonaState(state)) throw new Error('Invalid persona library.');
+  writeCached(PERSONAS_FILE, structuredClone(state), JSON.stringify(state, null, 2));
+  return state;
+}
+export function savePersona(name, instructions) {
+  personaName(name);
+  if (typeof instructions !== 'string' || !instructions.trim() || instructions.length > 2000) throw new Error('Persona instructions must contain 1–2000 characters.');
+  const state = loadPersonas({ strict: true });
+  const index = state.personas.findIndex(p => p.name === name);
+  const preset = { name, instructions: instructions.trim() };
+  if (index < 0) state.personas.push(preset); else state.personas[index] = preset;
+  savePersonaState(state); return structuredClone(preset);
+}
+export function selectPersona(sessionId, name) {
+  if (name !== 'default') personaName(name);
+  const state = loadPersonas({ strict: true });
+  if (name !== 'default' && !state.personas.some(p => p.name === name)) throw new Error('Persona not found. Use /persona list.');
+  const id = personaSession(sessionId);
+  state.selections = state.selections.filter(s => s.sessionId !== id);
+  if (name !== 'default') state.selections.push({sessionId:id,name});
+  savePersonaState(state); return name;
+}
+export function activePersona(sessionId) {
+  const state = loadPersonas();
+  const selection = state.selections.find(s => s.sessionId === personaSession(sessionId));
+  return state.personas.find(p => p.name === selection?.name) || null;
+}
+export function removePersona(name) {
+  personaName(name); const state = loadPersonas({ strict:true });
+  if (!state.personas.some(p => p.name === name)) throw new Error('Persona not found.');
+  state.personas = state.personas.filter(p => p.name !== name);
+  state.selections = state.selections.filter(s => s.name !== name);
+  savePersonaState(state);
+}
