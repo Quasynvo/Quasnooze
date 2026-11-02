@@ -44,17 +44,26 @@ from zero to a running assistant.
 
 ## Voice, on your phone
 
-The most natural way to use Pinch is to talk to it. Everything here runs in the browser — no app
-store, no extra account.
+The most natural way to use Pinch is to talk to it. The web panel needs no app store, build step or
+extra account. Browser speech recognition is supplied by the browser, though — see the privacy
+table below before assuming it is on-device.
 
 - **Dictation** — tap the mic, speak, send. Language is a dropdown: `EN·IN`, `EN·US`, `தமிழ்`, `हिन्दी`.
   (If you speak Tamil or Hindi, this is the single biggest usability upgrade — it was added for exactly that reason.)
-- **Spoken replies** — the panel reads answers aloud with the device's own TTS voice, queued so it
-  never talks over itself.
-- **`Hey Pinch` wake word** — opt-in, panel-only, off by default. The browser's own recogniser
-  matches locally; audio never leaves the device until a command actually follows.
+  Browser speech recognition may send microphone audio to the browser vendor, depending on the
+  browser and OS. The Windows companion uses local System.Speech recognition instead.
+- **Spoken replies** — tap 🔈 once to opt in. The panel reads completed answers aloud with an
+  installed local voice (`localService=true`), queued so it never talks over itself. No
+  `WHISPER_URL`, server TTS endpoint or cloud account is involved. A network-only voice is
+  refused, long replies are chunked rather than cut off, and code blocks and the guard footer are
+  not read aloud. Off by default on every device.
+- **`Hey Pinch` wake word** — opt-in, panel-only, off by default. Matching happens in the browser,
+  but browser recognition may send microphone audio to the browser vendor even before a command
+  follows; the Windows companion keeps wake listening on the device.
 - **Voice notes** — send a voice message from Telegram and Pinch transcribes it, if you point
   `WHISPER_URL` at a local Whisper server.
+
+Evidence, reproduction commands and the exact boundaries: [Voice, in detail](VOICE.md).
 
 Add the panel to your home screen first; browsers only grant microphone access on a page you have
 tapped.
@@ -386,9 +395,13 @@ The honest table. No "we respect your privacy" paragraph — a list.
 | `search_web` page fetch | the URL | that website |
 | Telegram / Discord / Slack / WhatsApp | the message text | that platform |
 | `pinch pair` QR | **Nothing.** Generated locally | your terminal |
+| Browser dictation / wake word | microphone audio **may** be sent to the browser vendor | that browser's speech service |
+| Web spoken replies | **Nothing.** Plain text to an installed local voice | your device's speech engine |
 | Everything else — memory, sessions, reminders, files, screenshots | **Nothing.** | `data/` on your disk |
 
 Default is local. Cloud is a choice you make in `.env`, never a default that happens to you.
+Browser speech recognition is the exception: it is browser-supplied, so use the Windows companion
+when recognition itself must stay on the device.
 
 ```bash
 grep -r "fetch(" src/    # every outbound call in the product, in one command
@@ -774,7 +787,12 @@ Listed because the absence of this section is usually a lie:
 - **Voice notes** need `WHISPER_URL` pointing at a local Whisper server; without it, audio messages
   are politely refused.
 - **The wake word needs an open panel tab and a microphone.** A browser cannot listen from a closed
-  tab, and no amount of wishful README writing changes that.
+  tab, and no amount of wishful README writing changes that. Browser recognition may send
+  microphone audio to the browser vendor; the Windows companion keeps recognition local.
+- **Spoken replies are opt-in and local-voice-only.** They work in the web panel and the Windows
+  companion, not in Telegram, Discord, Slack or WhatsApp. The web player refuses network-only
+  voices rather than silently going online, caps a reply at 2,000 characters and reads it in
+  bounded chunks. A device with no installed local voice stays silent. See [VOICE.md](VOICE.md).
 - **WhatsApp is unofficial** and can get a number banned. Off by default.
 - **The command screen is a denylist.** Obfuscated commands still reach the human for approval —
   that is the design, not an oversight. Never run `PINCH_AUTO_APPROVE=true` on a machine you care about.

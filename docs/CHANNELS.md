@@ -91,9 +91,11 @@ that would be an amusing way to hand your access key to someone else.
 ### Wake word
 
 The 👂 toggle in the panel header enables "Hey Pinch". It uses the browser's own recogniser in
-continuous mode and matches the phrase **on your device**; nothing leaves the machine until a
-command actually follows the wake word. It stops when the tab or app closes, and the toggle is
-off by default on every device — always-on microphones should be a choice, not a default.
+continuous mode to match the phrase while the tab is open. Browser speech recognition may send
+microphone audio to the browser vendor even before a command follows the wake word, so the toggle
+asks for explicit consent and points at the Windows companion for recognition that stays on the
+device. It stops when the tab or app closes, and the toggle is off by default on every device —
+always-on microphones should be a choice, not a default.
 
 On iOS, Safari may pause recognition when the screen locks; keep the screen on for hands-free
 use, or use the mic button on the lock screen's dictation instead.
