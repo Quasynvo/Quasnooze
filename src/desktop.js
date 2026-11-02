@@ -71,13 +71,19 @@ export class DesktopRuntime {
     this.state = { available: false, phase: "not-running", mic: false, voice: "Windows companion not running", text: "Run npm run desktop on Windows.", lastMs: null };
     this.recent = []; this.notices = [];
   }
-  snapshot() { return { ...this.state, busy: this.busy, approval: this.approval ? { ...this.approval } : null, recent: this.recent.map((r) => ({ ...r })) }; }
+  snapshot() { return { ...this.state, ...(this.state.speech ? { speech: { ...this.state.speech } } : {}), busy: this.busy, approval: this.approval ? { ...this.approval } : null, recent: this.recent.map((r) => ({ ...r })) }; }
   update(patch) { Object.assign(this.state, patch); this.bridge?.send({ op: "state", ...patch }); }
   attach(bridge) { this.bridge = bridge; this.update({ available: true, phase: "muted", text: "Ready. Local wake listening is off until you enable it." }); }
   detach() { this.bridge = null; if (this.approval) this.approve(this.approval.id, false); this.update({ available: false, phase: "not-running", mic: false, voice: "Companion disconnected" }); }
   approve(id, allowed) {
     if (typeof allowed !== "boolean" || this.approval?.id !== id || !pendingApprovalsFor(SESSION).some((p) => p.id === id)) return false;
     const ok = answerApproval(id, allowed); this.approval = null; return ok;
+  }
+  recognition(event) {
+    if (!this.bridge || !["listening", "hearing", "heard", "rejected", "timeout", "error", "audio-problem"].includes(event.status)) return false;
+    const speech = { status: event.status, detail: String(event.detail || "").slice(0, 600), text: String(event.text || "").slice(0, 2000), confidence: Number.isFinite(event.confidence) ? Math.max(0, Math.min(1, event.confidence)) : null };
+    this.update({ speech, ...(event.status === "error" && !this.busy ? { phase: "attention" } : {}) });
+    return true;
   }
   control(action) {
     if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });

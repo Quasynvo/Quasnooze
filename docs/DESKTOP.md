@@ -120,3 +120,32 @@ For optional browser regression checks, install Playwright **as developer toolin
 - Confirm exact URL/clipboard consent, cancellation, 30-second expiry, sensitive tool approval, denied action, long description, disconnect and concurrent reminder.
 - Verify startup install/remove affects only the user's Pinch shortcut and starts muted after login; verify no process remains after tray Quit.
 - Measure cold/warm Ollama completion and wake-to-listen / command-to-speech on named PC hardware. Do not reuse a clock-handler timing as an inference benchmark.
+
+
+## Troubleshooting: chat microphone works, command-deck Talk does not
+
+These are different engines: the chat browser recognizer may use a vendor service;
+the command deck uses local Windows System.Speech and the **Windows default recording
+device**. Browser success does not validate desktop-app microphone permission, that
+default device, or classic English desktop recognition accuracy.
+
+1. If the deck says connection needed, keep the `npm run desktop` process running
+   and use **Deck** in the native widget to reopen the correct server/key. Do not
+   open desktop.html as a `file://` page. Verify the clock fast path before testing
+   speech. A page losing its API connection cannot establish native mic state.
+2. Press Talk locally and accept the default-No native consent dialog. The widget
+   is brought forward for consent; wait for LISTENING. Check Windows Settings >
+   Privacy & security > Microphone > allow desktop apps, and System > Sound > Input.
+   The browser can be using a different device. Check the selected input meter.
+3. Read **Last speech event** in the deck: listening/hearing, rejected or
+   low-confidence input, initial-silence timeout, input-signal problems and engine
+   errors are now surfaced instead of silently returning to wake mode. Recognized
+   text and confidence are local runtime diagnostics, not a cloud STT fallback.
+   Rejected text is not executed. Historical diagnostic text is not a live mic LED.
+4. Try `what time is it`, which bypasses the model. Only then test model requests;
+   request completion time does not measure recognition latency.
+
+The completion handler now rearms wake listening after a natural multiple-mode
+completion too, rather than assuming only dictation can complete. Device-specific
+failures and recognition quality still require a Windows microphone test; these
+changes do not establish the cause on an unseen user's computer.

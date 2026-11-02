@@ -168,3 +168,30 @@ test("PowerShell compilation resolves installed GAC assembly locations, not bare
   assert.match(script, /-ReferencedAssemblies \$references/);
   assert.doesNotMatch(script, /['"]System\.Speech\.dll['"]/);
 });
+
+
+test("native speech diagnostics are bounded, scoped to an attached host, and never execute rejected text", () => {
+  let calls = 0;
+  const runtime = new DesktopRuntime({ agent: async () => { calls++; } });
+  assert.equal(runtime.recognition({ status: "error", detail: "not attached" }), false);
+  runtime.attach(bridge());
+  assert.equal(runtime.recognition({ status: "unknown", text: "open calculator" }), false);
+  assert.equal(runtime.recognition({ status: "rejected", detail: "x".repeat(700), text: "open calculator", confidence: 0.2 }), true);
+  assert.equal(runtime.snapshot().speech.detail.length, 600);
+  assert.equal(runtime.snapshot().speech.confidence, 0.2);
+  assert.equal(calls, 0);
+  const copy = runtime.snapshot(); copy.speech.text = "changed";
+  assert.equal(runtime.snapshot().speech.text, "open calculator");
+  runtime.update({ phase: "approval" }); runtime.busy = true;
+  runtime.recognition({ status: "error", detail: "device unplugged" });
+  assert.equal(runtime.snapshot().phase, "approval");
+});
+
+test("native recognizer reports rejection, default-input problems and completion failures", () => {
+  const source = readFileSync(new URL("../desktop/Companion.cs", import.meta.url), "utf8");
+  for (const event of ["SpeechRecognitionRejected", "AudioSignalProblemOccurred", "SpeechDetected", "InitialSilenceTimeout"])
+    assert.ok(source.includes(event));
+  assert.ok(source.includes('SpeechStatus("error", e.Error.Message'));
+  assert.ok(source.includes('if (WantWake && !Working && !e.Cancelled) StartRecognition(false)'));
+  assert.ok(source.includes('Window.Show(); Window.Activate();'));
+});
