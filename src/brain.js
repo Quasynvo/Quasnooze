@@ -15,6 +15,8 @@
 import { AssistantTextStream, assistantText } from "./assistant-text.js";
 import { config } from "./config.js";
 import { fit, ctx } from "./budget.js";
+import { CODES, QuasError, classify, fromStatus, planFor } from "./failure.js";
+import { ResilientRouter } from "./router.js";
 
 const TIMEOUT_MS = 180_000;
 
@@ -34,13 +36,19 @@ async function postJson(url, body, headers = {}, timeoutMs = TIMEOUT_MS) {
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
-      throw new Error(`Non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+      // A body we cannot read is a shape problem, not a transport one: say which.
+      throw new QuasError(CODES.PAYLOAD_MISMATCH, `Non-JSON response (${res.status}): ${text.slice(0, 200)}`);
     }
     if (!res.ok) {
       const detail = json?.error?.message || json?.error || text.slice(0, 300);
-      throw new Error(`HTTP ${res.status}: ${detail}`);
+      const retryAfter = Number(res.headers.get("retry-after")) || null;
+      throw fromStatus(res.status, detail, { retryAfterSeconds: retryAfter });
     }
     return json;
+  } catch (err) {
+    // fetch itself throws for a refused socket, a DNS miss and an abort; those are the three
+    // cases the agent most needs to tell apart.
+    throw classify(err);
   } finally {
     clearTimeout(timer);
   }
@@ -91,9 +99,9 @@ async function postStream(url, body, headers = {}) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+      throw fromStatus(res.status, text.slice(0, 300), { retryAfterSeconds: Number(res.headers.get("retry-after")) || null });
     }
-  } catch (err) { clearTimeout(timer); throw err; }
+  } catch (err) { clearTimeout(timer); throw classify(err); }
   return { res, done: () => clearTimeout(timer) };
 }
 
@@ -237,7 +245,7 @@ const openai = {
   name: "openai",
 
   async chat(messages, { tools = [], model, onDelta, maxTokens = ctx.numPredict } = {}) {
-    if (!config.llm.openaiKey) throw new Error("OPENAI_API_KEY is not set");
+    if (!config.llm.openaiKey) throw new QuasError(CODES.NEED_AUTH, "OPENAI_API_KEY is not set", { provider: "openai" });
     const { messages: fitted, dropped } = fit(messages, { tools, numPredict: maxTokens });
     const body = {
       model: model || config.llm.openaiModel,
@@ -313,7 +321,7 @@ const openai = {
   },
 
   async probe() {
-    if (!config.llm.openaiKey) throw new Error("no OPENAI_API_KEY configured");
+    if (!config.llm.openaiKey) throw new QuasError(CODES.NEED_AUTH, "no OPENAI_API_KEY configured", { provider: "openai" });
     return { ok: true, models: [config.llm.openaiModel], url: config.llm.openaiBaseUrl };
   },
 };
@@ -453,6 +461,8 @@ const PROVIDERS = { ollama, openai, mock };
 
 let probeCache = null;
 let runtimeModel = null;
+/** The last turn's route, for the doctor and for error text. Null until a turn runs. */
+let lastRoute = null;
 
 function configuredModel() {
   const provider = Object.hasOwn(PROVIDERS, config.llm.provider) ? config.llm.provider : "ollama";
@@ -519,13 +529,56 @@ export const brain = {
     return this.active;
   },
 
+  /** The providers a turn would try, in order. This is the app's resilience, made visible. */
+  plan(selection = this.active) {
+    return planFor({ provider: selection.provider, model: selection.model });
+  },
+
+  /** The last turn's route: which provider answered, and what was tried before it. */
+  get lastRoute() {
+    return lastRoute;
+  },
+
   async chat(messages, options = {}) {
     const { selection = this.active, onDelta, ...rest } = options;
     if (rest.maxTokens !== undefined) rest.maxTokens = Math.max(1, Math.min(ctx.numPredict, Number.isFinite(rest.maxTokens) ? Math.floor(rest.maxTokens) : ctx.numPredict));
     const stream = onDelta ? new AssistantTextStream(onDelta) : null;
-    const out = await PROVIDERS[selection.provider].chat(messages, { ...rest, model: rest.model || selection.model, ...(stream ? {onDelta:piece=>stream.push(piece)} : {}) });
-    const cleaned = stream ? stream.finish(out.content) : assistantText(out.content);
-    return {...out, content:cleaned.text, reasoningFiltered:cleaned.filtered};
+    const chain = this.plan({ provider: selection.provider, model: rest.model || selection.model });
+    const names = chain.map((candidate) => candidate.provider);
+
+    const router = new ResilientRouter(
+      chain.map((candidate) => ({
+        name: candidate.provider,
+        provider: candidate.provider,
+        chat: (msgs, opts) => PROVIDERS[candidate.provider].chat(msgs, { ...opts, model: candidate.model }),
+      })),
+      { onAttempt: (record) => { lastRoute = { ...record, plan: names, at: Date.now() }; } },
+    );
+
+    try {
+      const routed = await router.run(messages, { ...rest, ...(stream ? { onDelta: (piece) => stream.push(piece) } : {}) });
+      const out = routed.result;
+      const cleaned = stream ? stream.finish(out.content) : assistantText(out.content);
+      lastRoute = { ok: true, provider: routed.provider, plan: names, attempts: routed.attempts, degraded: routed.degraded, at: Date.now() };
+      return {
+        ...out,
+        content: cleaned.text,
+        reasoningFiltered: cleaned.filtered,
+        provider: routed.provider,
+        attempts: routed.attempts,
+        degraded: routed.degraded,
+      };
+    } catch (err) {
+      lastRoute = {
+        ok: false,
+        provider: err?.provider ?? names[0] ?? null,
+        plan: names,
+        code: err?.code ?? null,
+        attempts: err?.attempts ?? [],
+        at: Date.now(),
+      };
+      throw err;
+    }
   },
 
   /** Probe every provider, cached for 30 s — the panel asks on every load. */

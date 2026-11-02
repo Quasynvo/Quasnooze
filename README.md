@@ -108,6 +108,28 @@ See the [capability inventory](docs/CAPABILITIES.json) for implementation eviden
 Read-only shell commands such as `ls`, `cat`, `grep`, `git status` and friends
 run straight through when they satisfy the risk classifier. Other commands ask; blocked commands remain blocked. [Exact policy and examples →](docs/GUIDE.md#commands-it-runs-without-asking)
 
+## When the model does not answer
+
+A failed turn is typed rather than guessed at: `RATE_LIMITED`, `NEED_AUTH`, `UNREACHABLE`,
+`TIMEOUT`, `UPSTREAM_BROKEN`, `PAYLOAD_MISMATCH`, `BAD_INPUT`, `CONTEXT_LIMIT`, `STREAM_CUT`. Each
+carries the one sentence that tells you what to do about it, and the reply says which provider
+failed — not advice to restart a service that was running fine.
+
+`quasnooze health` is the command to reach for when something breaks. It calls each provider for
+real, prints status codes and latencies, shows whether a turn would survive losing its provider,
+and exits non-zero so a script can act on it:
+
+```
+▲ routing   single provider (ollama) — a 429, 5xx or refused connection has nowhere to go
+    Set LLM_FALLBACK=openai to survive an Ollama outage. That sends the turn's history to the
+    cloud endpoint, so it stays off by default.
+```
+
+Falling back to a second provider is opt-in for that reason: Quasnooze is local-first, and quietly
+sending a conversation to a cloud endpoint to keep a turn alive is your decision, not a default.
+A reply that has already started on screen is never re-asked elsewhere — that would print the
+answer's beginning twice. [The whole story →](docs/ROUTING.md)
+
 ## Privacy, permissions and honest limits
 
 - Conversations and personal state live on the machine running Quasnooze. Local does **not** automatically mean encrypted or sandboxed.
@@ -126,6 +148,7 @@ From a checkout, use `node bin/quasnooze.js help`. The `pinch` entry remains a c
 | Command | Purpose |
 |---|---|
 | `quasnooze setup` / `quasnooze doctor` | Guided configuration / readiness checks |
+| `quasnooze health` | Provider matrix, routing plan and verdict; `--json` for scripts, exits 1 on failure |
 | `quasnooze desktop` | Windows resident companion |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
 | `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model/tool probe |
@@ -152,6 +175,6 @@ The bots maintain a bounded, evidence-backed queue—**up to ten open contributo
 
 ## Learn more
 
-[User guide](docs/GUIDE.md) · [Desktop and local voice](docs/DESKTOP.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md) · [Brand and migration](docs/REBRANDING.md)
+[User guide](docs/GUIDE.md) · [Routing and diagnostics](docs/ROUTING.md) · [Desktop and local voice](docs/DESKTOP.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md) · [Brand and migration](docs/REBRANDING.md)
 
 Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous author/contributor attribution is preserved. [MIT license](LICENSE).
