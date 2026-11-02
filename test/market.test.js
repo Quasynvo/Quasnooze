@@ -179,3 +179,26 @@ test("the product boundary is recorded, not quietly dropped", () => {
   assert.ok(multi, "multi-user must stay in the inventory so the decision is visible");
   assert.equal(multi.policy, "out-of-scope");
 });
+
+
+test("inventory uses supported statuses so completed features are not proposed as missing", () => {
+  const { capabilities } = JSON.parse(readFileSync(join(ROOT, "docs", "CAPABILITIES.json"), "utf8"));
+  const statuses = new Set(["have", "partial", "missing"]);
+  for (const capability of capabilities) {
+    assert.ok(statuses.has(capability.status), `${capability.id} has unsupported status ${capability.status}`);
+  }
+});
+
+test("saved personas are evidenced as present and never re-proposed as a market gap", () => {
+  const { capabilities } = JSON.parse(readFileSync(join(ROOT, "docs", "CAPABILITIES.json"), "utf8"));
+  const personas = capabilities.find(capability => capability.id === "prompt-library");
+  assert.ok(personas);
+  assert.equal(personas.status, "have");
+  for (const file of ["src/store.js", "src/personas.js", "src/prompt.js", "src/export.js", "test/agent.test.js", "test/personas.test.js", "test/desktop.test.js", "docs/GUIDE.md"]) {
+    assert.ok(personas.evidence.some(evidence => evidence.startsWith(file + ":")), `missing evidence: ${file}`);
+  }
+  const sources = Array.from({ length: 10 }, (_, i) => ({ repo: `fixture/project-${i}`, text: "- Saved persona presets and reusable prompts" }));
+  const rows = compare([personas], sources);
+  assert.equal(rows[0].coverage, 10, "a present capability must be excluded even with unanimous competitor coverage");
+  assert.deepEqual(gaps(rows), []);
+});
