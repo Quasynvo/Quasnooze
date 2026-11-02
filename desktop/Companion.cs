@@ -117,8 +117,17 @@ public static class PinchCompanion {
         if (!allowed) SpeechStatus("denied", "Microphone permission was declined. Press Talk and accept the native consent dialog to retry.");
         return allowed;
     }
+    // Shared by the resident and WAV probe: common commands must not rely only on free dictation.
+    public static void LoadCaptureGrammars(SpeechRecognitionEngine engine, System.Globalization.CultureInfo culture) {
+        var builder = new GrammarBuilder(); builder.Culture = culture;
+        builder.Append(new Choices("what time is it", "what is the time", "time", "system status", "computer status",
+            "open calculator", "open notepad", "open file explorer", "open github", "open youtube", "open google",
+            "read my clipboard", "read clipboard", "mute microphone", "stop listening"));
+        engine.LoadGrammar(new Grammar(builder) { Name = "PinchQuickCommands", Priority = 10 });
+        engine.LoadGrammar(new DictationGrammar() { Name = "PinchDictation" });
+    }
     static void StartRecognition(bool capture) {
-        if (!WantWake || Working || Quitting) return;
+        if (!WantWake || Working || Quitting || CurrentPrompt != null) return;
         SpeechAction(SpeechGate.Start(capture));
     }
     static void StartRecognitionCore(bool capture) {
@@ -128,7 +137,7 @@ public static class PinchCompanion {
             var info = infos.FirstOrDefault(x => x.Culture.Name == "en-IN") ?? infos.FirstOrDefault(x => x.Culture.Name == "en-US") ?? infos.FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName == "en");
             if (info == null) throw new InvalidOperationException("No English desktop speech recognizer. Install an English speech pack in Windows Settings, then restart Pinch. No cloud fallback is used.");
             rec = new SpeechRecognitionEngine(info); Recognizer = rec;
-            if (capture) rec.LoadGrammar(new DictationGrammar());
+            if (capture) LoadCaptureGrammars(rec, info.Culture);
             else {
                 var builder = new GrammarBuilder(); builder.Culture = info.Culture;
                 builder.Append(new Choices("hey pinch", "pinch")); rec.LoadGrammar(new Grammar(builder));
@@ -185,7 +194,7 @@ public static class PinchCompanion {
                     SpeechStatus(e.InitialSilenceTimeout ? "timeout" : "rejected", e.InitialSilenceTimeout ? "No speech detected within 12 seconds. Check Windows default Input and allow desktop apps to access the microphone, then press Talk again." : "No usable instruction recognized. Press Talk to retry; check the Windows default microphone and English desktop speech pack.");
                 }
                 // Multiple-mode recognition may also complete. Never leave an armed UI with a stopped engine.
-                if (WantWake && !Working && !Quitting) {
+                if (WantWake && !Working && !Quitting && CurrentPrompt == null) {
                     if (next != "none") SpeechAction(next);
                     else if (!e.Cancelled) StartRecognition(false);
                 } else SpeechGate.FailedStart();

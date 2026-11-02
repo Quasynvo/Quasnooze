@@ -15,10 +15,13 @@ public static class PinchSpeechDoctor {
         var report = new Dictionary<string, object>();
         report["microphoneOpened"] = false;
         report["test"] = "local TTS-generated WAV to System.Speech; synthetic audio, not a microphone test";
-        var info = SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(x => x.Culture.Name == "en-US")
+        var info = SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(x => x.Culture.Name == "en-IN")
+            ?? SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(x => x.Culture.Name == "en-US")
             ?? SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName == "en");
         if (info == null) { report["status"] = "unavailable: no English desktop recognizer; audio test did not run"; return new JavaScriptSerializer().Serialize(report); }
+        report["culture"] = info.Culture.Name;
         try {
+            bool passed = true;
             foreach (bool wake in new [] { true, false }) {
                 using (var wave = new MemoryStream()) {
                     using (var speaker = new SpeechSynthesizer()) {
@@ -31,15 +34,17 @@ public static class PinchSpeechDoctor {
                     wave.Position = 0;
                     using (var engine = new SpeechRecognitionEngine(info)) {
                         if (wake) { var grammar = new GrammarBuilder(); grammar.Culture = info.Culture; grammar.Append(new Choices("hey pinch", "pinch")); engine.LoadGrammar(new Grammar(grammar)); }
-                        else engine.LoadGrammar(new DictationGrammar());
+                        else PinchCompanion.LoadCaptureGrammars(engine, info.Culture);
                         engine.SetInputToWaveStream(wave);
                         var result = engine.Recognize(TimeSpan.FromSeconds(10));
+                        bool accepted = result != null && result.Confidence >= (wake ? 0.78 : 0.45) && String.Equals(result.Text, wake ? "hey pinch" : "what time is it", StringComparison.OrdinalIgnoreCase);
+                        passed = passed && accepted;
                         report[wake ? "wake" : "dictation"] = new { text = result == null ? "" : result.Text, confidence = result == null ? 0 : result.Confidence, policyWouldAccept = result != null && result.Confidence >= (wake ? 0.78 : 0.45) };
                     }
                 }
             }
-            report["status"] = "synthetic audio test completed; inspect transcripts and confidence; hardware microphone not verified";
-        } catch(Exception e) { report["status"] = "synthetic audio test failed"; report["error"] = e.Message; }
+            report["status"] = passed ? "synthetic audio fixture passed; hardware microphone not verified" : "synthetic audio fixture failed";
+        } catch(Exception e) { report["status"] = "synthetic audio fixture failed"; report["error"] = e.Message; }
         return new JavaScriptSerializer().Serialize(report);
     }
     public static string Run(bool micTest) {
@@ -69,7 +74,7 @@ public static class PinchSpeechDoctor {
         string text = "", error = "", signal = ""; float confidence = 0;
         try {
             rec = new SpeechRecognitionEngine(info);
-            rec.LoadGrammar(new DictationGrammar());
+            PinchCompanion.LoadCaptureGrammars(rec, info.Culture);
             rec.InitialSilenceTimeout = TimeSpan.FromSeconds(12);
             rec.BabbleTimeout = TimeSpan.FromSeconds(8);
             rec.AudioLevelUpdated += (s, e) => { lock(sync) maxLevel = Math.Max(maxLevel, e.AudioLevel); };

@@ -21,6 +21,8 @@ reached the model. Earlier compilation and JS tests were not microphone tests.
    retries both exercised that ordering. Replacement is now serialized through a
    pure C# lifecycle gate; cancellation must complete before disposal/restart.
    Mute clears a queued restart; late callbacks are ignored while stopping.
+   Completion cannot rearm recognition during an active TTS prompt: a fast reply
+   racing with the old completion callback must not reopen the mic over speech.
    Natural completion and intentional cancellation are distinguished, including
    the InputStreamEnded and silence/rejection branches. A five-second watchdog
    reports failed shutdown without pretending the microphone was released or
@@ -43,10 +45,21 @@ reached the model. Earlier compilation and JS tests were not microphone tests.
    browser recognition, classic English desktop packs and Windows desktop-app
    permissions differ. No automatic cloud/browser fallback or machine-settings
    modification has been added.
-6. **Confidence gating is still intentional.** Existing wake/dictation thresholds
+6. **Dictation-only decoding failed a real synthetic probe.** The first Windows
+   run recognized the generated wake phrase at 0.982 confidence, but decoded the
+   generated “what time is it” as “What I was it” at 0.378, below the 0.45 command
+   threshold. This is concrete evidence of the classic dictation route failing a
+   controlled fixture, not proof of the user's microphone failure. Resident capture
+   now loads a higher-priority constrained grammar for supported everyday commands
+   alongside free dictation. Doctor and the resident share that grammar factory,
+   and CI fails an available synthetic fixture when the expected phrase is not
+   accepted. Missing prerequisites are explicitly reported as unavailable.
+7. **Confidence gating is still intentional.** Existing wake/dictation thresholds
    are unchanged. The report makes low-confidence text visible instead of
    blindly relaxing thresholds and executing possibly incorrect instructions.
-   Accuracy and threshold tuning need real accent/noise recordings and consent.
+   Rejected candidate text can be copied into an editable draft for manual review,
+   never automatically executed. Accuracy and threshold tuning need real accent/
+   noise recordings and consent.
 
 ## Reproduce on the affected Windows PC
 

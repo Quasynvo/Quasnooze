@@ -20,6 +20,7 @@ function render(state) {
  $('micState').textContent=state.mic ? 'ON':'OFF'; $('nativeStatus').textContent=state.available ? 'CONNECTED':'NOT RUNNING';
  $('nativeCopy').textContent=state.available ? (state.voice || 'Companion connected.') : 'Run npm run desktop on Windows. This webpage never turns on a browser speech recognizer.';
  $('speechDetail').textContent=state.speech ? 'Last speech event — '+state.speech.status.toUpperCase()+': '+state.speech.detail : 'Press Talk locally, accept the native microphone dialog, then speak when LISTENING appears. Uses the Windows default recording device.';
+ $('reviewHeard').hidden=state.speech?.status !== 'rejected' || !state.speech?.text;
  $('heardText').textContent=state.speech?.text ? 'Windows heard: '+state.speech.text+(state.speech.confidence === null ? '' : ' ('+Math.round(state.speech.confidence*100)+'% confidence)') : '';
  const live=state.mic && state.audioAgeMs !== null && state.audioAgeMs < 2000 && Number.isFinite(state.audioLevel);
  $('audioMeter').value=live ? state.audioLevel : 0; $('audioLabel').textContent=live ? 'Windows input level: '+state.audioLevel+' / 100' : (state.mic ? 'Waiting for Windows input-level samples…' : 'Microphone level: not capturing');
@@ -54,6 +55,7 @@ async function run(text) {
  catch(err) { $('result').textContent=err.message; $('resultKind').textContent='REFUSED'; }
  finally { await refresh(); }
 }
+$('reviewHeard').onclick=()=>{$('command').value=current.speech?.text || '';$('command').focus();toast('Review and correct the draft, then press Run. Nothing was executed.');};
 $('commandForm').onsubmit=e=>{e.preventDefault(); const text=$('command').value; $('command').value=''; run(text);};
 for(const button of document.querySelectorAll('[data-command]')) button.onclick=()=>run(button.dataset.command);
 for(const button of document.querySelectorAll('[data-close]')) button.onclick=()=>$(button.dataset.close).close();
