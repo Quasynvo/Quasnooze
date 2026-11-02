@@ -12,10 +12,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sandbox = mkdtempSync(join(tmpdir(), "pinch-audit-"));
@@ -298,4 +299,36 @@ test("rendered links can never reach back into the opener", () => {
   const md = loadMarkdown();
   const html = md("[ok](https://example.com)");
   assert.match(html, /rel="noopener noreferrer"/);
+});
+
+
+test("document search never reuses a cached entry after replacement by an escaping symlink", async (t) => {
+  const { createSources } = await import("../src/sources.js");
+  const dir = join(sandbox, "index-security"), file = join(dir, "cached.txt");
+  // A private, unpredictable directory prevents another local user from
+  // pre-creating the external fixture or replacing it with a symlink.
+  const outsideDir = mkdtempSync(join(tmpdir(), "pinch-index-outside-"));
+  const outside = join(outsideDir, "outside.txt");
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, "insideauditword", { mode: 0o600, flag: "wx" });
+    writeFileSync(outside, "outsideauditword", { mode: 0o600, flag: "wx" });
+    const tool = TOOL_MAP.get("search_documents");
+    const first = await tool.run({ path: dir, query: "insideauditword" }, { sources: createSources() });
+    assert.match(first.output, /insideauditword/);
+    rmSync(file);
+    try { symlinkSync(outside, file); } catch { t.skip("symlinks unavailable"); return; }
+    const second = await tool.run({ path: dir, query: "outsideauditword" }, { sources: createSources() });
+    assert.doesNotMatch(second.output, /outsideauditword/);
+    await assert.rejects(tool.run({ path: file, query: "outsideauditword" }, { sources: createSources() }), SafePathError);
+  } finally { rmSync(outsideDir, { recursive: true, force: true }); }
+});
+
+test("compressed PDF document bomb is rejected at the expansion limit", async () => {
+  const { extract, MAX_EXTRACTED_BYTES } = await import("../src/attachments.js");
+  const compressed = deflateSync(Buffer.alloc(MAX_EXTRACTED_BYTES + 1, 65));
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n<< /Filter /FlateDecode >>\nstream\n"), compressed, Buffer.from("\nendstream\n%%EOF")]);
+  const result = extract(pdf, "bomb.pdf");
+  assert.equal(result.text, "");
+  assert.match(result.note, /limit|incomplete/i);
 });

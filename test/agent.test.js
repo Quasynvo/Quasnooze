@@ -4,7 +4,7 @@
  */
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -33,7 +33,12 @@ const modelServer = createServer(async (req, res) => {
   if (local && modelFailure) { res.writeHead(404); return res.end(JSON.stringify({ error: "model not found" })); }
   if (local && modelRedirect) { res.writeHead(302, { location: "/redirect-target" }); return res.end(); }
   const toolRound = local && body.messages.some((m) => m.role === "user" && m.content === "force-tool-loop") && !body.messages.some((m) => m.role === "tool");
-  const message = replyOverride || (toolRound
+  const docTurn = local && body.messages.some((m) => m.role === "user" && m.content === "search-docs-e2e");
+  const docTool = body.messages.some((m) => m.role === "tool");
+  const docMessage = docTurn ? (docTool ? { content: "The ceiling is 4200 [1], plus a fabricated claim [3]." } : {
+    content: "", tool_calls: [{ function: { name: "search_documents", arguments: { path: ".", query: "reimbursement" } } }],
+  }) : null;
+  const message = replyOverride || docMessage || (toolRound
     ? { content: "", tool_calls: [{ function: { name: "calculator", arguments: { expression: "2+2" } } }] }
     : { content: `${local ? "local" : "cloud"} ${body.model}` });
   if (local) {
@@ -348,4 +353,22 @@ test('persona commands are local, persist selections, and cannot run as unattend
  assert.equal(activePersona('persona-command').name,'friendly');assert.equal(modelRequests.length,count);
  const blocked=await runAgent({sessionId:'persona-command',text:'/persona delete friendly',autonomy:'unattended'});
  assert.match(blocked.text,/interactive user/);assert.equal(activePersona('persona-command').name,'friendly');
+});
+
+
+test("document search reaches the model and the real agent validates and guards citations", async () => {
+  const { brain } = await import("../src/brain.js");
+  writeFileSync(join(sandbox, "search-e2e.md"), "Reimbursement ceiling 4200.");
+  try {
+    await brain.setModel({ provider: "ollama", model: "fast:latest" });
+    const result = await runAgent({ sessionId: "documents-citations-e2e", text: "search-docs-e2e" });
+    assert.ok(result.trace.some((t) => t.tool === "search_documents" && t.ok));
+    assert.equal(result.sources.length, 1);
+    assert.match(result.text, /Sources/);
+    assert.match(result.text, /search-e2e\.md/);
+    assert.ok(result.guard.some((f) => f.code === "invented-citation"));
+    assert.match(result.text, /\[3\]/);
+    const request = modelRequests.findLast((r) => r.body.messages.some((m) => m.role === "tool" && String(m.content).includes("4200")));
+    assert.ok(request, "model must actually receive the citable passage");
+  } finally { brain.resetModel(); }
 });

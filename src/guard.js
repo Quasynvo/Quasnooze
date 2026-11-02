@@ -13,6 +13,8 @@
  * happened.
  */
 
+import { citedIds as extractCitedIds } from "./citations.js";
+
 /** Verbs that assert a completed action, split by what kind of evidence they need. */
 const ACTION_CLAIMS = [
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:sent|emailed|posted|submitted)\b/i, needs: ["shell", "write_file", "search_web"] },
@@ -138,19 +140,14 @@ export function auditReply({ reply, trace = [], memoryFacts = [], userText = "",
   // evidence and there is nothing behind it. Checked against the registry of
   // what was actually fetched, not against the reply's own list.
   const known = new Set((sources || []).map((s) => s.id));
-  const cited = new Set(citedIds || []);
-  for (const m of said.matchAll(/\[(\d{1,2}(?:\s*[,-]\s*\d{1,2})*)\](?!\()/g)) {
-    for (const part of m[1].split(",")) {
-      const n = Number(part.trim().split("-")[0]);
-      if (Number.isFinite(n) && n > 0 && !known.has(n) && !cited.has(n)) {
-        flags.push({
-          code: "invented-citation",
-          message: `the reply cites [${n}], but this turn retrieved ${known.size || "no"} source${known.size === 1 ? "" : "s"}`,
-        });
-        break;
-      }
+  for (const n of extractCitedIds(said)) {
+    if (!known.has(n)) {
+      flags.push({
+        code: "invented-citation",
+        message: `the reply cites [${n}], but this turn retrieved ${known.size || "no"} source${known.size === 1 ? "" : "s"}`,
+      });
+      break;
     }
-    if (flags.some((f) => f.code === "invented-citation")) break;
   }
 
   // 6) A denial that the reply quietly glossed over as success.

@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deflateSync } from "node:zlib";
+import { deflateSync, deflateRawSync } from "node:zlib";
 
 import {
   stripTags,
@@ -30,6 +30,7 @@ import {
   renderForPrompt,
   pendingCount,
   MAX_BYTES,
+  MAX_EXTRACTED_BYTES,
   PER_FILE_CHARS,
   MAX_PENDING,
 } from "../src/attachments.js";
@@ -367,4 +368,25 @@ test("no attachments renders nothing at all", () => {
 
 test("the size ceiling is a real number the caller can enforce", () => {
   assert.ok(Number.isFinite(MAX_BYTES) && MAX_BYTES > 1024 * 1024);
+});
+
+
+test("compressed PDF and DOCX expansion is bounded before allocation", () => {
+  const expanded = Buffer.alloc(MAX_EXTRACTED_BYTES + 1, 65);
+  const pdfStream = deflateSync(expanded);
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n<< /Filter /FlateDecode >>\nstream\n"), pdfStream, Buffer.from("\nendstream\n%%EOF")]);
+  const pdfResult = extract(pdf, "bomb.pdf");
+  assert.equal(pdfResult.text, "");
+  assert.match(pdfResult.note, /limit|incomplete/i);
+
+  const name = Buffer.from("word/document.xml"), compressed = deflateRawSync(expanded);
+  const local = Buffer.alloc(30), central = Buffer.alloc(46), eocd = Buffer.alloc(22);
+  local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt16LE(name.length, 26);
+  central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(8, 10);
+  central.writeUInt32LE(compressed.length, 20); central.writeUInt32LE(expanded.length, 24); central.writeUInt16LE(name.length, 28);
+  eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(local.length + name.length + compressed.length, 16);
+  const zip = Buffer.concat([local, name, compressed, central, name, eocd]);
+  assert.throws(() => docxText(zip));
+  assert.equal(extract(zip, "bomb.docx").text, "");
 });

@@ -195,3 +195,12 @@ afterAll(() => {
 function afterAll(fn) {
   process.on("exit", fn);
 }
+
+test("guard flags unknown members of citation ranges, including long ranges and zero", () => {
+  const sources = [{ id: 1, kind: "file", ref: "evidence" }];
+  for (const reply of ["Claim [1-3]", "Claim [1-99]", "Claim [0]"]) {
+    const v = validateCitations({ text: reply, sources });
+    assert.ok(v.unknown.length, reply);
+    assert.ok(auditReply({ reply, sources, citedIds: v.cited }).flags.some((f) => f.code === "invented-citation"), reply);
+  }
+});
