@@ -180,6 +180,18 @@ test("roadmap status, issue classifier, and PR context helpers stay deterministi
 test("contributor-queue checks --state all so closed issues are never re-filed as duplicates", async () => {
   const { readFileSync } = await import("node:fs");
   const yml = readFileSync(WORKFLOW, "utf8");
-  assert.match(yml, /gh issue list --state all/);
+  assert.match(yml, /gh api --paginate --slurp/);
+  assert.match(yml, /issues\?state=all&per_page=100/);
   assert.match(yml, /issues:\s*\n\s*types:\s*\[closed\]/);
+});
+
+test('auto_file must be a literal boolean, never an ambiguous string', () => {
+  const {path,cleanup}=fixture({items:[item({auto_file:'false'})]});
+  try {const result=run(path);assert.equal(result.code,1);assert.match(result.out,/auto_file must be a boolean/);}
+  finally {cleanup();}
+});
+test('status dashboard distinguishes manually gated work from auto-filing candidates', async () => {
+  const {renderStatusMarkdown}=await import('../scripts/roadmap-bots.js');
+  const output=renderStatusMarkdown({items:[item({id:'gated',auto_file:false})]},[]);
+  assert.match(output,/Maintainer approval required/);
 });

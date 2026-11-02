@@ -108,14 +108,14 @@ export function renderStatusMarkdown(roadmap, issues = [], repoRoot = ROOT) {
 
   if (queued.length) {
     lines.push(
-      "## Next queued tasks (auto-opened as open issues close)",
+      "## Next queued tasks (eligible tasks replenish within caps)",
       "",
-      "| ID | Title | Difficulty | Verify |",
-      "|---|---|---|---|",
+      "| ID | Title | Difficulty | Filing gate | Verify |",
+      "|---|---|---|---|---|",
     );
     for (const item of queued.slice(0, 6)) {
       lines.push(
-        `| \`${item.id}\` | ${item.title} | ${item.difficulty} | \`${item.verify || "npm run verify"}\` |`,
+        `| \`${item.id}\` | ${item.title} | ${item.difficulty} | ${item.auto_file === false ? "Maintainer approval required" : "Eligible within caps"} | \`${item.verify || "npm run verify"}\` |`,
       );
     }
     lines.push("");
