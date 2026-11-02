@@ -785,3 +785,24 @@ before allocation. `test/audit.test.js` and `scripts/audit.js` probe a cached-fi
 replacement and PDF decompression bomb; attachment tests additionally cover DOCX bombs.
 This does not prevent a concurrent local process from replacing parent directories between
 checks and reads, or make the best-effort parsers a complete document sandbox.
+
+### Opt-in local JavaScript tools
+
+`PINCH_TOOLS_DIR` imports owner-reviewed Node.js modules before server/desktop or
+terminal CLI turns. Module initialization is executable code **outside** the
+per-call approval gate; it is not sandboxed, isolated, or forcibly timed out.
+Only configure a directory you control outside every `PINCH_WORKSPACE` root.
+Workspace directories (including dot-prefixed paths) and symlink module entries
+are refused so the assistant cannot normally plant a plugin via its file tools
+for execution at the next restart. Concurrent changes by other local processes
+and hostile owner-installed code are outside this protection.
+
+Registered plugins default to `dangerous: true`; `dangerous: false` alone cannot
+opt out. Explicit `trusted: true` grants an opt-out, while `dangerous: true`
+retains confirmation even for trusted modules. The existing interactive global
+auto-approval setting remains effective. Unattended execution refuses dangerous
+plugins before calling their `run()` functions. Existing built-in, MCP and JSON
+manifest tool names cannot be overwritten. Tests in `test/tools.test.js` verify
+the actual agent allow/deny/unattended paths, not just registry flags. This adds
+no claim of isolation, automatic plugin trust review, or universal injection
+resistance.

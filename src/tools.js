@@ -13,7 +13,8 @@ import { Worker } from "node:worker_threads";
 import { readFile, writeFile, readdir, stat, mkdir } from "node:fs/promises";
 import { SKIP_DIRS } from "./scan.js";
 import { existsSync, realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, relative, resolve, join } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, join, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { homedir } from "node:os";
 import { config } from "./config.js";
 import { searchDocuments } from "./documents.js";
@@ -1275,4 +1276,50 @@ export function registerTool(tool, { dangerous = Boolean(tool.dangerous) } = {})
   if (dangerous) DANGEROUS.add(tool.name);
   else DANGEROUS.delete(tool.name);
   return tool;
+}
+
+
+/** Load owner-reviewed local code once at boot, never from model tool calls.
+ * Approval covers run(), not module initialization. This is not a JS sandbox.
+ */
+export async function loadLocalTools({ dir = config.toolsDir, log = console } = {}) {
+  const report = { registered: [], skipped: [] };
+  if (!dir) return report;
+  const skip = (file, error) => {
+    report.skipped.push(file);
+    log.warn(`local tools: ${file}: ${error?.message || String(error)}`);
+  };
+  const within = (parent, child) => {
+    const rel = relative(parent, child);
+    return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep));
+  };
+  let root, entries;
+  try {
+    root = realpathSync(resolve(String(dir).replace(/^~(?=$|[\\/])/, homedir())));
+    // Model-writable code would turn a later restart into an approval bypass.
+    if (config.workspaceRoots.some(workspace => within(canonicalise(workspace), root))) {
+      throw new Error('PINCH_TOOLS_DIR must be outside every PINCH_WORKSPACE root');
+    }
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) { skip(String(dir), error); return report; }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!/\.(?:mjs|js)$/.test(entry.name)) continue;
+    try {
+      if (!entry.isFile()) throw new Error('plugins must be regular files, not symlinks or directories');
+      const file = join(root, entry.name);
+      if (!within(root, realpathSync(file))) throw new Error('plugin resolves outside PINCH_TOOLS_DIR');
+      const { default: tool } = await import(pathToFileURL(file).href);
+      if (!tool || typeof tool.name !== 'string' || typeof tool.run !== 'function' ||
+          typeof tool.description !== 'string' || !tool.description.trim() ||
+          !tool.parameters || tool.parameters.type !== 'object' ||
+          (tool.parameters.properties != null && (typeof tool.parameters.properties !== 'object' || Array.isArray(tool.parameters.properties)))) {
+        throw new Error('export default { name, description, parameters: { type: "object", properties: {} }, run }');
+      }
+      // dangerous:false alone is not trust; the owner must explicitly opt out.
+      const dangerous = tool.trusted !== true || tool.dangerous === true;
+      registerTool({ ...tool, dangerous }, { dangerous });
+      report.registered.push(tool.name);
+    } catch (error) { skip(entry.name, error); }
+  }
+  return report;
 }
