@@ -334,12 +334,16 @@
       "policy": "in-scope",
       "evidence": [
         "pinch-tools.example.json: a JSON manifest entry is a tool — name, description, command, args",
+        "src/tools.js: loadLocalTools() loads owner-reviewed PINCH_TOOLS_DIR .js/.mjs modules via registerTool(), refuses collisions and workspace directories, defaults dangerous:true",
+        "src/cli.js: local modules loaded before terminal turns",
+        "src/index.js: local modules loaded before server/desktop turns",
+        "test/tools.test.js: module loading, trust defaults, approval/denial/unattended refusal and workspace/symlink restrictions",
         "src/custom-tools.js: startCustomTools() resolves the executable, refuses anything inside the workspace, registers via registerTool() with dangerous:true",
         "src/index.js: loaded before listen(), so the tool list is final before anything can ask for it",
         "test/custom-tools.test.js: 'a model-supplied argument is data, never a shell' — the semicolon test",
         "docs/GUIDE.md: 'Your own tools (no code required)' — the five guards and what is not supported"
       ],
-      "note": "Three ways in, none of which require editing src/tools.js: a JSON manifest for a command you already run (src/custom-tools.js), an MCP server for someone else's tools (src/mcp.js), and a built-in for contributors. Manifest tools are always behind the approval gate — there is no trusted-server opt-out, because the arguments come from the model rather than from code you can read first."
+      "note": "Four extension paths: owner-reviewed local JavaScript modules (PINCH_TOOLS_DIR; not sandboxed), a JSON manifest for a command you already run (src/custom-tools.js), an MCP server for someone else's tools (src/mcp.js), and a built-in for contributors. Manifest tools are always behind the approval gate — there is no trusted-server opt-out, because the arguments come from the model rather than from code you can read first."
     },
     {
       "id": "scheduled-agents",

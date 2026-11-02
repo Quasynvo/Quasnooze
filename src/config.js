@@ -113,6 +113,7 @@ export const config = Object.freeze({
   // discovered implicitly, because a file the user did not point at is a file the
   // user did not review.
   customToolsPath: env.PINCH_TOOLS || "",
+  toolsDir: env.PINCH_TOOLS_DIR || "",
   mcpTrusted: env.PINCH_MCP_TRUSTED || "",
   numCtx: Number(env.PINCH_NUM_CTX || 8192),
   numPredict: Number(env.PINCH_NUM_PREDICT || 2048),

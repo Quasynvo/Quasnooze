@@ -7,6 +7,7 @@
  *
  * Same agent, same memory, same approval flow — just a terminal.
  */
+import { loadLocalTools } from "./tools.js";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { runAgent, answerApprovalByChannel, pendingApprovals } from "./agent.js";
@@ -47,6 +48,7 @@ async function turn(rl, text, sessionId) {
 }
 
 async function main() {
+  await loadLocalTools();
   const [mode, ...rest] = process.argv.slice(2);
   const rl = createInterface({ input: stdin, output: stdout });
 
