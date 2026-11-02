@@ -225,3 +225,17 @@ test("audio level only represents fresh, attached active capture and rejects mal
 test("speech doctor refuses unsupported platforms without opening a microphone", { skip: process.platform === "win32" }, () => {
   assert.throws(() => execFileSync(process.execPath, [new URL("../scripts/desktop-doctor.js", import.meta.url).pathname], { encoding: "utf8", stdio: "pipe" }), /requires Windows/);
 });
+
+
+test("resident model drafts appear before final completion and clear after it",async()=>{
+  let finish;
+  const runtime=new DesktopRuntime({agent:async({onEvent})=>{
+    onEvent({type:'delta',text:'Hello!'});
+    await new Promise(resolve=>{finish=resolve;});
+    return {text:'Hello! How are you?'};
+  }}); runtime.attach(bridge());
+  const pending=runtime.request('hi');
+  assert.equal(runtime.snapshot().draft,'Hello!');assert.ok(runtime.snapshot().firstTextMs>=0);
+  finish();assert.equal((await pending).text,'Hello! How are you?');
+  assert.equal(runtime.snapshot().draft,'');
+});

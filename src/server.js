@@ -446,6 +446,8 @@ async function handleApi(req, res, url) {
       stream.send("final", {
         text: result.text,
         error: result.error || null,
+        ms: result.ms,
+        firstTextMs: result.firstTextMs,
         trace: result.trace,
         guard: result.guard || [],
         // What the turn actually read, and which of it the reply cited. The panel

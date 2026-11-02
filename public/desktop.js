@@ -26,8 +26,11 @@ function render(state) {
  $('audioMeter').value=live ? state.audioLevel : 0; $('audioLabel').textContent=live ? 'Windows input level: '+state.audioLevel+' / 100' : (state.mic ? 'Waiting for Windows input-level samples…' : 'Microphone level: not capturing');
  $('listenButton').disabled=!state.available || state.busy; $('muteButton').disabled=!state.available; $('stopButton').disabled=!state.available;
  $('runButton').disabled=Boolean(state.busy); $('allow').disabled=$('deny').disabled=false;
- $('latency').textContent=state.lastMs === null ? 'Not measured' : `${state.lastMs} ms`;
- if (state.text && (state.recent?.length || phase === 'reminder')) $('result').textContent=state.text;
+ const total=Number.isFinite(state.lastMs) ? `${state.lastMs} ms total` : 'completing';
+ $('latency').textContent=Number.isFinite(state.firstTextMs) ? `${state.firstTextMs} ms first text · ${total}` : (state.lastMs == null ? 'Not measured' : `${state.lastMs} ms`);
+ if (state.busy && !state.draft && !state.approval) { $('result').textContent='Preparing a reply…'; $('resultKind').textContent='REQUEST IN PROGRESS'; }
+ if (state.busy && state.draft && !state.approval) { $('result').textContent=state.draft; $('resultKind').textContent='RESPONDING · LOCAL MODEL'; }
+ if (!state.busy && state.text && (state.recent?.length || phase === 'reminder')) $('result').textContent=state.text;
  approvalId=state.approval?.id || ''; $('permission').hidden=!approvalId; $('approvalText').textContent=state.approval?.description || '';
  if (state.recent?.length) {
   $('recent').replaceChildren();

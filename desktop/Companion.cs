@@ -72,7 +72,7 @@ public static class PinchCompanion {
     static SpeechSynthesizer Speaker;
     static Prompt CurrentPrompt;
     static Icon BrandIcon;
-    static bool WantWake, Quitting, Working;
+    static bool WantWake, Quitting, Working, FollowUps;
     static string Panel = "", Root = "", Node = "", Launcher = "", Approval = "", ApprovalText = "";
     static readonly Color Coral = Color.FromArgb(255, 111, 82);
 
@@ -224,7 +224,7 @@ public static class PinchCompanion {
             try {
                 if (Speaker == null) {
                     Speaker = new SpeechSynthesizer(); Speaker.SetOutputToDefaultAudioDevice();
-                    Speaker.SpeakCompleted += (s, e) => Post(() => { if (Object.ReferenceEquals(CurrentPrompt, e.Prompt)) { CurrentPrompt = null; if (WantWake && !Working) StartRecognition(false); } });
+                    Speaker.SpeakCompleted += (s, e) => Post(() => { if (Object.ReferenceEquals(CurrentPrompt, e.Prompt)) { CurrentPrompt = null; if (WantWake && !Working) StartRecognition(FollowUps); } });
                 }
                 // Bounded local speech; never interpret SSML from a model.
                 string spoken = text.Substring(0, Math.Min(text.Length, 1200));
@@ -353,6 +353,13 @@ public static class PinchCompanion {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Show Pinch", null, (s, e) => Window.Show());
         menu.Items.Add("Mute / enable local wake", null, (s, e) => ToggleWake());
+        var conversation = new ToolStripMenuItem("Conversational follow-ups (local)");
+        conversation.Click += (s, e) => {
+            if (!FollowUps && !Confirm("Enable conversational follow-ups? After each spoken answer, Pinch will wait up to 12 seconds for one more instruction without another wake phrase, then return to wake mode on silence. A spoken utterance can last longer than that initial-silence window. Nearby speech can trigger actions; sensitive actions still require approval. Mute stops listening. This does not enable the microphone by itself.")) return;
+            FollowUps = !FollowUps; conversation.Checked = FollowUps;
+            if (!FollowUps && WantWake && !Working && CurrentPrompt == null) StartRecognition(false);
+        };
+        menu.Items.Add(conversation);
         menu.Items.Add("Command deck", null, (s, e) => ShowDeck());
         menu.Items.Add("Toggle start with Windows", null, (s, e) => Startup());
         menu.Items.Add("Quit Pinch", null, (s, e) => { Emit(new { type = "quit" }); Quitting = true; Window.Close(); });

@@ -100,10 +100,10 @@ export class DesktopRuntime {
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });
     this.busy = true;
     const started = Date.now();
-    this.update({ phase: "working", text: "Working…" });
+    this.update({ phase: "working", text: "Working…", draft: "", firstTextMs: null, lastMs: null });
     this.bridge?.send({ op: "working" }); // releases recognition until the response finishes
     const intent = desktopIntent(text);
-    let reply, failed = false;
+    let reply, failed = false, streamDraft = "", lastDraftAt = 0;
     try {
       switch (intent.kind) {
         case "time": reply = `It is ${new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: config.timezone })}.`; break;
@@ -128,7 +128,15 @@ export class DesktopRuntime {
             throw new Error("Desktop requests require loopback Ollama (or explicit mock demo mode). No remote model or cloud fallback is permitted.");
           }
           const result = await this.agent({ sessionId: SESSION, channel: "desktop", target: "resident", text, onEvent: (event) => {
-            if (event.type === "approval") {
+            if (event.type === "delta") {
+              streamDraft = (streamDraft + event.text).slice(0, 16000);
+              const now = Date.now(), first = this.state.firstTextMs === null;
+              // Model text is filtered at brain.chat. Bound native pipe/UI traffic.
+              if (first || now - lastDraftAt >= 120) {
+                lastDraftAt = now;
+                this.update({ draft: streamDraft, firstTextMs: this.state.firstTextMs ?? now - started });
+              }
+            } else if (event.type === "approval") {
               this.approval = { id: event.id, description: event.description };
               this.update({ phase: "approval", text: event.description });
               this.bridge?.send({ op: "approval", id: event.id, text: event.description });
@@ -142,7 +150,7 @@ export class DesktopRuntime {
     if (this.notices.length) reply = `${this.notices.splice(0).map((notice) => `Reminder: ${notice}`).join("\n")}\n\n${reply}`;
     const ms = Date.now() - started;
     this.recent.unshift({ command: text.slice(0, 160), ok: !failed, ms }); this.recent = this.recent.slice(0, 8);
-    this.update({ phase: failed ? "attention" : "ready", text: reply, lastMs: ms });
+    this.update({ phase: failed ? "attention" : "ready", text: reply, draft: "", lastMs: ms });
     this.bridge?.send({ op: "reply", text: reply.slice(0, 4000), speak: intent.kind !== "mute" && !failed });
     return { text: reply, ok: !failed, ms, fastPath: intent.kind !== "agent" };
   }

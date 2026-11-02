@@ -158,3 +158,12 @@ replacement fix, executable native lifecycle checks, and evidence limits.
 `npm run desktop:doctor -- --self-test` probes recognition using synthetic WAV
 without microphone access; `npm run desktop:doctor -- --mic` separately asks
 permission for a short real input test and never executes the transcript.
+
+### Natural replies and optional follow-ups
+
+See [CONVERSATION.md](CONVERSATION.md) for the agent/output review. The native tray
+now offers **Conversational follow-ups (local)** with explicit session-only
+consent: after a spoken response it listens for another instruction for up to 12
+seconds without repeating the name. Silence returns to wake mode. It is still
+half-duplex; spoken output starts after the final answer, and there is no promise
+of simultaneous speaking/listening or measured real-model latency.
