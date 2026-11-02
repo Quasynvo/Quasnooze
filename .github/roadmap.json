@@ -11,12 +11,14 @@
     ],
     "latest_release": "",
     "notes": [
-      "status: backlog    -> not eligible to be filed",
+      "status: backlog    -> eligible only when complete and not explicitly gated; ready items come first",
       "status: ready      -> eligible; the bot may file it when the cap allows",
       "status: filed      -> the bot created it; the marker lives in the issue body",
       "status: shipped    -> the bot may comment + close its own issue, naming the release",
-      "Only entries with status=ready AND a complete body are ever filed.",
-      "latest_release   -> the tag the close comment cites; empty means the bot will not close anything it filed"
+      "Only ready/backlog entries with complete bodies and auto_file not false are ever filed.",
+      "latest_release   -> the tag the close comment cites; empty means the bot will not close anything it filed",
+      "auto_file: false -> explicit maintainer gate; never filed automatically even if body is complete.",
+      "Ready tasks are preferred; complete ungated backlog tasks replenish available slots. Historical markers prevent re-filing closed work."
     ],
     "open_curated_cap": 4
   },
@@ -226,6 +228,143 @@
       ],
       "verify": "node --test test/citations.test.js test/tools.test.js && node scripts/audit.js",
       "body": "## Context\n\n`docs/CAPABILITIES.json` (`rag-documents`) and Growth issue #39 highlight local document indexing & Q&A. Pinch can index Markdown, text, PDF, and DOCX files inside `PINCH_WORKSPACE` using pure-JS BM25 chunk ranking and `src/attachments.js` extractors \u2014 zero native or cloud dependencies.\n\n## What to change\n\n- Add incremental mtime-keyed BM25 chunk indexing confined via `resolveInWorkspace()`.\n- Register every retrieved passage in `src/sources.js` so `src/citations.js` and `src/guard.js` validate `[n]` citations identically to web and file reads.\n\n## Acceptance criteria\n\n- [ ] Strictly confined to `PINCH_WORKSPACE` (`realpath` checked, symlink escapes refused)\n- [ ] Retrieved passages register in `src/sources.js` so invented `[n]` citations still trigger `guard.js`\n- [ ] Zero new runtime dependencies; passes `node --test` and `node scripts/audit.js`\n\n## How to verify\n\n```bash\nnode --test test/citations.test.js test/tools.test.js\nnode scripts/audit.js\n```\n\n## Time estimate\n\n~4-5 hours."
+    },
+    {
+      "id": "pinch-012-local-readiness-baseline",
+      "title": "feat(diagnostics): structured local readiness and reproducible latency baseline",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u20138 developer-days",
+      "files": [
+        "scripts/setup.js",
+        "scripts/braincheck.js",
+        "src/telemetry.js",
+        "src/agent.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nReuse existing setup/doctor, model probes and local telemetry; do not build duplicate diagnostics. Produce structured readiness states and synthetic, content-free phase timing artifacts.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NOW workstream. Existing features must be preserved.\n\n## What to change\n\nReuse existing setup/doctor, model probes and local telemetry; do not build duplicate diagnostics. Produce structured readiness states and synthetic, content-free phase timing artifacts.\n\n## Acceptance criteria\n\n- [ ] Distinguish missing model, unreachable backend, unavailable companion, muted mic and ready, each with a next action.\n- [ ] Record hardware/OS/model digest/settings, warm/cold state, sample count, errors and p50/p95; separate deterministic handlers, first text, full answer and optional consented audio.\n- [ ] No hidden model downloads, microphone capture or prompt/response/clipboard/secret logging. Test secret canaries and readiness failures.\n- [ ] Document a consented Windows first successful local turn separately from mocks; do not invent hardware measurements.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u20138 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-013-muted-resident-recovery",
+      "title": "fix(desktop): bounded host recovery without replaying approvals or microphone consent",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u201315 developer-days",
+      "files": [
+        "src/windows-companion.js",
+        "src/desktop.js",
+        "test/desktop.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nPreserve existing detach/exit cleanup. Add startup-ready timeout, bounded recovery states and explicit retry. Coordinate readiness schema with task 012; integrate after its contract is agreed.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NOW workstream. Existing features must be preserved.\n\n## What to change\n\nPreserve existing detach/exit cleanup. Add startup-ready timeout, bounded recovery states and explicit retry. Coordinate readiness schema with task 012; integrate after its contract is agreed.\n\n## Acceptance criteria\n\n- [ ] At most three bounded restart attempts per episode, then explicit user retry; quit cancels pending retries.\n- [ ] Every reconnect is muted; stale approval IDs are invalid and commands/actions are never replayed.\n- [ ] Crash, pipe failure and missing-ready events show honest unavailable/recovering states, never false readiness; uncertain side effects are labelled unknown.\n- [ ] Inject child/clock failures and stale events in automated tests; record physical Windows crash/sleep-wake checks separately.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u201315 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-014-durable-user-state",
+      "title": "fix(config): durable user configuration and safe migration for packaged installs",
+      "status": "backlog",
+      "auto_file": true,
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u201315 developer-days",
+      "files": [
+        "src/config.js",
+        "scripts/setup.js",
+        "src/export.js",
+        "test/cli.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nReproduce package-root config/data behavior in clone, read-only global-install-like and npx-cache-like fixtures before selecting a per-user resolver. Coordinate with task 012. No npm publication or automatic updater.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NOW workstream. Existing features must be preserved.\n\n## What to change\n\nReproduce package-root config/data behavior in clone, read-only global-install-like and npx-cache-like fixtures before selecting a per-user resolver. Coordinate with task 012. No npm publication or automatic updater.\n\n## Acceptance criteria\n\n- [ ] Use one tested platform-appropriate resolver shared by setup/runtime while preserving explicit PINCH_DATA and clone compatibility.\n- [ ] Migration requires preview and explicit confirmation; never overwrite conflicting state, and preserve originals or roll back every failed step.\n- [ ] Verify stable owner-writable state across restart/update fixtures, permissions/ACL limitations, and secret-free logs.\n- [ ] Test Windows/Linux path resolution, conflicts and failure injection; document uninstall versus intentional personal-data deletion.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u201315 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-015-relevant-tool-schemas",
+      "title": "perf(agent): evaluate permission-preserving tool-schema selection",
+      "status": "backlog",
+      "auto_file": false,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u20138 developer-days",
+      "files": [
+        "src/agent.js",
+        "src/tools.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nManual gate: promote only after 012 supplies an accepted baseline and holdout corpus. Evaluate deterministic tool families with explicit full-tool fallback, not a new cloud router.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NEXT workstream. Existing features must be preserved.\n\n## What to change\n\nManual gate: promote only after 012 supplies an accepted baseline and holdout corpus. Evaluate deterministic tool families with explicit full-tool fallback, not a new cloud router.\n\n## Acceptance criteria\n\n- [ ] Compare token counts, selector overhead, needed-tool recall, task success and warm p95 against the full-schema baseline.\n- [ ] No selected tool bypasses registry, argument checks, approval or unattended restrictions.\n- [ ] Do not enable by default if safe task success regresses; performance percentages are experimental goals, not achieved claims.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u20138 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-016-safe-cancellation",
+      "title": "feat(agent): session-scoped cancellation and truthful execution progress",
+      "status": "backlog",
+      "auto_file": false,
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u201315 developer-days",
+      "files": [
+        "src/agent.js",
+        "src/brain.js",
+        "src/desktop.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nManual gate: require accepted lifecycle work in 013. Stop voice is not tool cancellation. Propagate cancellation without claiming rollback of completed effects.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NEXT workstream. Existing features must be preserved.\n\n## What to change\n\nManual gate: require accepted lifecycle work in 013. Stop voice is not tool cancellation. Propagate cancellation without claiming rollback of completed effects.\n\n## Acceptance criteria\n\n- [ ] Abort generation, invalidate pending approvals and stop future dispatch for only the requested session.\n- [ ] Test process-tree termination where supported, partial writes, stale callbacks, cross-session isolation and retry races.\n- [ ] Non-cancellable or uncertain effects remain explicitly unknown; no silent command replay.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u201315 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-017-validated-restore",
+      "title": "feat(data): previewable versioned local restore with rollback",
+      "status": "backlog",
+      "auto_file": false,
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "9\u201315 developer-days",
+      "files": [
+        "src/export.js",
+        "src/store.js",
+        "src/schedules.js",
+        "test/export-cost.test.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nManual gate: require accepted per-user state/migration design from 014. Extend existing export; do not add cloud sync.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NEXT workstream. Existing features must be preserved.\n\n## What to change\n\nManual gate: require accepted per-user state/migration design from 014. Extend existing export; do not add cloud sync.\n\n## Acceptance criteria\n\n- [ ] Validate schema, sizes, conflicts and paths before applying; corruption or failure leaves live data unchanged.\n- [ ] Reject traversal/symlinks, imported credentials/config/plugins and approval grants.\n- [ ] Restore schedules/reminders disabled until explicit re-enable; test round-trip, preview and rollback.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n9\u201315 developer-days (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
+    },
+    {
+      "id": "pinch-018-everyday-acceptance",
+      "title": "test(product): validate five everyday Windows assistant journeys",
+      "status": "backlog",
+      "auto_file": false,
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "time_estimate": "4\u20138 developer-days plus hardware/user access",
+      "files": [
+        "docs/DESKTOP.md",
+        "test/desktop.test.js",
+        "src/desktop.js"
+      ],
+      "verify": "node --test --test-concurrency=4 && node scripts/audit.js",
+      "body": "## Context\n\nManual gate: require readiness, recovery and state work (012\u2013014) acceptance. Test existing workflows rather than introducing broad OS automation.\n\nSource: [approved proposal](https://github.com/pinchfoundry/Pinch/blob/main/docs/ROADMAP-PROPOSED.md), NEXT workstream. Existing features must be preserved.\n\n## What to change\n\nManual gate: require readiness, recovery and state work (012\u2013014) acceptance. Test existing workflows rather than introducing broad OS automation.\n\n## Acceptance criteria\n\n- [ ] Validate first local turn, mute/wake/talk/stop, bounded file lookup, approved app launch and reminder/failure recovery.\n- [ ] Use consenting users and synthetic/consented data; separate physical hardware observations from mocks and coached from unassisted success.\n- [ ] Verify visible mic/permission states, denial handling and keyboard/accessibility paths; clipboard stays out of model history by default.\n- [ ] Independent review, full regression suite and audit pass; do not weaken approvals, add hidden cloud fallback or claim unperformed hardware validation.\n\n## How to verify\n\n```bash\nnode --test --test-concurrency=4\nnode scripts/audit.js\nnode scripts/validate-roadmap.js\n```\n\nAdd targeted regression tests for the acceptance criteria and include exact output in the PR. Manual/hardware checks require explicit consent and recorded conditions.\n\n## Time estimate\n\n4\u20138 developer-days plus hardware/user access (estimate, not a deadline; hardware/review lead time excluded).\n\n## Contributor guidance\n\nComment before starting to coordinate ownership; open a small PR with `Closes #<issue-number>`. This is not a good-first-issue task. No direct pushes to main or automatic merges.\n"
     }
   ]
 }

@@ -24,6 +24,7 @@ on:
       - ".github/roadmap.json"
       - ".github/workflows/contributor-queue.yml"
       - "scripts/validate-roadmap.js"
+      - "scripts/roadmap-queue.js"
   issues:
     types: [closed]
   schedule:
@@ -147,8 +148,9 @@ jobs:
           set -euo pipefail
           gh issue list --state open --limit 200 \
             --json number,title,body,labels > /tmp/open.json
-          gh issue list --state all --limit 500 \
-            --json number,title,body,state > /tmp/all.json
+          # Paginate all history so old completed markers never fall out of deduplication.
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues?state=all&per_page=100" \
+            | jq 'add | map(select(.pull_request | not))' > /tmp/all.json
 
           CURATED="$(jq '[.[] | select((.body // "") | contains("<!-- roadmap:"))] | length' /tmp/open.json)"
 
@@ -186,36 +188,9 @@ jobs:
             exit 0
           fi
 
-          # Prefer status=="ready" first, then fully-specified status=="backlog" items,
-          # excluding any ID whose marker has EVER been opened (open or closed in /tmp/all.json).
-          jq -c --slurpfile seen /tmp/all.json \
-            --argjson easy "$EASY" --argjson easyCap "$EASY_CAP" --argjson cur "$CURATED" --argjson totCap "$TOTAL_CAP" '
-            def complete:
-              ((.body // "") | (contains("## Context") and contains("## Acceptance criteria") and contains("## How to verify") and contains("## Time estimate")))
-              and ((.files // []) | length > 0)
-              and ((.verify // "") | length > 0);
-            def unseen:
-              (.id | "<!-- roadmap:" + . + " -->") as $m
-              | ([$seen[0][] | select((.body // "") | contains($m))] | length) == 0;
-
-            (
-              [ .items[] | select(.status == "ready") | select(complete) | select(unseen) ] +
-              [ .items[] | select(.status == "backlog") | select(complete) | select(unseen) ]
-            ) as $candidates
-            | reduce $candidates[] as $item (
-                { picked: [], e: $easy, c: $cur };
-                if .c >= $totCap then .
-                elif ($item.difficulty == "easy" and .e >= $easyCap) then .
-                else
-                  {
-                    picked: (.picked + [$item]),
-                    e: (if $item.difficulty == "easy" then .e + 1 else .e end),
-                    c: (.c + 1)
-                  }
-                end
-              )
-            | .picked
-          ' .github/roadmap.json > /tmp/picked.json
+          # Select through the tested helper. auto_file:false is an explicit
+          # maintainer gate, even for fully specified ready/backlog tasks.
+          node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json > /tmp/picked.json
 
           COUNT="$(jq 'length' /tmp/picked.json)"
           if [ "$COUNT" -eq 0 ]; then

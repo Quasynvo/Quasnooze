@@ -60,6 +60,9 @@ for (const [i, item] of doc.items.entries()) {
   }
   if (!item?.id) continue;
 
+  if (item.auto_file !== undefined && typeof item.auto_file !== "boolean") {
+    fail(`${at}: auto_file must be a boolean`);
+  }
   if (seen.has(item.id)) fail(`${at}: duplicate id`);
   seen.add(item.id);
 
