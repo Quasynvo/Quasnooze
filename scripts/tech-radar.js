@@ -7,8 +7,8 @@
  * The point of this script is what it does *not* do. It does not ask a language
  * model what is current — a model asked "what is new in Node?" will answer from
  * its training data and sound completely confident while being a year out of
- * date. The exact failure mode Pinch's own honesty guard exists to catch,
- * pointed at Pinch itself.
+ * date. The exact failure mode Quasnooze's own honesty guard exists to catch,
+ * pointed at Quasnooze itself.
  *
  * Instead it fetches primary sources and compares them against this repo:
  *
@@ -49,7 +49,7 @@ async function getJSON(url, headers = {}) {
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "pinch-tech-radar", accept: "application/json", ...headers },
+      headers: { "user-agent": "quasnooze-tech-radar", accept: "application/json", ...headers },
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -113,7 +113,7 @@ if (nodeCycles && engineMajor) {
     // stays on this cycle until a specific date, say so once and stop nagging
     // — but keep escalating the moment that date passes (the `eol` branch above
     // takes over as soon as the cycle is out of support).
-    const policy = pkg.pinch?.node;
+    const policy = pkg.quasnooze?.node;
     const decided =
       policy &&
       Number(policy.min) === Number(claimed.cycle) &&
@@ -221,7 +221,7 @@ if (AS_JSON) {
 }
 
 if (AS_MARKDOWN) {
-  console.log(`## 🦞 Tech radar — ${today}`);
+  console.log(`## ✦ Tech radar — ${today}`);
   console.log("");
   console.log("Grounded in primary sources (`endoflife.date`, `nodejs.org`, the GitHub API), not in a model's memory.");
   console.log("");
@@ -254,7 +254,7 @@ const paint = (code, s) => (colour ? `\x1b[${code}m${s}\x1b[0m` : s);
 const label = { high: paint("38;5;203", "HIGH"), medium: paint("38;5;214", "MED "), low: paint("38;5;180", "LOW "), info: paint("2", "info") };
 
 console.log("");
-console.log(paint("1", "  🦞 Pinch tech radar") + paint("2", `  ${today}`));
+console.log(paint("1", "  ✦ Quasnooze tech radar") + paint("2", `  ${today}`));
 console.log(paint("2", "  ─────────────────────────────────────────────────────────────────────"));
 if (!findings.length) console.log("  nothing to report");
 for (const f of findings) {

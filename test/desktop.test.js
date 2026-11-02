@@ -201,8 +201,8 @@ test("native recognizer reports rejection, default-input problems and completion
   assert.ok(source.includes('rec.AudioLevelUpdated +='));
   assert.ok(source.includes('if (capture) LoadCaptureGrammars(rec, info.Culture)'));
   const doctor=readFileSync(new URL('../desktop/SpeechDoctor.cs', import.meta.url),'utf8');
-  assert.ok(doctor.includes('PinchCompanion.LoadCaptureGrammars(rec, info.Culture)'));
-  assert.ok(doctor.includes('PinchCompanion.LoadCaptureGrammars(engine, info.Culture)'));
+  assert.ok(doctor.includes('QuasnoozeCompanion.LoadCaptureGrammars(rec, info.Culture)'));
+  assert.ok(doctor.includes('QuasnoozeCompanion.LoadCaptureGrammars(engine, info.Culture)'));
   assert.ok(source.includes('if (!WantWake || Working || Quitting || CurrentPrompt != null) return;'));
   assert.ok(source.includes('if (WantWake && !Working && !Quitting && CurrentPrompt == null)'));
   assert.ok(source.includes('Window.Show(); Window.Activate();'));

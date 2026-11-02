@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 if (process.platform !== 'win32') {
-  console.error('Pinch desktop:doctor requires Windows. No microphone was opened.');
+  console.error('Quasnooze desktop:doctor requires Windows. No microphone was opened.');
   process.exitCode = 1;
 } else {
   const args = process.argv.slice(2);

@@ -53,7 +53,7 @@ web/native events → displayed answer → history → next request → local sp
 The native tray has an optional **Conversational follow-ups (local)** setting.
 Enabling it requires explicit default-No consent and is session-only. It does not
 turn on the microphone by itself: initial microphone consent is still required.
-After each spoken answer, Pinch waits up to 12 seconds for the start of one more
+After each spoken answer, Quasnooze waits up to 12 seconds for the start of one more
 instruction without another wake phrase. This is an initial-silence window, not a
 hard recording-duration cap; an utterance can last longer. Silence returns it to wake mode. Mute clears
 queued recognition restarts; sensitive actions still need explicit approval.

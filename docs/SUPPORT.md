@@ -1,6 +1,6 @@
 # Support policy
 
-Which runtimes Pinch supports, until when, and what happens when one runs out.
+Which runtimes Quasnooze supports, until when, and what happens when one runs out.
 
 The short version: **we support the minimum Node version until it reaches end of life
 upstream.** Then the minimum moves up, in one deliberate step, before the security patches
@@ -15,7 +15,7 @@ stop — not after.
 | **22** | Maintenance (security only) since 2025-10-21 · **EOL 2027-04-30** | ✅ works, dropped at EOL | ✅ |
 | 20 | **End of life 2026-04-30** — no security patches at all | ❌ | ❌ |
 
-`package.json` declares `engines.node: ">=22"`. Nothing in Pinch needs a newer runtime than
+`package.json` declares `engines.node: ">=22"`. Nothing in Quasnooze needs a newer runtime than
 that; the floor moves for security reasons, not for language features.
 
 ### The next scheduled change
@@ -33,7 +33,7 @@ calendar ever disagree, the calendar wins and the workflow says so.
 
 ### What it looks like if you run something unsupported
 
-- **Node 20:** `npm install` warns about `engines`. You can force it, and Pinch may well run
+- **Node 20:** `npm install` warns about `engines`. You can force it, and Quasnooze may well run
   — but no test covers that combination, and no security patch will reach you.
 - **Node 22 (maintenance tier):** works, is tested, and prints **one line at startup** —
   once per install, not on every boot — saying it is in maintenance and when that ends:
@@ -54,14 +54,14 @@ calendar ever disagree, the calendar wins and the workflow says so.
 | macOS | Supported, including Apple Silicon |
 | Windows 10/11 | Supported — `shell` uses `cmd.exe`, services use Task Scheduler |
 
-Everything is Node standard library, so if Node runs there, Pinch runs there. Linux
+Everything is Node standard library, so if Node runs there, Quasnooze runs there. Linux
 screenshots additionally need `gnome-screenshot`, `scrot`, `imagemagick` or `grim`;
 macOS and Windows use the built-in capture.
 
 ## Models
 
 Not a support matrix so much as a requirement: the model must be able to **call tools**.
-A chat-only model turns Pinch into an expensive diary. Check yours in ten seconds:
+A chat-only model turns Quasnooze into an expensive diary. Check yours in ten seconds:
 
 ```bash
 npm run brain        # first-token speed, and whether tool calling actually works
@@ -80,5 +80,5 @@ OpenRouter). Local is the default; cloud is a choice you make in `.env`.
 | `docs/SUPPORT.md` | this file — the decision, written down where a human can argue with it |
 
 If a supported combination breaks, that is a bug worth
-[filing](https://github.com/pinchfoundry/Pinch/issues). If an *unsupported* one breaks,
+[filing](https://github.com/Quasynvo/Quasnooze/issues). If an *unsupported* one breaks,
 the honest fix is to upgrade your Node.

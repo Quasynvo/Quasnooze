@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * scripts/brain-test.js — "pinch brain-test"
+ * scripts/brain-test.js — "quasnooze brain-test"
  *
  * Two questions that actually matter before you trust a local model with your
  * machine: how fast is it, and can it call tools at all? A model that chats
- * beautifully but never emits a tool call makes Pinch a very expensive diary.
+ * beautifully but never emits a tool call makes Quasnooze a very expensive diary.
  */
 import { brain } from "../src/brain.js";
 import { config } from "../src/config.js";
 import { toolSchemas } from "../src/tools.js";
 
 const C = {
-  coral: (s) => `\x1b[38;5;209m${s}\x1b[0m`,
+  coral: (s) => `\x1b[38;5;87m${s}\x1b[0m`,
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
   teal: (s) => `\x1b[38;5;79m${s}\x1b[0m`,
@@ -22,7 +22,7 @@ const C = {
 const model =
   config.llm.provider === "ollama" ? config.llm.ollamaModel : config.llm.openaiModel;
 
-console.log(`\n${C.coral("🦞  brain-test")}  ${C.dim(`${config.llm.provider} · ${model}`)}\n`);
+console.log(`\n${C.coral("✦  brain-test")}  ${C.dim(`${config.llm.provider} · ${model}`)}\n`);
 
 const probe = await brain.probe();
 const current = probe[config.llm.provider];
@@ -77,7 +77,7 @@ if (toolOk) {
   console.log(`  ${C.teal("✔")} tool calling works (chose "${toolName}")`);
 } else {
   console.log(`  ${C.gold("▲")} the model answered without calling a tool`);
-  console.log(`    ${C.dim("It may still work for chat, but Pinch's whole point is doing things.")}`);
+  console.log(`    ${C.dim("It may still work for chat, but Quasnooze's whole point is doing things.")}`);
   console.log(`    ${C.dim("Use a tool-capable model: qwen2.5-coder:7b, llama3.1:8b, mistral-nemo, qwen3:8b.")}`);
 }
 

@@ -387,3 +387,17 @@ test("a symlink cannot walk out of PINCH_WORKSPACE", async (t) => {
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('new and legacy auth headers work, but a bad/empty canonical header does not fall back', async () => {
+  const url=`http://127.0.0.1:${pinchPort}/api/memory`;
+  for(const header of ['x-quasnooze-key','x-pinch-key']) {
+    assert.equal((await fetch(url,{headers:{[header]:'test-key-not-a-secret'}})).status,200);
+    assert.equal((await fetch(url,{headers:{[header]:'wrong'}})).status,401);
+  }
+  for(const value of ['wrong','']) assert.equal((await fetch(url,{headers:{'x-quasnooze-key':value,'x-pinch-key':'test-key-not-a-secret'}})).status,401);
+  const rejected=await fetch(url,{headers:{origin:`https://untrusted.invalid`,'x-quasnooze-key':'test-key-not-a-secret'}});
+  assert.equal(rejected.status,403);
+  const options=await fetch(url,{method:'OPTIONS',headers:{origin:`http://127.0.0.1:${pinchPort}`}});
+  assert.equal(options.status,204);
+  for(const header of ['x-quasnooze-key','x-pinch-key','x-quasnooze-session','x-pinch-session'])assert.ok(options.headers.get('access-control-allow-headers').includes(header));
+});

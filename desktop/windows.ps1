@@ -15,12 +15,12 @@ $references = @(
 )
 Add-Type -Path @((Join-Path $PSScriptRoot 'Companion.cs'), (Join-Path $PSScriptRoot 'SpeechDoctor.cs')) -ReferencedAssemblies $references
 if ($AudioSelfTest) {
-    $report = [PinchSpeechDoctor]::AudioSelfTest()
+    $report = [QuasnoozeSpeechDoctor]::AudioSelfTest()
     Write-Output $report
     if (($report | ConvertFrom-Json).status -eq 'synthetic audio fixture failed') { exit 1 }
     exit 0
 }
 if ($MicTest -and -not $Doctor) { throw '-MicTest requires -Doctor' }
-if ($Doctor) { [PinchSpeechDoctor]::Run([bool]$MicTest); exit 0 }
-if ($CheckOnly) { [PinchCompanion]::SelfTest(); exit 0 }
-[PinchCompanion]::Run()
+if ($Doctor) { [QuasnoozeSpeechDoctor]::Run([bool]$MicTest); exit 0 }
+if ($CheckOnly) { [QuasnoozeCompanion]::SelfTest(); exit 0 }
+[QuasnoozeCompanion]::Run()

@@ -50,6 +50,7 @@ test('desktop is enabled only by Windows process flag 1, with safety overrides',
   try {
     mkdirSync(join(fixture, 'src'));
     copyFileSync(join(root, 'src', 'config.js'), join(fixture, 'src', 'config.js'));
+    copyFileSync(join(root, 'src', 'brand-config.js'), join(fixture, 'src', 'brand-config.js'));
     writeFileSync(join(fixture, 'package.json'), '{"type":"module"}');
     writeFileSync(join(fixture, '.env'), 'PINCH_DESKTOP=1\nPINCH_HOST=0.0.0.0\nPINCH_AUTO_APPROVE=true\nPINCH_KEY=\n');
     const inspect = (platform, flag) => {

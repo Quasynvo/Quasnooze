@@ -96,15 +96,15 @@ test("mcp: a server that dies mid-call rejects, it does not hang", async () => {
 /* ───────────────────────── the security boundary ───────────────────────── */
 
 test("mcp: an untrusted server's tools are dangerous, a trusted one's are not", async () => {
-  const { toPinchTool } = await import("../src/mcp.js");
+  const { toQuasnoozeTool } = await import("../src/mcp.js");
   const client = await server();
   try {
     client.trusted = false;
-    const untrusted = toPinchTool(client, client.tools.find((t) => t.name === "add"));
-    assert.equal(untrusted.dangerous, true, "third-party code inherited Pinch's own trust");
+    const untrusted = toQuasnoozeTool(client, client.tools.find((t) => t.name === "add"));
+    assert.equal(untrusted.dangerous, true, "third-party code inherited Quasnooze's own trust");
 
     client.trusted = true;
-    const trusted = toPinchTool(client, client.tools.find((t) => t.name === "add"));
+    const trusted = toQuasnoozeTool(client, client.tools.find((t) => t.name === "add"));
     assert.equal(trusted.dangerous, false);
   } finally {
     await client.close();
@@ -147,10 +147,10 @@ test("mcp: registered tools reach the model, and dangerous ones reach the gate",
 });
 
 test("mcp: a tool result is labelled as untrusted text", async () => {
-  const { toPinchTool } = await import("../src/mcp.js");
+  const { toQuasnoozeTool } = await import("../src/mcp.js");
   const client = await server();
   try {
-    const tool = toPinchTool(client, client.tools.find((t) => t.name === "add"));
+    const tool = toQuasnoozeTool(client, client.tools.find((t) => t.name === "add"));
     const result = await tool.run({ a: 5, b: 6 });
     assert.match(result.output, /<untrusted-source tool="mcp__fake__add">/);
     assert.match(result.output, /11/);
@@ -159,7 +159,7 @@ test("mcp: a tool result is labelled as untrusted text", async () => {
   }
 });
 
-test("mcp: a server cannot see Pinch's secrets", async () => {
+test("mcp: a server cannot see Quasnooze's secrets", async () => {
   process.env.PINCH_KEY = "should-not-be-visible-1234";
   process.env.SOME_API_KEY = "also-not-visible";
   const client = await server();
@@ -253,8 +253,8 @@ function listen(server) {
 
 test("mcp: a third-party tool is offered to the model over HTTP", async () => {
   // The acceptance criterion for #16 is not "the adapter works" but "the model
-  // is offered a tool Pinch did not ship". So this stands up a fake Ollama,
-  // points a real Pinch at it with one MCP server configured, and asserts on
+  // is offered a tool Quasnooze did not ship". So this stands up a fake Ollama,
+  // points a real Quasnooze at it with one MCP server configured, and asserts on
   // the tools array the model actually received.
   const seen = [];
   const model = createServer((req, res) => {

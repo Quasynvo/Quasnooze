@@ -1,5 +1,5 @@
 /**
- * store.js — Pinch's memory, on disk, in plain JSON.
+ * store.js — Quasnooze's memory, on disk, in plain JSON.
  *
  * No database, no cloud, no telemetry: data/ is yours. Files are
  * written atomically (tmp + fsync + rename) so a crash mid-write cannot

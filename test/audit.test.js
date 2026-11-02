@@ -207,7 +207,7 @@ test("childEnv strips credential-shaped variables", () => {
     }
     assert.equal(env.SAFE_SETTING, "visible");
     assert.equal(env.PATH, process.env.PATH, "PATH must survive or nothing runs");
-    assert.equal(env.PINCH, "1", "children can tell they are inside Pinch");
+    assert.equal(env.PINCH, "1", "children can tell they are inside Quasnooze");
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);

@@ -2,14 +2,14 @@
  * mcp.js — third-party tools over the Model Context Protocol.
  *
  * The gap this closes: every comparable assistant lets you point it at someone
- * else's tools, and Pinch required editing src/tools.js. An MCP server is a
+ * else's tools, and Quasnooze required editing src/tools.js. An MCP server is a
  * process that speaks JSON-RPC on stdin/stdout and can list and call tools; that
- * is close enough to Pinch's own tool shape (name, schema, async run) that the
+ * is close enough to Quasnooze's own tool shape (name, schema, async run) that the
  * whole adapter is a translator, not a subsystem.
  *
  * The one line that matters is `dangerous: !trusted`. An MCP server is
  * arbitrary third-party code that was written by someone else and installed
- * from a registry. It must not inherit the trust of a tool Pinch shipped, so an
+ * from a registry. It must not inherit the trust of a tool Quasnooze shipped, so an
  * untrusted server's tools go through the same in-chat approval gate as `shell`.
  * Trust is opt-in per server, by name, in your own .env.
  *
@@ -79,7 +79,7 @@ export class McpClient {
     this.info = await this._request("initialize", {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "pinch", version: "1.0.0" },
+      clientInfo: { name: "quasnooze", version: "1.0.0" },
     });
     this._notify("notifications/initialized", {});
 
@@ -225,13 +225,13 @@ export function parseServers(spec, trusted = "") {
 const clients = new Map();
 
 /**
- * Turn MCP tools into Pinch tools.
+ * Turn MCP tools into Quasnooze tools.
  *
  * The name is namespaced (`mcp__files__read_file`) so a third-party server can
  * never shadow a built-in tool — a server that ships a `shell` tool must not be
  * able to intercept calls meant for ours.
  */
-export function toPinchTool(client, definition) {
+export function toQuasnoozeTool(client, definition) {
   const remoteName = definition.name;
   return {
     name: `mcp__${client.name}__${remoteName}`,
@@ -270,7 +270,7 @@ export async function startMcpTools({ registerTool, log = console, servers = con
       clients.set(def.name, client);
       for (const definition of client.tools) {
         try {
-          registerTool(toPinchTool(client, definition));
+          registerTool(toQuasnoozeTool(client, definition));
           registered.push(`${client.name}:${definition.name}`);
         } catch (err) {
           log.warn?.(`mcp ${client.name}: could not register ${definition.name} — ${err.message}`);

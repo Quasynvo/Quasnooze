@@ -247,18 +247,18 @@ function collectDocDrift(root = ROOT, files = markdownFiles()) {
  *  reverse, which is a feature nobody can discover. Aliases are not drift:
  *  `case "start": case "serve":` is one verb with two names, not two features. */
 function collectCliDrift() {
-  const file = join(ROOT, "bin", "pinch.js");
+  const file = join(ROOT, "bin", "quasnooze.js");
   if (!existsSync(file)) return [];
   const src = readFileSync(file, "utf8");
 
   const usageBlock = /function usage\(\)\s*\{([\s\S]*?)\n\}/.exec(src);
   const promised = new Set();
   if (usageBlock) {
-    // The verb is inside the bold tag: c.bold("pinch") or c.bold("pinch pair").
-    // Matching bare "pinch <word>" instead picks up the first word of the
+    // The verb is inside the bold tag: c.bold("quasnooze") or c.bold("quasnooze pair").
+    // Matching bare "quasnooze <word>" instead picks up the first word of the
     // description — which is how an earlier version of this file decided that
-    // `pinch start` was undiscoverable when it is the whole product.
-    for (const m of usageBlock[1].matchAll(/c\.bold\("pinch(?: ([a-z][a-z-]+))?"\)/g)) {
+    // `quasnooze start` was undiscoverable when it is the whole product.
+    for (const m of usageBlock[1].matchAll(/c\.bold\("quasnooze(?: ([a-z][a-z-]+))?"\)/g)) {
       promised.add(m[1] || "start");
     }
   }
@@ -286,14 +286,14 @@ function collectCliDrift() {
       candidate({
         kind: "first-run",
         fingerprint: `cli:promised-not-implemented:${verb}`,
-        title: `\`pinch ${verb}\` is in the help text but not in the switch`,
+        title: `\`quasnooze ${verb}\` is in the help text but not in the switch`,
         impact: 5,
         confidence: 3,
         demand: 1,
         effort: 1,
-        what: `\`bin/pinch.js usage()\` advertises \`pinch ${verb}\`. The command switch has no case for it, so a user who follows the help text gets the unknown-command path.`,
+        what: `\`bin/quasnooze.js usage()\` advertises \`quasnooze ${verb}\`. The command switch has no case for it, so a user who follows the help text gets the unknown-command path.`,
         why: `Static check on ${TODAY}: "${verb}" appears in usage() and no \`case\` label implements it.`,
-        where: ["bin/pinch.js"],
+        where: ["bin/quasnooze.js"],
         guard: "A test that every verb in usage() resolves to a case, run in `npm test`.",
         cost: "None — either implement the verb or remove the line.",
         risk: "Low. First-run friction, not a security path.",
@@ -308,14 +308,14 @@ function collectCliDrift() {
       candidate({
         kind: "first-run",
         fingerprint: `cli:implemented-not-documented:${verb}`,
-        title: `\`pinch ${verb}\` works but nobody can find it`,
+        title: `\`quasnooze ${verb}\` works but nobody can find it`,
         impact: 2,
         confidence: 3,
         demand: 1,
         effort: 1,
         what: `The command switch handles \`${verb}\`, but usage() never mentions it. A capability that cannot be discovered is a capability that does not exist for the person who needed it.`,
         why: `Static check on ${TODAY}: "${verb}" is the first label of its case group and usage() has no line for it.`,
-        where: ["bin/pinch.js"],
+        where: ["bin/quasnooze.js"],
         guard: "The same usage/switch test from the other direction.",
         cost: "One line in a template literal.",
         risk: "None.",
@@ -518,11 +518,11 @@ function collectMarket(path) {
       confidence: 3,
       demand: 2,
       effort: g.status === "partial" ? 3 : 4,
-      what: `${g.name}. Pinch's inventory currently says **${g.status}**${g.note ? ` — ${g.note}` : ""}. ${g.status === "partial" ? "The capability exists but not to the depth the comparison set ships, which is usually the cheapest kind of improvement available." : "Pinch does not do this at all."}`,
+      what: `${g.name}. Quasnooze's inventory currently says **${g.status}**${g.note ? ` — ${g.note}` : ""}. ${g.status === "partial" ? "The capability exists but not to the depth the comparison set ships, which is usually the cheapest kind of improvement available." : "Quasnooze does not do this at all."}`,
       why: `Read from each project's own README on ${report.today || TODAY} (${sources} sources): ${g.coveredBy.map((c) => c.repo).join(", ")}. Keywords matched: ${[...new Set(g.coveredBy.flatMap((c) => c.keywords))].slice(0, 8).join(", ")}.`,
       where: g.evidence && g.evidence.length ? g.evidence : ["docs/CAPABILITIES.json — the inventory entry that has to change with the code"],
       guard: `An entry in \`docs/CAPABILITIES.json\` flipping from \`${g.status}\` to \`have\`, with evidence a reader can open, plus a test that fails without the behaviour.`,
-      cost: "Anything that makes Pinch look more like a hosted product makes it heavier: more surface, more to explain, more to keep secure. The inventory file exists so that trade is visible before the code is written.",
+      cost: "Anything that makes Quasnooze look more like a hosted product makes it heavier: more surface, more to explain, more to keep secure. The inventory file exists so that trade is visible before the code is written.",
       risk: /plugin|mcp|rag|document|image/i.test(g.id)
         ? "Medium to high. Anything that adds an external input path is a new way to reach the model, and the model can reach the shell. This is the category where review is least optional."
         : "Low to medium — but check `docs/AUDIT.md` before assuming so.",
@@ -798,7 +798,7 @@ function renderAnnotation(chosen) {
     chosen.cost,
     "",
     "### The invariant to check first",
-    "Pinch's guard rails are the product: the approval gate, the workspace sandbox, `screenCommand()`, host/origin validation and the honesty guard. If this change touches any of them, the PR has to say so and `docs/AUDIT.md` has to grow a line. If it touches none, say that too — it is the fastest way to make a review easy.",
+    "Quasnooze's guard rails are the product: the approval gate, the workspace sandbox, `screenCommand()`, host/origin validation and the honesty guard. If this change touches any of them, the PR has to say so and `docs/AUDIT.md` has to grow a line. If it touches none, say that too — it is the fastest way to make a review easy.",
     "",
     "### What would make this a no",
     "A reason that is not effort. \"Nobody has time\" is a scheduling fact; \"it would make the approval prompt less legible\" is a design one.",
@@ -841,7 +841,11 @@ function main() {
   const maxOpen = Math.max(HOURLY_MAX_OPEN, quota + 2);
   const hour = Number(opt("--hour", process.env.GROWTH_HOUR || new Date().getUTCHours()));
   const shard = flag("--no-shard") ? null : shardFor(hour);
-  const boardCap = JSON.parse(readFileSync(join(ROOT, ".github/roadmap.json"), "utf8")).meta.open_curated_cap;
+  // Published runtime packages omit .github; retain the documented queue cap.
+  const roadmapPath = join(ROOT, ".github/roadmap.json");
+  const boardCap = existsSync(roadmapPath)
+    ? JSON.parse(readFileSync(roadmapPath, "utf8")).meta.open_curated_cap
+    : 10;
   const result = plan([...byKind.values()], existing, { quota, maxOpen, shard, boardCap });
   result.maxOpen = maxOpen;
   result.shard = shard;
@@ -887,7 +891,7 @@ function main() {
   }
 
   const headline = { file: "WOULD FILE", annotate: "WOULD COMMENT", skip: "staying quiet" }[result.decision];
-  console.log(`\n🦞 growth — ${TODAY}`);
+  console.log(`\n✦ growth — ${TODAY}`);
   console.log(`   quota ${quota} (from ${merged} merged) · cap ${maxOpen} · this hour: ${shard ? shard.label : "no shard"} · market: ${market.note}\n`);
   console.log(`  ${headline}: ${result.reason}\n`);
   for (const c of result.ranked.slice(0, 8)) {

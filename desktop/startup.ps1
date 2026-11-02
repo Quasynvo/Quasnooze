@@ -12,7 +12,7 @@ if ($Remove) {
 $node = (Resolve-Path -LiteralPath $NodePath).Path
 $script = (Resolve-Path -LiteralPath $Launcher).Path
 if ([IO.Path]::GetFileName($node) -ne 'node.exe' -or [IO.Path]::GetFileName($script) -ne 'desktop.js') {
-    throw 'Only the installed Node executable and Pinch desktop launcher are accepted.'
+    throw 'Only the installed Node executable and Quasnooze desktop launcher are accepted.'
 }
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut($shortcutPath)
@@ -20,5 +20,5 @@ $link.TargetPath = $node
 $link.Arguments = '"' + $script + '"'
 $link.WorkingDirectory = Split-Path (Split-Path $script -Parent) -Parent
 $link.WindowStyle = 7
-$link.Description = 'Pinch resident assistant. Microphone starts muted.'
+$link.Description = 'Quasnooze resident assistant. Microphone starts muted.'
 $link.Save()

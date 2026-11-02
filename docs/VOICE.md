@@ -1,6 +1,6 @@
 # Voice: the evidence and the boundary
 
-**Issue:** [pinchfoundry/Pinch#60](https://github.com/pinchfoundry/Pinch/issues/60) — *Talk to it and
+**Issue:** [Quasynvo/Quasnooze#60](https://github.com/Quasynvo/Quasnooze/issues/60) — *Talk to it and
 have it read replies back*. **Date:** 2026-11-02. **Status:** implemented in this tree; a human
 still reviews and merges. The old inventory said `partial` and claimed replies were not spoken
 back. That was stale: the web panel already had a speak toggle, but it could silently choose a
@@ -73,7 +73,7 @@ npm test
 npm run audit
 
 # Manual check (no model needed).
-LLM_PROVIDER=mock PINCH_KEY= npm start
+LLM_PROVIDER=mock QUASNOOZE_KEY= npm start
 ```
 
 Open `http://localhost:7777/index.html` (the default `/` is the command deck), tap **🔈** once,

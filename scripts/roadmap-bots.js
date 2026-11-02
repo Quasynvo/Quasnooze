@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * roadmap-bots.js — zero-dependency GitHub automation helpers for Pinch.
+ * roadmap-bots.js — zero-dependency GitHub automation helpers for Quasnooze.
  *
  * Subcommands:
  *   node scripts/roadmap-bots.js status [--issues-json FILE] [--out FILE]
@@ -74,7 +74,7 @@ export function renderStatusMarkdown(roadmap, issues = [], repoRoot = ROOT) {
 
   const lines = [
     STATUS_MARKER,
-    "# 🦞 Pinch Roadmap Status",
+    "# ✦ Quasnooze Roadmap Status",
     "",
     `Progress: \`${bar}\` **${doneCount}/${items.length}** curated tasks completed.`,
     "",
@@ -149,7 +149,7 @@ const AREA_RULES = [
   ["area/memory", /\b(memory|session|store\.js|history|recall|remember|persona|export|rag)\b/i],
   ["area/mcp", /\b(mcp|json-rpc|stdio|registertool|plugin|third-party tool)\b/i],
   ["area/security", /\b(security|symlink|guard\.js|risk\.js|approval|confinement|rebind|injection|secret)\b/i],
-  ["area/cli", /\b(cli|bin\/pinch|doctor|braincheck|setup\.js|npm pack|model switch)\b/i],
+  ["area/cli", /\b(cli|bin\/(?:quasnooze|pinch)|doctor|braincheck|setup\.js|npm pack|model switch)\b/i],
   ["area/docs", /\b(readme|docs\/|documentation|typo|guide\.md)\b/i],
 ];
 
@@ -184,7 +184,7 @@ export function labelsForChangedFiles(files, totalLines = 0) {
     if (f === "src/guard.js" || f === "src/risk.js" || f === "scripts/audit.js") {
       labels.add("area/security");
     }
-    if (f === "bin/pinch.js" || f === "src/cli.js" || f === "scripts/setup.js") {
+    if (f === "bin/quasnooze.js" || f === "src/cli.js" || f === "scripts/setup.js") {
       labels.add("area/cli");
     }
     if (f.startsWith("docs/") || f.endsWith(".md")) labels.add("area/docs");
@@ -207,7 +207,7 @@ export function renderPrContext(roadmap, changedFiles, prBody = "") {
     if (hit.length) matches.push({ item, hit });
   }
   const hasCloses = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#\d+/i.test(prBody || "");
-  const lines = [PR_MARKER, "### 🦞 Pinch PR Context"];
+  const lines = [PR_MARKER, "### ✦ Quasnooze PR Context"];
   if (!matches.length) {
     lines.push("", "No active `.github/roadmap.json` item directly matches the touched paths.");
   } else {

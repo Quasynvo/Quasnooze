@@ -1,17 +1,17 @@
 /**
  * whatsapp.js — optional bridge over Baileys (WhatsApp Web protocol).
  *
- * ⚠️  This is the one unofficial channel in Pinch. Read this before enabling:
+ * ⚠️  This is the one unofficial channel in Quasnooze. Read this before enabling:
  *   • Automating a personal WhatsApp account violates WhatsApp's Terms of
  *     Service, and accounts have been banned for it.
  *   • Use a SECONDARY number you can afford to lose, never your main one.
  *   • Messages travel through WhatsApp's servers (obviously) — this channel is
  *     not end-to-end private from the service itself, only from third parties.
  *   • Baileys is an optional dependency: `npm install` pulls it, but if it is
- *     missing Pinch simply reports this channel as unavailable instead of
+ *     missing Quasnooze simply reports this channel as unavailable instead of
  *     crashing.
  *
- * Everything else about Pinch stays local; enable this only if you accept it.
+ * Everything else about Quasnooze stays local; enable this only if you accept it.
  */
 import { config } from "../config.js";
 import { routeMessage } from "./router.js";
@@ -102,7 +102,7 @@ export async function startWhatsApp(log = console) {
 
         if (!text) {
           if (msg.message.audioMessage) {
-            await sock.sendMessage(from, { text: "🦞 Voice notes aren't transcribed in the WhatsApp bridge yet — use the web panel mic, or set WHISPER_URL." }, { quoted: msg });
+            await sock.sendMessage(from, { text: "✦ Voice notes aren't transcribed in the WhatsApp bridge yet — use the web panel mic, or set WHISPER_URL." }, { quoted: msg });
           }
           continue;
         }
@@ -123,7 +123,7 @@ export async function startWhatsApp(log = console) {
             send: (t) => sock.sendMessage(from, { text: t }),
           });
         } catch (err) {
-          await sock.sendMessage(from, { text: `🦞 Something jammed: ${err.message}` });
+          await sock.sendMessage(from, { text: `✦ Something jammed: ${err.message}` });
         }
       }
     });

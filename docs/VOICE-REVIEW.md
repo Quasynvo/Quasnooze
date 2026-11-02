@@ -63,7 +63,7 @@ reached the model. Earlier compilation and JS tests were not microphone tests.
 
 ## Reproduce on the affected Windows PC
 
-Stop Pinch through its tray, and turn off the chat/browser mic before the probe.
+Stop Quasnooze through its tray, and turn off the chat/browser mic before the probe.
 Run these in the updated project directory with Node 22+:
 
 ```powershell
@@ -116,8 +116,8 @@ score, **not a measured real-world accuracy percentage**.
 | `hey pinch` | `hey pinch`, 0.982, wake gate accepts | `hey pinch`, 0.982, accepts |
 | `what time is it` | `What I was it`, 0.378, command gate rejects | `what time is it`, 0.892, accepts |
 
-Before: [Windows job 125163987967](https://github.com/pinchfoundry/Pinch/actions/runs/41411062890/job/125163987967).
-After: [Windows job 125164938874](https://github.com/pinchfoundry/Pinch/actions/runs/41411368873/job/125164938874), production revision `fd942de`.
+Before: [Windows job 125163987967](https://github.com/Quasynvo/Quasnooze/actions/runs/41411062890/job/125163987967).
+After: [Windows job 125164938874](https://github.com/Quasynvo/Quasnooze/actions/runs/41411368873/job/125164938874), production revision `fd942de`.
 Both reports explicitly say `microphoneOpened: false`. These controlled synthetic
 results verify the fixture regression and correction, **not the affected PC's
 microphone, accent, noise, wake-to-dictation transition or overall speech accuracy**.

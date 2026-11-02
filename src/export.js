@@ -1,5 +1,5 @@
 /**
- * export.js — everything Pinch knows about you, in one file you can read.
+ * export.js — everything Quasnooze knows about you, in one file you can read.
  *
  * The README makes a promise: "your conversations are JSON files in data/ —
  * `rm -rf data` is a valid uninstall". That promise is only worth something if
@@ -51,7 +51,7 @@ export function buildExport({ includeTelemetry = false } = {}) {
     $schema: "pinch-export/1",
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
-    generator: { name: "pinch", from: ROOT.replace(/.*[\\/]/, "") },
+    generator: { name: "quasnooze", from: ROOT.replace(/.*[\\/]/, "") },
     counts: {
       sessions: sessions.length,
       messages: sessions.reduce((n, s) => n + (s.messages?.length || 0), 0),
@@ -117,7 +117,7 @@ export function describeExport({ path, bytes, counts }) {
     `reminders  ${counts.reminders}`,
     `schedules  ${counts.schedules}`,
     counts.telemetryTurns !== undefined ? `telemetry  ${counts.telemetryTurns} turns` : `telemetry  not included`,
-    path ? `written    ${path} · ${kb} KB` : `size       ${kb} KB on stdout — save it with: pinch export > backup.json`,
+    path ? `written    ${path} · ${kb} KB` : `size       ${kb} KB on stdout — save it with: quasnooze export > backup.json`,
   ].join("\n");
 }
 

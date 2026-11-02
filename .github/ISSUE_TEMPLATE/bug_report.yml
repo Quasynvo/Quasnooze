@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Pinch is broken or behaves unexpectedly
+description: Something in Quasnooze is broken or behaves unexpectedly
 labels: [bug]
 body:
   - type: markdown
@@ -12,7 +12,7 @@ body:
     attributes:
       label: What happened
       description: What did you expect, and what did you get instead?
-      placeholder: I asked Pinch to run the tests and it replied "…" instead of running them.
+      placeholder: I asked Quasnooze to run the tests and it replied "…" instead of running them.
     validations:
       required: true
   - type: textarea
@@ -30,19 +30,19 @@ body:
     id: channel
     attributes:
       label: Which channel?
-      options: [Web panel, Telegram, Discord, Slack, WhatsApp, Terminal (pinch chat), Not channel-specific]
+      options: [Web panel, Telegram, Discord, Slack, WhatsApp, Terminal (quasnooze chat), Not channel-specific]
     validations:
       required: true
   - type: input
     id: brain
     attributes:
       label: Brain
-      description: Output of `pinch brain-test` (first line is enough), or LLM_PROVIDER/model
+      description: Output of `quasnooze brain-test` (first line is enough), or LLM_PROVIDER/model
       placeholder: ollama · qwen2.5-coder:7b · first token 480 ms
   - type: textarea
     id: doctor
     attributes:
-      label: "`pinch doctor` output"
+      label: "`quasnooze doctor` output"
       description: Paste it with any tokens redacted.
       render: shell
   - type: input

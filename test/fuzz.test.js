@@ -1,7 +1,7 @@
 /**
  * Property-based fuzzing for the parts that parse hostile input.
  *
- * Everything Pinch reads is attacker-shaped: web pages, files, chat messages,
+ * Everything Quasnooze reads is attacker-shaped: web pages, files, chat messages,
  * model output. The unit tests check the cases somebody thought of; this checks
  * the ones nobody did, by throwing a few thousand random strings at each entry
  * point and asserting the *properties* that must always hold:
@@ -56,7 +56,7 @@ function mulberry32(a) {
   };
 }
 
-const ALPHABET = "abcABC012 <>/?\\'\"`&;$(){}[]|:.-_=+*%#@!?~^\n\t\r\0\u00e9\u4e2d🦞";
+const ALPHABET = "abcABC012 <>/?\\'\"`&;$(){}[]|:.-_=+*%#@!?~^\n\t\r\0\u00e9\u4e2d✦";
 const TRICKY = [
   "<script>alert(1)</script>",
   "https://a.example/\"onmouseover=\"alert(1)",

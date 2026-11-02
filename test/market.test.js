@@ -3,7 +3,7 @@
  *
  * Two things matter here and both are about honesty rather than parsing:
  *
- *   1. A capability Pinch claims to have, with no evidence, is not counted as
+ *   1. A capability Quasnooze claims to have, with no evidence, is not counted as
  *      present. An inventory that credits itself is how a project talks itself
  *      into complacency.
  *   2. A capability the product has decided against is never proposed, however

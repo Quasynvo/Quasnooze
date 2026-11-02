@@ -36,7 +36,7 @@ test("src/ is not editable, by any path", () => {
     "scripts/audit.js",
     ".github/workflows/growth.yml",
     "package.json",
-    "bin/pinch.js", // help text is fixed by hand, not by the manager
+    "bin/quasnooze.js", // help text is fixed by hand, not by the manager
   ]) {
     assert.equal(isAllowed(p), false, `${p} must be outside the fence`);
   }

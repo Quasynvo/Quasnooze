@@ -61,7 +61,7 @@ export function startTelegram(log = console) {
   async function sendApproval(chatId, id, description) {
     await call("sendMessage", {
       chat_id: chatId,
-      text: `🦞 Claws up — I want to \`${description}\`.\n\nAllow it?`,
+      text: `✦ Quick check — I want to \`${description}\`.\n\nAllow it?`,
       parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [
@@ -72,7 +72,7 @@ export function startTelegram(log = console) {
         ],
       },
     }).catch(async () => {
-      await send(chatId, `🦞 I want to \`${description}\`. Reply yes or no.`);
+      await send(chatId, `✦ I want to \`${description}\`. Reply yes or no.`);
     });
   }
 
@@ -81,7 +81,7 @@ export function startTelegram(log = console) {
     const userId = msg.from?.id;
     const incomingText = msg.text || msg.caption || "";
     if (!incomingText) {
-      await send(chatId, "🦞 I can only read text for now. Voice notes are on the roadmap — use the web panel mic for talking.");
+      await send(chatId, "✦ I can only read text for now. Voice notes are on the roadmap — use the web panel mic for talking.");
       return;
     }
 
@@ -89,8 +89,8 @@ export function startTelegram(log = console) {
       log.warn?.(`telegram: blocked unauthorised user ${userId}`);
       await send(
         chatId,
-        `🦞 This bot is private.\n\nYour Telegram user id is \`${userId}\`.\n` +
-          `Add it to \`TELEGRAM_ALLOWED_IDS\` in .env and restart Pinch to grant access.`
+        `✦ This bot is private.\n\nYour Telegram user id is \`${userId}\`.\n` +
+          `Add it to \`TELEGRAM_ALLOWED_IDS\` in .env and restart Quasnooze to grant access.`
       );
       return;
     }
@@ -114,7 +114,7 @@ export function startTelegram(log = console) {
         onApproval: ({ id, description }) => sendApproval(chatId, id, description),
       });
     } catch (err) {
-      await send(chatId, `🦞 Something jammed: ${err.message}`);
+      await send(chatId, `✦ Something jammed: ${err.message}`);
     }
   }
 
@@ -137,7 +137,7 @@ export function startTelegram(log = console) {
               text: decision === "1" ? "Allowed 🔧" : "Denied",
             }).catch(() => {});
             const chatId = update.callback_query.message?.chat?.id;
-            if (chatId) await send(chatId, decision === "1" ? "🦞 Allowed. On it." : "🦞 Denied — leaving that alone.");
+            if (chatId) await send(chatId, decision === "1" ? "✦ Allowed. On it." : "✦ Denied — leaving that alone.");
           }
         }
       } catch (err) {

@@ -1,6 +1,6 @@
-# Contributing to Pinch
+# Contributing to Quasnooze
 
-Pinch is a personal project that happens to be useful to other people. Contributions are
+Quasnooze is a personal project that happens to be useful to other people. Contributions are
 welcome, especially the kind that make it **safer** or **work in more places**.
 
 ## Ground rules
@@ -11,7 +11,7 @@ welcome, especially the kind that make it **safer** or **work in more places**.
    If you need something, write the 100 lines — `src/channels/ws.js` is the example.
 2. **Anything that mutates the machine needs `dangerous: true`** on its tool definition. If a
    new tool can write, delete, execute or spend, it goes behind the approval gate. No exceptions.
-3. **Never widen the sandbox to make a test pass.** `PINCH_WORKSPACE` containment is checked in
+3. **Never widen the sandbox to make a test pass.** `QUASNOOZE_WORKSPACE` containment is checked in
    `resolveInWorkspace()`. If your change needs a path outside it, the tool is wrong, not the guard.
 4. **If the model can get it wrong, check it in code.** That is what `src/guard.js` is for. A new
    class of claim ("I booked it", "I paid") should come with a matching audit rule.
@@ -21,21 +21,21 @@ welcome, especially the kind that make it **safer** or **work in more places**.
 ## Getting set up
 
 ```bash
-git clone https://github.com/pinchfoundry/Pinch && cd Pinch
+git clone https://github.com/Quasynvo/Quasnooze && cd Quasnooze
 npm test          # 110 tests, no model needed
 npm run audit     # the adversarial self-check — does the product still refuse attacks?
 npm run demo      # mock brain — the whole app, no Ollama required
 npm run verify    # both of the above, the full gate
 ```
 
-You do **not** need a GPU, an API key or any chat tokens to develop most of Pinch. The mock
+You do **not** need a GPU, an API key or any chat tokens to develop most of Quasnooze. The mock
 brain exercises the full agent loop, streaming, approvals and reminders.
 
 ## Your first PR
 
 Your workflows will show **"awaiting approval"** on your first pull request. That is normal:
 GitHub holds CI and Security runs from first-time contributors until a maintainer approves them,
-and Pinch keeps that gate on because the suite spawns processes and boots a real server — `npm test`
+and Quasnooze keeps that gate on because the suite spawns processes and boots a real server — `npm test`
 shells out to `scripts/audit.js` through `test/selfcheck.test.js`, and `test/hardening.test.js`
 starts a child process. Fork PRs must never run that with a token that can write.
 

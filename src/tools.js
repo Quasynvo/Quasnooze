@@ -1,5 +1,5 @@
 /**
- * tools.js — the claws.
+ * tools.js — the assistant tools.
  *
  * Every tool is declared once, in one place, with:
  *   name, description, parameters (JSON Schema), dangerous flag, run().
@@ -106,7 +106,7 @@ export function resolveInWorkspace(input) {
 
   if (isProtected(abs) || isProtected(canonical)) {
     throw new SafePathError(
-      `Blocked: ${abs} is a credential store, not a workspace. Pinch never reads ` +
+      `Blocked: ${abs} is a credential store, not a workspace. Quasnooze never reads ` +
         `~/.ssh, ~/.aws, ~/.gnupg or similar — not even when your workspace is your home directory.`
     );
   }
@@ -116,7 +116,7 @@ export function resolveInWorkspace(input) {
     throw new SafePathError(
       `Blocked: ${abs} is outside the allowed workspace${why}. ` +
         `Allowed roots: ${config.workspaceRoots.join(", ")}. ` +
-        `Add a root to PINCH_WORKSPACE in .env if that is a mistake.`
+        `Add a root to QUASNOOZE_WORKSPACE in .env if that is a mistake.`
     );
   }
   return abs;
@@ -128,7 +128,7 @@ export function resolveInWorkspace(input) {
  * resolveInWorkspace answers "is this inside the workspace"; it does not and
  * cannot answer "is this string safe to hand to another program". A name
  * containing $(...), a backtick, a quote or a newline is legal on every
- * filesystem and is a command waiting for a shell. Nothing Pinch writes needs
+ * filesystem and is a command waiting for a shell. Nothing Quasnooze writes needs
  * those characters, so anything that uses one is refused here rather than
  * being escaped later by whoever remembers to.
  */
@@ -145,7 +145,7 @@ export function checkFilename(name) {
       ok: false,
       output:
         "That path contains shell metacharacters ($ ` | ; & < > or a newline). " +
-        "Pinch will not build a command from it. Use plain letters, digits, dots, dashes, underscores and slashes.",
+        "Quasnooze will not build a command from it. Use plain letters, digits, dots, dashes, underscores and slashes.",
     };
   }
   return { ok: true };
@@ -505,7 +505,7 @@ export function grepInWorker({ root, pattern, glob }, timeoutMs = GREP_TIMEOUT_M
         workerData: { root, pattern: String(pattern), glob: glob ? String(glob) : null },
         resourceLimits: { maxOldGenerationSizeMb: 128 },
         // Never inherit the host's flags: `node --input-type=module` in
-        // execArgv makes every Worker fail to start, and Pinch should not
+        // execArgv makes every Worker fail to start, and Quasnooze should not
         // depend on how it was launched.
         execArgv: [],
       });
@@ -887,7 +887,7 @@ export const TOOLS = [
       try {
         const res = await fetch(
           `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-          { headers: { "user-agent": "Mozilla/5.0 (compatible; Pinch/1.0)" }, signal: AbortSignal.timeout(12_000) }
+          { headers: { "user-agent": "Mozilla/5.0 (compatible; Quasnooze/1.0)" }, signal: AbortSignal.timeout(12_000) }
         );
         const html = await res.text();
         const results = [];
@@ -1067,7 +1067,7 @@ export const TOOLS = [
     // tools later, with nobody watching. It goes through the approval prompt.
     dangerous: true,
     description:
-      "Manage tasks Pinch runs on a schedule without you. Use for 'every morning, summarise my " +
+      "Manage tasks Quasnooze runs on a schedule without you. Use for 'every morning, summarise my " +
       "unread issues', 'each Monday at 8, check the build'. Cadence shapes: 'every 30m', " +
       "'daily at 09:00', 'weekly on mon at 8:00'. A scheduled run cannot use tools that need " +
       "approval (shell, write_file, screenshot, system_control) and cannot create more schedules.",

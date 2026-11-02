@@ -10,7 +10,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-public static class PinchSpeechDoctor {
+public static class QuasnoozeSpeechDoctor {
     public static string AudioSelfTest() {
         var report = new Dictionary<string, object>();
         report["microphoneOpened"] = false;
@@ -34,7 +34,7 @@ public static class PinchSpeechDoctor {
                     wave.Position = 0;
                     using (var engine = new SpeechRecognitionEngine(info)) {
                         if (wake) { var grammar = new GrammarBuilder(); grammar.Culture = info.Culture; grammar.Append(new Choices("hey pinch", "pinch")); engine.LoadGrammar(new Grammar(grammar)); }
-                        else PinchCompanion.LoadCaptureGrammars(engine, info.Culture);
+                        else QuasnoozeCompanion.LoadCaptureGrammars(engine, info.Culture);
                         engine.SetInputToWaveStream(wave);
                         var result = engine.Recognize(TimeSpan.FromSeconds(10));
                         bool accepted = result != null && result.Confidence >= (wake ? 0.78 : 0.45) && String.Equals(result.Text, wake ? "hey pinch" : "what time is it", StringComparison.OrdinalIgnoreCase);
@@ -64,7 +64,7 @@ public static class PinchSpeechDoctor {
         }
         if (!micTest) return new JavaScriptSerializer().Serialize(report);
         if (info == null) { report["status"] = "missing English desktop System.Speech recognizer"; return new JavaScriptSerializer().Serialize(report); }
-        if (MessageBox.Show("Test the Windows default microphone locally for up to 12 seconds? After accepting, say 'what time is it'. The report includes recognized text and audio levels. No commands run, raw audio is not saved, and no cloud service is used. Stop other Pinch/chat microphone sessions first.", "Pinch microphone diagnostic", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) != DialogResult.Yes) {
+        if (MessageBox.Show("Test the Windows default microphone locally for up to 12 seconds? After accepting, say 'what time is it'. The report includes recognized text and audio levels. No commands run, raw audio is not saved, and no cloud service is used. Stop other Quasnooze/chat microphone sessions first.", "Quasnooze microphone diagnostic", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) != DialogResult.Yes) {
             report["status"] = "microphone consent declined"; return new JavaScriptSerializer().Serialize(report);
         }
         SpeechRecognitionEngine rec = null;
@@ -74,7 +74,7 @@ public static class PinchSpeechDoctor {
         string text = "", error = "", signal = ""; float confidence = 0;
         try {
             rec = new SpeechRecognitionEngine(info);
-            PinchCompanion.LoadCaptureGrammars(rec, info.Culture);
+            QuasnoozeCompanion.LoadCaptureGrammars(rec, info.Culture);
             rec.InitialSilenceTimeout = TimeSpan.FromSeconds(12);
             rec.BabbleTimeout = TimeSpan.FromSeconds(8);
             rec.AudioLevelUpdated += (s, e) => { lock(sync) maxLevel = Math.Max(maxLevel, e.AudioLevel); };

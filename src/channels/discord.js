@@ -1,9 +1,9 @@
 /**
- * discord.js — gateway listener built on Pinch's own tiny WebSocket client.
+ * discord.js — gateway listener built on Quasnooze's own tiny WebSocket client.
  *
  * Needs one thing enabled in the Discord developer portal:
  *   Bot → Privileged Gateway Intents → MESSAGE CONTENT INTENT (on)
- * Otherwise Discord delivers empty message bodies and Pinch looks deaf.
+ * Otherwise Discord delivers empty message bodies and Quasnooze looks deaf.
  */
 import { WebSocketClient } from "./ws.js";
 import { config } from "../config.js";
@@ -83,7 +83,7 @@ export function startDiscord(log = console) {
         send: (t) => send(message.channel_id, t),
       });
     } catch (err) {
-      await send(message.channel_id, `🦞 Something jammed: ${err.message}`);
+      await send(message.channel_id, `✦ Something jammed: ${err.message}`);
     }
   }
 
@@ -122,7 +122,7 @@ export function startDiscord(log = console) {
               d: {
                 token: config.discord.token,
                 intents: INTENTS,
-                properties: { os: process.platform, browser: "pinch", device: "pinch" },
+                properties: { os: process.platform, browser: "quasnooze", device: "quasnooze" },
               },
             }));
           }

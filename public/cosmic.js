@@ -1,4 +1,4 @@
-/** Cosmic concept UI: no browser speech/recording, third-party scripts or auto approvals. */
+/** Quasnooze conversation UI: no browser speech/recording, third-party scripts or auto approvals. */
 export function consumeFrames(buffer) {
   const normalized = buffer.replace(/\r\n/g, "\n");
   const parts = normalized.split("\n\n"),
@@ -122,7 +122,7 @@ function init() {
         ? "YOU"
         : demo
           ? "QUASNOOZE · SCRIPTED PREVIEW"
-          : "QUASNOOZE · PINCH BACKEND";
+          : "QUASNOOZE · LOCAL ASSISTANT";
     const body = document.createElement("div");
     body.textContent = text;
     article.append(label, body);
@@ -137,7 +137,7 @@ function init() {
       method: data === undefined ? "GET" : "POST",
       headers: {
         "content-type": "application/json",
-        ...(key ? { "x-pinch-key": key } : {}),
+        ...(key ? { "x-quasnooze-key": key } : {}),
       },
       signal: AbortSignal.timeout(7000),
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
@@ -146,7 +146,7 @@ function init() {
       throw Error(
         response.status === 401
           ? "Instance key required. Open settings."
-          : `Pinch request failed (HTTP ${response.status}).`,
+          : `Quasnooze request failed (HTTP ${response.status}).`,
       );
     return response.json();
   }
@@ -154,15 +154,15 @@ function init() {
     $("connection").textContent = demo
       ? "SCRIPTED DESIGN PREVIEW"
       : connected
-        ? "PINCH SERVICE CONNECTED"
+        ? "QUASNOOZE SERVICE CONNECTED"
         : "SERVICE NOT CONNECTED";
     $("modeNotice").textContent = demo
       ? "SCRIPTED PREVIEW · Not an AI response. No tools or audio capture. Previewing does not mute a separately running native companion."
       : connected
-        ? "REAL BACKEND · Existing Pinch permissions apply. Conversations may be stored by Pinch."
-        : "Preview UI only. Connect to Pinch in settings, or explicitly try the scripted preview.";
+        ? "REAL BACKEND · Existing Quasnooze permissions apply. Conversations may be stored by Quasnooze."
+        : "Not connected. Connect to Quasnooze in settings, or explicitly try the scripted preview.";
     $("demoToggle").textContent = demo
-      ? "Connect real Pinch instead"
+      ? "Connect real Quasnooze instead"
       : "Try scripted preview";
     if (demo) {
       $("backendLabel").textContent =
@@ -253,7 +253,7 @@ function init() {
       message(
         "assistant",
         err.message +
-          " Permission reply could not be confirmed; check Pinch before retrying.",
+          " Permission reply could not be confirmed; check Quasnooze before retrying.",
       );
       state("attention");
     } finally {
@@ -278,7 +278,7 @@ function init() {
     state("thinking");
     if (demo) {
       answer.textContent =
-        "Scripted preview: this is how a reply will appear. A real model is not connected in this mode. Connect your Pinch instance to have this conversation for real.";
+        "Scripted preview: this is how a reply will appear. A real model is not connected in this mode. Connect your Quasnooze instance to have this conversation for real.";
       state("thinking", "Scripted state preview—not model inference.");
       later(() => {
         state(
@@ -299,7 +299,7 @@ function init() {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          ...(key ? { "x-pinch-key": key } : {}),
+          ...(key ? { "x-quasnooze-key": key } : {}),
         },
         body: JSON.stringify({ sessionId: session, text }),
       });
@@ -348,7 +348,7 @@ function init() {
       }
       if (!complete)
         throw Error(
-          "Connection ended before completion. The backend task may still be running; check the current Pinch deck.",
+          "Connection ended before completion. The backend task may still be running; check the current Quasnooze deck.",
         );
     } catch (err) {
       answer.textContent += "\n" + err.message;
@@ -363,7 +363,7 @@ function init() {
         } catch {
           message(
             "assistant",
-            "Could not confirm denial of the pending action. Check Pinch before continuing.",
+            "Could not confirm denial of the pending action. Check Quasnooze before continuing.",
           );
         }
       }
@@ -397,7 +397,7 @@ function init() {
     $("messages").replaceChildren();
     message(
       "assistant",
-      "A fresh conversation. This resets this view, not your stored Pinch history.",
+      "A fresh conversation. This resets this view, not your stored Quasnooze history.",
     );
   };
   $("demoToggle").onclick = () => {

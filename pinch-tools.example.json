@@ -1,9 +1,9 @@
 {
-  "$comment": "Copy this to your own file, edit it, and point PINCH_TOOLS at it. Every tool here calls a program you already trust; Pinch never executes this file. Every call stops for your approval, always — there is no 'trusted' flag in this format.",
+  "$comment": "Copy this to your own file, edit it, and point PINCH_TOOLS at it. Every tool here calls a program you already trust; Quasnooze never executes this file. Every call stops for your approval, always — there is no 'trusted' flag in this format.",
   "tools": [
     {
       "name": "git_status_here",
-      "description": "Show the working tree status of the Pinch checkout: branch, changed files, untracked files.",
+      "description": "Show the working tree status of the Quasnooze checkout: branch, changed files, untracked files.",
       "command": "git",
       "args": ["status", "--short", "--branch"],
       "timeout_ms": 10000

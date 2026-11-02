@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * index.js — boot Pinch.
+ * index.js — boot Quasnooze.
  *
  *   node src/index.js
  *
@@ -9,7 +9,7 @@
  */
 import { config } from "./config.js";
 import { startCustomTools } from "./custom-tools.js";
-import { createPinchServer, lanAddresses, status } from "./server.js";
+import { createQuasnoozeServer, lanAddresses, status } from "./server.js";
 import { startChannels } from "./channels/index.js";
 import { brain } from "./brain.js";
 import { ensureData, pendingReminders } from "./store.js";
@@ -22,7 +22,7 @@ import { startWindowsCompanion } from "./windows-companion.js";
 import { registerTool, loadLocalTools } from "./tools.js";
 
 const c = {
-  coral: (s) => `\x1b[38;5;209m${s}\x1b[0m`,
+  coral: (s) => `\x1b[38;5;87m${s}\x1b[0m`,
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
   bold: (s) => `\x1b[1m${s}\x1b[0m`,
   teal: (s) => `\x1b[38;5;79m${s}\x1b[0m`,
@@ -39,7 +39,7 @@ function banner() {
   console.log(
     c.coral(`
    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-      🦞  ${c.bold("P I N C H")}  ${c.dim("v1.0")}
+      ✦  ${c.bold("Q U A S N O O Z E")}  ${c.dim("v1.0")}
    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀`)
   );
   console.log(c.dim(`   your assistant · running locally · ${new Date().toLocaleString()}\n`));
@@ -65,7 +65,7 @@ async function main() {
     } else {
       log.warn(
         `brain: ollama unreachable at ${config.llm.ollamaUrl} — start it with ${c.bold("ollama serve")}, ` +
-          `or set LLM_PROVIDER=mock to try the plumbing. Pinch still boots.`
+          `or set LLM_PROVIDER=mock to try the plumbing. Quasnooze still boots.`
       );
     }
   } else if (config.llm.provider === "openai") {
@@ -123,19 +123,19 @@ async function main() {
   if (!config.authKey && !isLoopback(config.host)) {
     if (config.hostExplicit) {
       console.log("");
-      log.warn(`PINCH_KEY is empty and PINCH_HOST=${config.host} — anyone who can reach this machine can use Pinch.`);
-      log.warn("Set PINCH_KEY, or set PINCH_HOST=127.0.0.1 to close it off.");
+      log.warn(`QUASNOOZE_KEY is empty and QUASNOOZE_HOST=${config.host} — anyone who can reach this machine can use Quasnooze.`);
+      log.warn("Set QUASNOOZE_KEY, or set QUASNOOZE_HOST=127.0.0.1 to close it off.");
       console.log("");
     } else {
       bindHost = "127.0.0.1";
       console.log("");
-      log.warn("No PINCH_KEY set, so Pinch is listening on localhost only.");
+      log.warn("No QUASNOOZE_KEY set, so Quasnooze is listening on localhost only.");
       log.warn(c.dim("   To reach it from your phone: npm run setup   (it generates a key)"));
       console.log("");
     }
   }
 
-  const server = createPinchServer();
+  const server = createQuasnoozeServer();
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, bindHost, resolve);
@@ -168,18 +168,18 @@ async function main() {
   log.info(`web panel: ${c.bold(`http://localhost:${config.port}`)}`);
   for (const addr of addrs) {
     // No fragment of the key is printed: terminal scrollback ends up in screen
-    // shares, bug reports and CI logs. `pinch pair` shows the same URL as a QR
+    // shares, bug reports and CI logs. `quasnooze pair` shows the same URL as a QR
     // generated locally, which is the transfer channel that was intended.
-    const suffix = config.authKey ? c.dim("  (needs your key — run `pinch pair` for a QR)") : "";
+    const suffix = config.authKey ? c.dim("  (needs your key — run `quasnooze pair` for a QR)") : "";
     console.log(`  ${c.dim("phone/Mac/PC on same Wi-Fi:")} ${c.bold(`http://${addr.address}:${config.port}`)}${suffix}`);
   }
   if (!config.authKey && !isLoopback(bindHost)) {
-    log.warn("PINCH_KEY is empty — anyone on your network can use Pinch. Run `npm run setup` to set one.");
+    log.warn("QUASNOOZE_KEY is empty — anyone on your network can use Quasnooze. Run `npm run setup` to set one.");
   }
   console.log("");
 
   // ── scheduler (reminders) ──────────────────────────────────────────────
-  // Starts before the channels so a reminder that came due while Pinch was
+  // Starts before the channels so a reminder that came due while Quasnooze was
   // off fires as soon as there is something to deliver it to.
   const scheduler = startScheduler(log);
 
@@ -199,7 +199,7 @@ async function main() {
 
   const shutdown = () => {
     companion?.stop();
-    console.log(c.dim("\n🦞 pinching out…"));
+    console.log(c.dim("\n✦ signing off…"));
     scheduler.stop();
     stopAll();
     mcp.stop().catch(() => {});
@@ -211,6 +211,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(`\x1b[31mPinch failed to start:\x1b[0m ${err.message}`);
+  console.error(`\x1b[31mQuasnooze failed to start:\x1b[0m ${err.message}`);
   process.exit(1);
 });

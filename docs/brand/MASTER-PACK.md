@@ -1,3 +1,5 @@
+> **Historical proposal/evidence:** this document records the earlier Pinch-era proposal and its own checks. For the adopted Quasnooze / Quasynvo identity and current compatibility rules, see [the rebrand guide](../REBRANDING.md). Historical names, source links and results below are preserved rather than rewritten as new evidence.
+
 # Cosmic Sloth — proposed brand master pack
 
 **Status:** maintainer-requested Pinch rebrand proposal, not a live rename. Working

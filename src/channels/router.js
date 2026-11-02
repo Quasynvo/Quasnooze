@@ -3,7 +3,7 @@
  *
  * Every channel hands a plain {channel, text, send} to this module and gets
  * back the same behaviour: approvals, agent turn, chunked reply. That is why
- * Pinch behaves identically in Telegram, Discord, Slack, WhatsApp and web.
+ * Quasnooze behaves identically in Telegram, Discord, Slack, WhatsApp and web.
  */
 import { runAgent, answerApproval, answerApprovalFor, pendingApprovalsFor } from "../agent.js";
 import { brain, modelCommand } from "../brain.js";
@@ -30,7 +30,7 @@ export function splitForLimit(text, limit = 4000) {
 /** Human-friendly summary of a tool call for a chat bubble. */
 function approvalPrompt(description) {
   return (
-    `🦞 Claws up — I want to \`${description}\`.\n\n` +
+    `✦ Quick check — I want to \`${description}\`.\n\n` +
     `Reply **yes** to allow, **no** to stop. (Nothing runs without your say-so.)`
   );
 }
@@ -55,12 +55,12 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
   if (pendingApprovalsFor(sessionId || `${channel}-main`).length) {
     if (YES.test(trimmed)) {
       answerApprovalFor({ sessionId: sessionId || `${channel}-main`, channel }, true);
-      await send("🦞 Allowed. On it.");
+      await send("✦ Allowed. On it.");
       return { handled: true, kind: "approval" };
     }
     if (NO.test(trimmed)) {
       answerApprovalFor({ sessionId: sessionId || `${channel}-main`, channel }, false);
-      await send("🦞 Denied — I'll leave that alone. What would you rather I do?");
+      await send("✦ Denied — I'll leave that alone. What would you rather I do?");
       return { handled: true, kind: "approval" };
     }
   }
@@ -74,7 +74,7 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
   // 2) Built-in commands, available identically everywhere.
   if (/^\/(start|help)\b/i.test(trimmed)) {
     await send(
-      `🦞 **Pinch** — your local assistant.\n\n` +
+      `✦ **Quasnooze** — your local assistant.\n\n` +
         `Just talk to me like a person. I can:\n` +
         `• read/write code and run commands (you approve each one)\n` +
         `• search the web, do maths, remember facts\n` +
@@ -86,14 +86,14 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
   }
 
   if (/^\/(reset|new)\b/i.test(trimmed)) {
-    await send("🦞 Fresh session. Previously, on Pinch: nothing. Let's start clean.");
+    await send("✦ Fresh session. Previously, on Quasnooze: nothing. Let's start clean.");
     return { handled: true, kind: "reset", reset: sessionId };
   }
 
   if (/^\/status\b/i.test(trimmed)) {
     const pending = pendingApprovalsFor(sessionId || `${channel}-main`);
     await send(
-      `🦞 **Status**\n` +
+      `✦ **Status**\n` +
         `Brain: ${brain.active.provider} / ${brain.active.model}\n` +
         `Workspace: ${config.workspaceRoots.join(", ")}\n` +
         `Approvals waiting: ${pending.length}\n` +

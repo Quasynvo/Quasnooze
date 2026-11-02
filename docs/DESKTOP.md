@@ -1,10 +1,10 @@
-# Pinch resident assistant — Windows preview
+# Quasnooze resident assistant — Windows preview
 
-Pinch's desktop mode is a **resident Windows host**, not a browser speech API wrapped around chat. A small always-on-top widget and notification-area icon stay available while Pinch runs. The command deck is its control surface; closing the browser does not stop the native host. Closing the widget hides it; **Quit Pinch** in the tray exits the assistant.
+Quasnooze's desktop mode is a **resident Windows host**, not a browser speech API wrapped around chat. A small always-on-top widget and notification-area icon stay available while Quasnooze runs. The command deck is its control surface; closing the browser does not stop the native host. Closing the widget hides it; **Quit Quasnooze** in the tray exits the assistant.
 
 **Validation boundary:** Node tests and browser checks have run on Linux. The native C# source also compiles as C# 5 against Microsoft's .NET Framework 4.8 reference assemblies. The Windows PowerShell compilation/self-test job is supplied in CI, but Windows execution, microphone recognition, audio-device switching, login startup and hotkey behavior have **not yet been verified on real Windows hardware**. This is a reviewable preview, not a claim of production-ready Jarvis or control of every application.
 
-![Command deck, captured from the actual Linux mock service](images/command-deck.png)
+![Quasnooze command deck, captured with a mocked API fixture; no active AI or microphone](images/command-deck.png)
 
 This screenshot uses a **mock brain**, with **no native host or installed model**. Its clock result is real; its 1 ms value measures that clock handler, **not model inference, wake recognition or end-to-end voice latency**.
 
@@ -12,8 +12,8 @@ This screenshot uses a **mock brain**, with **no native host or installed model*
 
 Requirements:
 
-- Windows 10/11, Node.js 22+, Windows PowerShell 5.1 and .NET Framework 4.8 with WinForms/System.Speech. No Python, browser speech SDK or cloud audio account is required. Restricted execution policies may prevent launching the helper; Pinch does not change machine policy or bypass organisational controls.
-- A microphone and a compatible **English desktop System.Speech recognizer** for voice. Pinch prefers en-IN, then en-US, then another installed English recognizer. Modern Windows voice-access support alone does not prove that the classic desktop recognizer is installed. If none is available, use typing and install the appropriate English speech components in Windows Settings before restarting. There is no silent browser/cloud fallback.
+- Windows 10/11, Node.js 22+, Windows PowerShell 5.1 and .NET Framework 4.8 with WinForms/System.Speech. No Python, browser speech SDK or cloud audio account is required. Restricted execution policies may prevent launching the helper; Quasnooze does not change machine policy or bypass organisational controls.
+- A microphone and a compatible **English desktop System.Speech recognizer** for voice. Quasnooze prefers en-IN, then en-US, then another installed English recognizer. Modern Windows voice-access support alone does not prove that the classic desktop recognizer is installed. If none is available, use typing and install the appropriate English speech components in Windows Settings before restarting. There is no silent browser/cloud fallback.
 - For general reasoning, a working loopback Ollama installation and an installed model. Native quick actions do not require a model. Hardware/model size determine inference speed; no universal RAM requirement or response-time promise is made here.
 
 From the repository directory:
@@ -33,10 +33,10 @@ Desktop launch binds the service to **127.0.0.1**, creates a random process-life
 ### Daily use
 
 1. Use **Enable local wake** in the widget. A default-No consent dialog explains the microphone and nearby-speaker risks. Every restart starts muted.
-2. Say **Hey Pinch**, pause until **LISTENING**, then say one instruction. This first implementation is a two-stage local grammar plus dictation recognizer, **not** an acoustic neural wake-word engine and not continuous free-form conversation. Accuracy depends on microphone, noise, speech pack and accent.
+2. Say **Hey Quasnooze**, pause until **LISTENING**, then say one instruction. This first implementation is a two-stage local grammar plus dictation recognizer, **not** an acoustic neural wake-word engine and not continuous free-form conversation. Accuracy depends on microphone, noise, speech pack and accent.
 3. Alternatively use **Talk**, **Ctrl+Alt+P**, the widget text field, or the command deck. A hotkey conflict is displayed rather than silently claimed as registered.
 4. **Mute microphone** releases recognition. **Stop voice** cancels speech, but does not cancel a running action or turn off armed wake listening. The mic pauses while working or speaking, to reduce self-triggering.
-5. Open the tray's **Toggle start with Windows** only if wanted. The confirmation changes just your user's `Startup/Pinch.lnk`; using it again removes that shortcut. It does not add an administrator service, change machine policy, or enable the microphone on login. Keep Node and the repository at their configured paths.
+5. Open the tray's **Toggle start with Windows** only if wanted. The confirmation changes just your user's `Startup/Quasnooze.lnk`; using it again removes that shortcut. It does not add an administrator service, change machine policy, or enable the microphone on login. Keep Node and the repository at their configured paths.
 
 The first run compiles the native host through PowerShell; it is not yet an installer or single signed executable. A console may remain visible/minimised with the Node process.
 
@@ -56,7 +56,7 @@ The first run compiles the native host through PowerShell; it is not yet an inst
 
 Without a native host, the deck still supports clock, system status and bounded search, and says that native voice/app/reminder delivery is unavailable. It does not simulate an installed assistant. The default web home is the command deck; the existing chat remains at **Conversation history** (`/index.html`) for normal web/channel conversations. Non-Windows users can keep using that existing surface; the resident host itself refuses non-Windows launch.
 
-**Not implemented:** arbitrary desktop clicking/typing, universal application automation, screen/vision understanding, mail/calendar integrations beyond existing project tools, OS shutdown/reboot, speaker identification, offline weather knowledge, an interruption/cancellation protocol for running tools, a neural wake-word pipeline, or a signed auto-updating installer. Do not give Pinch elevated privileges or assume a wake phrase authenticates a person.
+**Not implemented:** arbitrary desktop clicking/typing, universal application automation, screen/vision understanding, mail/calendar integrations beyond existing project tools, OS shutdown/reboot, speaker identification, offline weather knowledge, an interruption/cancellation protocol for running tools, a neural wake-word pipeline, or a signed auto-updating installer. Do not give Quasnooze elevated privileges or assume a wake phrase authenticates a person.
 
 ## Speed: changes, not invented benchmarks
 
@@ -84,7 +84,7 @@ Node Windows bridge → resident runtime → local fast path / scoped approval /
 - `/api/desktop`: authenticated GET snapshot and POST **one** command, control or approval. It cannot start the native host. Cookie-only API authentication remains refused; foreign Origin/Host protections remain in force.
 - `public/desktop.html`: no external runtime libraries and **no browser microphone API**. Dynamic text uses text nodes. Service loss marks microphone state **UNKNOWN** and tells you to check/mute the native tray; a disconnected page cannot prove that a still-running native microphone is off.
 
-The native component neither saves audio nor intentionally sends it to a cloud speech service. Recognized text used for general requests enters the **existing local agent/session storage**, and reminders persist in Pinch's data directory. Fast-path recent commands/results remain in runtime memory; clipboard results are displayed in the authenticated deck and may be spoken. Existing optional tools, websites, remote MCP servers and messaging integrations have their own network/data boundaries. **Local speech is not a promise that every tool stays offline.** Only use trusted model endpoints/tools and keep the service key private.
+The native component neither saves audio nor intentionally sends it to a cloud speech service. Recognized text used for general requests enters the **existing local agent/session storage**, and reminders persist in Quasnooze's data directory. Fast-path recent commands/results remain in runtime memory; clipboard results are displayed in the authenticated deck and may be spoken. Existing optional tools, websites, remote MCP servers and messaging integrations have their own network/data boundaries. **Local speech is not a promise that every tool stays offline.** Only use trusted model endpoints/tools and keep the service key private.
 
 The key is initially passed to the browser URL by the native Deck action; the page removes it into tab-local sessionStorage. Browser history, extensions, local process inspection and local malware are outside this application's security boundary. A key holder is a trusted operator, not a low-privilege tenant.
 
@@ -98,7 +98,7 @@ The user supplied [GitHub's Jarvis repository search](https://github.com/search?
 - [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) exposes a native desktop directory and Windows build work. The useful direction is a resident native shell plus local services, rather than treating a chat tab as physical presence; no implementation parity is claimed.
 - [Priler/jarvis](https://github.com/Priler/jarvis) describes a Rust/Tauri desktop architecture, local STT and several wake approaches, but its README explicitly warns it is outdated and lists unfinished components. It is not evidence that every listed feature works.
 
-The resulting Pinch choices are its own: native Windows resident shell, session-only mic consent, visible state/mute, deterministic quick actions, scoped confirmations and a command deck using the existing identity. No source, logo or performance claim was copied from these projects.
+The resulting Quasnooze choices are its own: native Windows resident shell, session-only mic consent, visible state/mute, deterministic quick actions, scoped confirmations and a command deck using the existing identity. No source, logo or performance claim was copied from these projects.
 
 ## Reproducible checks
 
@@ -110,7 +110,7 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File desktop/windows.ps1
 
 The last command compiles and checks URL policy without opening a widget or microphone. CI adds that command on `windows-latest` plus desktop orchestration/HTTP tests. CI cannot establish real microphone accuracy.
 
-For optional browser regression checks, install Playwright **as developer tooling outside runtime dependencies**, install its Chromium browser, then run `scripts/check-desktop-ui.cjs` against a disposable, loopback mock service with **no native host or Ollama**. Set `NODE_PATH` to that tooling's `node_modules`, `PINCH_UI_BASE=http://127.0.0.1:7777/`, and optionally `PINCH_UI_SCREENSHOT` to an output PNG. The script covers actual clock calls, disconnected native state, missing model, dialogs, four widths, and a **separate synthetic** text-injection response. Synthetic injection data is never used in the screenshot.
+For optional browser regression checks, install Playwright **as developer tooling outside runtime dependencies**, install its Chromium browser, then run `scripts/check-desktop-ui.cjs` against a disposable, loopback mock service with **no native host or Ollama**. Set `NODE_PATH` to that tooling's `node_modules`, `QUASNOOZE_UI_BASE=http://127.0.0.1:7777/`, and optionally `QUASNOOZE_UI_SCREENSHOT` to an output PNG. The script covers actual clock calls, disconnected native state, missing model, dialogs, four widths, and a **separate synthetic** text-injection response. Synthetic injection data is never used in the screenshot.
 
 ### Required Windows acceptance pass before calling this release-ready
 
@@ -118,7 +118,7 @@ For optional browser regression checks, install Playwright **as developer toolin
 - Verify mic off at launch/login; opt in, wake → listening → one request → pause/TTS → armed; verify mute releases the microphone and no recognition happens during work/speech.
 - Test missing recognizer, denied permission, device unplug/switch, noise/false activation, en-IN/en-US recognition and hotkey collision.
 - Confirm exact URL/clipboard consent, cancellation, 30-second expiry, sensitive tool approval, denied action, long description, disconnect and concurrent reminder.
-- Verify startup install/remove affects only the user's Pinch shortcut and starts muted after login; verify no process remains after tray Quit.
+- Verify startup install/remove affects only the user's Quasnooze shortcut and starts muted after login; verify no process remains after tray Quit.
 - Measure cold/warm Ollama completion and wake-to-listen / command-to-speech on named PC hardware. Do not reuse a clock-handler timing as an inference benchmark.
 
 

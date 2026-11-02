@@ -7,7 +7,7 @@
  * blast radius is a markdown file. It is deliberately not a general-purpose
  * code-writing agent, and the reason is not caution for its own sake:
  *
- *   Pinch runs shell commands on someone's laptop. A subtle change to
+ *   Quasnooze runs shell commands on someone's laptop. A subtle change to
  *   screenCommand() or resolveInWorkspace() does not produce a broken button,
  *   it produces a machine that can be wiped by a prompt injection. For that
  *   code, "the tests passed" is not the same claim as "a human read it".
@@ -49,7 +49,7 @@ const opt = (n, d) => {
  * The fence. A path is editable if it matches one of these, and every fixer
  * below must additionally declare which of them it writes.
  *
- * `bin/pinch.js` is here for one reason: its usage() block is a help string.
+ * `bin/quasnooze.js` is here for one reason: its usage() block is a help string.
  * The fixer that touches it edits inside that template literal only, and a test
  * asserts the switch itself is untouched.
  */
@@ -87,7 +87,7 @@ const undocumentedConfig = {
       PINCH_DATA: [
         "Where data lives",
         [
-          "Pinch keeps sessions, memory and reminders under this directory.",
+          "Quasnooze keeps sessions, memory and reminders under this directory.",
           "Point it at a synced or removable volume to carry your assistant",
           "between machines.",
         ],
@@ -408,7 +408,7 @@ async function main() {
     return;
   }
 
-  console.log(`\n🦞 manager — ${open.length} open proposal(s)\n`);
+  console.log(`\n✦ manager — ${open.length} open proposal(s)\n`);
   for (const r of reports) {
     const mark = r.verified ? "✓ fixed" : r.ok ? "→ planned" : "· left alone";
     console.log(`  ${mark.padEnd(12)} #${r.issue} ${String(r.title).slice(0, 56)}`);

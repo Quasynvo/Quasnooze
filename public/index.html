@@ -6,15 +6,15 @@
 <meta name="theme-color" content="#160a0c" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Pinch — a local-first personal AI assistant</title>
+<title>Quasnooze — a local-first personal AI assistant</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <style>
   :root{
     --bg:#160a0c; --bg2:#1e0f12; --panel:#241316; --line:#3a2024;
     --ink:#ffe9e0; --dim:#c9a196; --faint:#8d6a62;
-    --coral:#ff6a4d; --coral2:#ff8f6b; --teal:#4dd6c1; --gold:#ffc061;
-    --user:#3a1d1f; --ok:#4dd6c1; --bad:#ff6a4d;
+    --coral:#83f5ed; --coral2:#c2aaff; --teal:#4dd6c1; --gold:#ffc061;
+    --user:#3a1d1f; --ok:#4dd6c1; --bad:#83f5ed;
     --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
@@ -42,7 +42,7 @@
     background:linear-gradient(180deg,#1c0d10,#150a0c);border-right:1px solid var(--line);min-height:0;
   }
   .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1.15rem;letter-spacing:.2px}
-  .brand .lob{font-size:1.5rem;filter:drop-shadow(0 0 10px #ff6a4d55)}
+  .brand .lob{font-size:1.5rem;filter:drop-shadow(0 0 10px #83f5ed55)}
   .brand small{display:block;font-weight:500;font-size:.68rem;color:var(--faint);letter-spacing:.8px;text-transform:uppercase}
   .newbtn{
     display:flex;align-items:center;gap:8px;justify-content:center;
@@ -119,7 +119,7 @@
   /* ── composer ── */
   .composer{padding:10px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(22,10,12,.8);backdrop-filter:blur(10px)}
   .composer .inner{max-width:760px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
-  /* Chips show what Pinch understood, not just what was attached — a scan read
+  /* Chips show what Quasnooze understood, not just what was attached — a scan read
      as an empty PDF must look different from a PDF with text in it. */
   .attachbar{max-width:760px;margin:0 auto 8px;display:flex;flex-wrap:wrap;gap:6px}
   .chip{display:flex;align-items:center;gap:7px;max-width:100%;background:#200f12;border:1px solid var(--line);
@@ -141,7 +141,7 @@
   .iconbtn.send{background:linear-gradient(180deg,var(--coral),#dd4a2a);border-color:transparent;color:#2a100a}
   .iconbtn:active{transform:scale(.95)}
   .iconbtn.listening{background:#3a1518;border-color:var(--coral);color:var(--coral);animation:pulse 1.2s infinite}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #ff6a4d55}50%{box-shadow:0 0 0 10px #ff6a4d00}}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #83f5ed55}50%{box-shadow:0 0 0 10px #83f5ed00}}
   .hint{max-width:760px;margin:7px auto 0;font-size:.68rem;color:var(--faint);display:flex;gap:10px;flex-wrap:wrap}
   .hint kbd{background:#200f12;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:.65rem}
 
@@ -195,15 +195,19 @@
     box-shadow:0 16px 40px -18px #000;
   }
   .toast.on{display:block}
+
+.quasnooze-mark{border-radius:7px;vertical-align:middle}.send{color:#091b25}.quasnooze-link{color:#83f5ed;font-size:12px;margin:0 10px}
+@media(prefers-reduced-motion:no-preference){.typing i{animation-duration:1.3s}}
 </style>
 </head>
 <body>
+<a class="quasnooze-link" href="/cosmic.html">✧ Meet your cosmic companion →</a>
 <a href="/desktop.html" style="position:fixed;bottom:12px;right:18px;z-index:30;color:#ffb18c;font:12px system-ui">Open command deck ↗</a>
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <span class="lob"><svg class="pinch-mark" width="28" height="28" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><defs><linearGradient id="pinchMarkGrad" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0%" stop-color="#ff8f6b"/><stop offset="55%" stop-color="#ff6a4d"/><stop offset="100%" stop-color="#e0502f"/></linearGradient></defs><path d="M 15 92 L 16 87 L 17 82 L 18 76 L 19 71 L 19 66 L 20 62 L 21 58 L 22 54 L 23 50 L 25 47 L 26 44 L 27 42 L 29 41 L 30 41 L 30 41 L 31 41 L 31 41 L 32 42 L 34 43 L 36 45 L 38 47 L 42 50 L 53 37 L 49 34 L 45 31 L 41 29 L 37 28 L 33 28 L 29 28 L 25 30 L 22 32 L 20 35 L 19 38 L 18 41 L 17 44 L 16 48 L 15 52 L 15 56 L 14 61 L 14 66 L 14 71 L 13 76 L 13 81 L 12 86 L 12 92 L 14 91 L 14 91 L 13 91 L 13 91 L 12 91 L 12 91 L 12 92 L 12 92 L 12 93 L 12 93 L 12 93 L 13 94 Z" fill="url(#pinchMarkGrad)"/><path d="M 107 92 L 107 86 L 106 81 L 106 76 L 105 71 L 105 66 L 105 61 L 104 56 L 104 52 L 103 48 L 102 44 L 101 41 L 100 38 L 99 35 L 97 32 L 94 30 L 90 28 L 86 28 L 82 28 L 78 29 L 74 31 L 70 34 L 66 37 L 77 50 L 81 47 L 83 45 L 85 43 L 87 42 L 88 41 L 88 41 L 89 41 L 89 41 L 90 41 L 92 42 L 93 44 L 94 47 L 96 50 L 97 54 L 98 58 L 99 62 L 100 66 L 100 71 L 101 76 L 102 82 L 103 87 L 104 92 L 104 91 L 104 92 L 104 92 L 104 92 L 104 93 L 104 93 L 104 94 L 105 94 L 105 94 L 106 94 L 106 94 L 106 94 Z" fill="url(#pinchMarkGrad)"/></svg></span>
-      <span>Pinch<small id="ownerLine">local assistant</small></span>
+      <span class="lob"><img class="quasnooze-mark" src="/mark.svg" width="28" height="28" alt=""></span>
+      <span>Quasnooze<small id="ownerLine">local assistant</small></span>
     </div>
     <button class="newbtn" id="newChat">＋ New chat</button>
     <div class="sessions" id="sessions"></div>
@@ -218,7 +222,7 @@
     <header class="top">
       <button class="hbtn" id="burger" style="display:none">☰</button>
       <div>
-        <div class="title">Pinch</div>
+        <div class="title">Quasnooze</div>
         <div class="sub" id="brainLine">local · private · yours</div>
       </div>
       <div class="spacer"></div>
@@ -228,7 +232,7 @@
         <option value="ta-IN">தமிழ்</option>
         <option value="hi-IN">हिन्दी</option>
       </select>
-      <button class="hbtn" id="wakeToggle" title="Listen for &quot;Hey Pinch&quot; while this page is open">👂</button>
+      <button class="hbtn" id="wakeToggle" title="Listen for &quot;Hey Quasnooze&quot; while this page is open">👂</button>
       <button class="hbtn" id="speakToggle" title="Read replies aloud with an installed local voice" aria-pressed="false">🔈</button>
       <button class="hbtn" id="memBtn" title="Memory & status">🧠</button>
     </header>
@@ -243,8 +247,8 @@
         <button class="iconbtn" id="attach" title="Attach a file, photo or PDF">📎</button>
         <input type="file" id="filepicker" multiple hidden
                accept=".txt,.md,.csv,.json,.log,.yaml,.yml,.js,.ts,.py,.sh,.sql,.html,.css,.xml,.pdf,.docx,image/*">
-        <button class="iconbtn" id="mic" title="Talk to Pinch">🎙️</button>
-        <textarea id="input" rows="1" placeholder="Message Pinch…  (or hold the mic and just talk)"></textarea>
+        <button class="iconbtn" id="mic" title="Talk to Quasnooze">🎙️</button>
+        <textarea id="input" rows="1" placeholder="Message Quasnooze…  (or hold the mic and just talk)"></textarea>
         <button class="iconbtn send" id="send" title="Send">➤</button>
       </div>
       <div class="hint">
@@ -255,7 +259,7 @@
   </main>
 </div>
 
-<div class="wake-pill" id="wakePill"><i></i><span>listening for “Hey Pinch”…</span></div>
+<div class="wake-pill" id="wakePill"><i></i><span>listening for “Hey Quasnooze”…</span></div>
 <div class="toast" id="toast"></div>
 
 <div class="drawer" id="drawer">
@@ -271,17 +275,17 @@
     </form>
     <h4>Privacy</h4>
     <div class="warnbox">
-      Everything here is stored in <code>data/</code> on the machine running Pinch — conversations,
+      Everything here is stored in <code>data/</code> on the machine running Quasnooze — conversations,
       memory and tasks. No analytics, no cloud, no exceptions, unless you set an
       OpenAI-compatible provider in <code>.env</code>. <b>Deny</b> any permission prompt you are not
-      sure about; Pinch cannot touch files or run commands without it.
+      sure about; Quasnooze cannot touch files or run commands without it.
     </div>
   </div>
 </div>
 
 <script>
 // The brand mark, inlined once so every use costs no extra request.
-const PINCH_MARK = '<svg class=\"pinch-mark\" width=\"28\" height=\"28\" viewBox=\"0 0 120 120\" aria-hidden=\"true\" focusable=\"false\"><defs><linearGradient id=\"pinchMarkGrad\" x1=\"0.15\" y1=\"0\" x2=\"0.85\" y2=\"1\"><stop offset=\"0%\" stop-color=\"#ff8f6b\"/><stop offset=\"55%\" stop-color=\"#ff6a4d\"/><stop offset=\"100%\" stop-color=\"#e0502f\"/></linearGradient></defs><path d=\"M 15 92 L 16 87 L 17 82 L 18 76 L 19 71 L 19 66 L 20 62 L 21 58 L 22 54 L 23 50 L 25 47 L 26 44 L 27 42 L 29 41 L 30 41 L 30 41 L 31 41 L 31 41 L 32 42 L 34 43 L 36 45 L 38 47 L 42 50 L 53 37 L 49 34 L 45 31 L 41 29 L 37 28 L 33 28 L 29 28 L 25 30 L 22 32 L 20 35 L 19 38 L 18 41 L 17 44 L 16 48 L 15 52 L 15 56 L 14 61 L 14 66 L 14 71 L 13 76 L 13 81 L 12 86 L 12 92 L 14 91 L 14 91 L 13 91 L 13 91 L 12 91 L 12 91 L 12 92 L 12 92 L 12 93 L 12 93 L 12 93 L 13 94 Z\" fill=\"url(#pinchMarkGrad)\"/><path d=\"M 107 92 L 107 86 L 106 81 L 106 76 L 105 71 L 105 66 L 105 61 L 104 56 L 104 52 L 103 48 L 102 44 L 101 41 L 100 38 L 99 35 L 97 32 L 94 30 L 90 28 L 86 28 L 82 28 L 78 29 L 74 31 L 70 34 L 66 37 L 77 50 L 81 47 L 83 45 L 85 43 L 87 42 L 88 41 L 88 41 L 89 41 L 89 41 L 90 41 L 92 42 L 93 44 L 94 47 L 96 50 L 97 54 L 98 58 L 99 62 L 100 66 L 100 71 L 101 76 L 102 82 L 103 87 L 104 92 L 104 91 L 104 92 L 104 92 L 104 92 L 104 93 L 104 93 L 104 94 L 105 94 L 105 94 L 106 94 L 106 94 L 106 94 Z\" fill=\"url(#pinchMarkGrad)\"/></svg>';
+const QUASNOOZE_MARK = '<img src="/mark.svg" width="28" height="28" alt="">';
 </script>
 <script type="module">
 const $ = (id) => document.getElementById(id);
@@ -292,7 +296,7 @@ const store = {
 };
 if (store.key) localStorage.setItem("pinch.key", store.key);
 
-const headers = () => ({ "content-type": "application/json", ...(store.key ? { "x-pinch-key": store.key } : {}) });
+const headers = () => ({ "content-type": "application/json", ...(store.key ? { "x-quasnooze-key": store.key } : {}) });
 
 /* ── markdown-lite: bold, inline code, code fences, links (escaped first) ── */
 function md(src) {
@@ -323,7 +327,7 @@ function md(src) {
 function addMsg(role, text) {
   const el = document.createElement("div");
   el.className = `msg ${role}`;
-  el.innerHTML = `<div class="who">${role === "user" ? "🧑" : PINCH_MARK}</div><div class="bubble"></div>`;
+  el.innerHTML = `<div class="who">${role === "user" ? "🧑" : QUASNOOZE_MARK}</div><div class="bubble"></div>`;
   el.querySelector(".bubble").innerHTML = role === "user" ? md(text) : md(text);
   $("thread").appendChild(el);
   scrollDown();
@@ -340,7 +344,7 @@ function addSteps() {
 function addApproval(id, description, onAnswer) {
   const el = document.createElement("div");
   el.className = "approval";
-  el.innerHTML = `<div class="q"><svg class="pinch-mark" width="28" height="28" viewBox="0 0 120 120" aria-hidden="true" focusable="false"><defs><linearGradient id="pinchMarkGrad" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0%" stop-color="#ff8f6b"/><stop offset="55%" stop-color="#ff6a4d"/><stop offset="100%" stop-color="#e0502f"/></linearGradient></defs><path d="M 15 92 L 16 87 L 17 82 L 18 76 L 19 71 L 19 66 L 20 62 L 21 58 L 22 54 L 23 50 L 25 47 L 26 44 L 27 42 L 29 41 L 30 41 L 30 41 L 31 41 L 31 41 L 32 42 L 34 43 L 36 45 L 38 47 L 42 50 L 53 37 L 49 34 L 45 31 L 41 29 L 37 28 L 33 28 L 29 28 L 25 30 L 22 32 L 20 35 L 19 38 L 18 41 L 17 44 L 16 48 L 15 52 L 15 56 L 14 61 L 14 66 L 14 71 L 13 76 L 13 81 L 12 86 L 12 92 L 14 91 L 14 91 L 13 91 L 13 91 L 12 91 L 12 91 L 12 92 L 12 92 L 12 93 L 12 93 L 12 93 L 13 94 Z" fill="url(#pinchMarkGrad)"/><path d="M 107 92 L 107 86 L 106 81 L 106 76 L 105 71 L 105 66 L 105 61 L 104 56 L 104 52 L 103 48 L 102 44 L 101 41 L 100 38 L 99 35 L 97 32 L 94 30 L 90 28 L 86 28 L 82 28 L 78 29 L 74 31 L 70 34 L 66 37 L 77 50 L 81 47 L 83 45 L 85 43 L 87 42 L 88 41 L 88 41 L 89 41 L 89 41 L 90 41 L 92 42 L 93 44 L 94 47 L 96 50 L 97 54 L 98 58 L 99 62 L 100 66 L 100 71 L 101 76 L 102 82 L 103 87 L 104 92 L 104 91 L 104 92 L 104 92 L 104 92 L 104 93 L 104 93 L 104 94 L 105 94 L 105 94 L 106 94 L 106 94 L 106 94 Z" fill="url(#pinchMarkGrad)"/></svg> Claws want to <code>${description.replace(/</g,"&lt;")}</code>. Allow?</div>
+  el.innerHTML = `<div class="q"><img class="quasnooze-mark" src="/mark.svg" width="28" height="28" alt=""> Quasnooze want to <code>${description.replace(/</g,"&lt;")}</code>. Allow?</div>
     <div class="row"><button class="allow">Allow</button><button class="deny">Deny</button></div>`;
   el.querySelector(".allow").onclick = () => { onAnswer(true); el.remove(); };
   el.querySelector(".deny").onclick = () => { onAnswer(false); el.remove(); };
@@ -410,12 +414,12 @@ $("mic").onclick = () => {
   try { recognition.start(); } catch {}
 };
 
-/* ── "Hey Pinch" wake word: opt-in, page must stay open ───────────────────
+/* ── "Hey Quasnooze" wake word: opt-in, page must stay open ───────────────────
    Runs the browser's own recogniser in continuous mode and matches the
    trigger phrase in transcripts. Browser speech may send audio to its vendor
    even before a command; use the Windows companion for local recognition. Deliberately not always-on audio:
    it only exists while this tab is open and the toggle is on.            */
-const WAKE_RE = /^\s*(?:hey\s+|ok\s+|oi\s+)?pinch\b[\s,.]*/i;
+const WAKE_RE = /^\s*(?:hey\s+|ok\s+|oi\s+)?quasnooze\b[\s,.]*/i;
 
 function ensureWake() {
   if (!SR) return null;
@@ -468,7 +472,7 @@ function setWake(on) {
 
 $("wakeToggle").onclick = () => {
   const next = !wakeMode;
-  if (next && !confirm("Listen for \"Hey Pinch\" while this page is open?\n\nThe microphone stays active in this tab only, and the browser's own recogniser does the matching on your device. Deny if you are on a shared machine.")) return;
+  if (next && !confirm("Listen for \"Hey Quasnooze\" while this page is open?\n\nThe microphone stays active in this tab only, and the browser's own recogniser does the matching on your device. Deny if you are on a shared machine.")) return;
   setWake(next);
 };
 if (wakeMode) setWake(true);
@@ -668,7 +672,7 @@ $("speakToggle").onclick = () => {
   localStorage.setItem("pinch.speak", store.speak ? "1" : "0");
   const s = speechOut.setEnabled(store.speak);
   if (store.speak && s.reason === "no-local-voice") {
-    toast("No installed local voice. Pinch will not use a network voice; install an OS speech voice or use the Windows companion.", 7000);
+    toast("No installed local voice. Quasnooze will not use a network voice; install an OS speech voice or use the Windows companion.", 7000);
   }
 };
 
@@ -719,7 +723,7 @@ async function attachFiles(files) {
       // endpoint that accepts a file.
       const res = await fetch("/api/attach", {
         method: "POST",
-        headers: { ...headers(), "x-filename": file.name, "x-pinch-session": store.sessionId },
+        headers: { ...headers(), "x-filename": file.name, "x-quasnooze-session": store.sessionId },
         body: file,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -751,7 +755,7 @@ async function send() {
   const steps = addSteps();
   const thinking = document.createElement("div");
   thinking.className = "step";
-  thinking.innerHTML = `<span class="pinch-mark-slot">${PINCH_MARK}</span><b>thinking</b><span class="typing"><i></i><i></i><i></i></span>`;
+  thinking.innerHTML = `<span class="pinch-mark-slot">${QUASNOOZE_MARK}</span><b>thinking</b><span class="typing"><i></i><i></i><i></i></span>`;
   steps.appendChild(thinking);
 
   // Live bubble: text appears as the model generates it.
@@ -889,7 +893,7 @@ async function send() {
     if (answer) speechOut.speak(answer, { replace: true });
   } catch (err) {
     thinking.remove();
-    addMsg("assistant", `⚠️ Could not reach Pinch's server: ${err.message}`);
+    addMsg("assistant", `⚠️ Could not reach Quasnooze's server: ${err.message}`);
   } finally {
     busy = false;
     $("send").textContent = "➤";
@@ -963,7 +967,7 @@ $("newChat").onclick = () => {
   store.sessionId = `web-${Date.now().toString(36)}`;
   localStorage.setItem("pinch.session", store.sessionId);
   $("thread").innerHTML = "";
-  addMsg("assistant", "Fresh session, same claws. What are we building?");
+  addMsg("assistant", "Fresh session, same orbit. What are we building?");
   loadSessions();
   if (window.innerWidth <= 820) $("sidebar").classList.remove("open");
 };
@@ -1001,7 +1005,7 @@ async function loadMemory() {
     const box = $("facts");
     box.innerHTML = "";
     const facts = (memory.facts || []).slice().reverse();
-    if (!facts.length) box.innerHTML = `<div style="color:var(--faint);font-size:.8rem">Nothing yet. Tell Pinch what matters.</div>`;
+    if (!facts.length) box.innerHTML = `<div style="color:var(--faint);font-size:.8rem">Nothing yet. Tell Quasnooze what matters.</div>`;
     for (const f of facts) {
       const el = document.createElement("div");
       el.className = "fact";
@@ -1041,7 +1045,7 @@ if (window.innerWidth <= 820) $("burger").style.display = "grid";
   connectEvents();
   if (!$("thread").children.length) {
     addMsg("assistant",
-      "**Pinch here.**\n\nI run on this machine, not in someone's cloud. I can read and write code, run commands (with your permission), search the web, and remember what matters to you.\n\nTry: *\"scan my projects folder and tell me what to work on\"* — or just tap the mic and talk.");
+      "**Quasnooze here.**\n\nI run on this machine, not in someone's cloud. I can read and write code, run commands (with your permission), search the web, and remember what matters to you.\n\nTry: *\"scan my projects folder and tell me what to work on\"* — or just tap the mic and talk.");
   }
   setInterval(health, 20000);
 })();

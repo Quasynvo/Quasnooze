@@ -1,9 +1,9 @@
 # Security & robustness audit
 
-**Subject:** Pinch v1.0 — commit `5242ea2`
+**Subject:** Quasnooze v1.0 — commit `5242ea2`
 **Date:** 30 October 2026
 **Method:** black-box probing of a running instance, then white-box reading of the code paths the probes implicated
-**Environment:** Linux (x86-64 sandbox), Node.js v20.20.2, `LLM_PROVIDER=mock`, zero runtime dependencies, no reverse proxy, `PINCH_KEY` deliberately left empty so the HTTP surface could be reached without a credential
+**Environment:** Linux (x86-64 sandbox), Node.js v20.20.2, `LLM_PROVIDER=mock`, zero runtime dependencies, no reverse proxy, `QUASNOOZE_KEY` deliberately left empty so the HTTP surface could be reached without a credential
 
 ---
 
@@ -30,7 +30,7 @@ those 91 tests fail against `5242ea2`.**
 | # | Finding | Severity | Status |
 |---|---------|----------|--------|
 | 1 | Sandbox escape: symlink in the workspace read `/etc/passwd` | **Critical** | Fixed + tested |
-| 2 | Every shell command inherited `PINCH_KEY`, `TELEGRAM_TOKEN`, `OPENAI_API_KEY` | **Critical** | Fixed + tested |
+| 2 | Every shell command inherited `QUASNOOZE_KEY`, `TELEGRAM_TOKEN`, `OPENAI_API_KEY` | **Critical** | Fixed + tested |
 | 3 | Any website could drive the assistant and read replies back (CSRF, no Origin check) | **High** | Fixed + tested |
 | 4 | DNS rebinding: `Host: attacker.example` reached the API | **High** | Fixed + tested |
 | 5 | Panel markdown renderer allowed attribute injection → XSS from model output | **High** | Fixed + tested |
@@ -143,7 +143,7 @@ runShell('env | grep -E "TOKEN|KEY|SECRET"')
 **What came back**
 
 ```
-PINCH_KEY=...
+QUASNOOZE_KEY=...
 TELEGRAM_TOKEN=...
 OPENAI_API_KEY=...
 ```
@@ -166,16 +166,16 @@ makes commands work survives. When a build genuinely needs a credential, it can 
 re-admitted by name:
 
 ```bash
-PINCH_ENV_PASSTHROUGH=NPM_TOKEN,GITHUB_TOKEN
+QUASNOOZE_ENV_PASSTHROUGH=NPM_TOKEN,GITHUB_TOKEN
 ```
 
 Opt-in and named, rather than all-or-nothing and silent.
 
 **Guarded by** — *childEnv strips credential-shaped variables*, *a shell command cannot read
-the assistant's secrets*, *PINCH_ENV_PASSTHROUGH re-admits a named variable*.
+the assistant's secrets*, *QUASNOOZE_ENV_PASSTHROUGH re-admits a named variable*.
 
 **Residual risk** — the filter is name-based. A secret stashed in a variable called
-`CONFIG_BLOB` is still passed. That is why Pinch's own config lives in `.env` (read by the
+`CONFIG_BLOB` is still passed. That is why Quasnooze's own config lives in `.env` (read by the
 parent, never exported to children) and why the docs pair this with "don't park secrets in
 the assistant's environment".
 
@@ -207,7 +207,7 @@ hand the response body to the calling page.
 
 Two failure modes stacked. Without an `Origin` check, a malicious page can fire
 `fetch('http://127.0.0.1:7777/api/chat', {mode:'no-cors', ...})` at the loopback interface
-of anyone running Pinch — the browser will deliver it. With the reflected ACAO, it becomes a
+of anyone running Quasnooze — the browser will deliver it. With the reflected ACAO, it becomes a
 *readable* cross-origin request, so the attacker sees the reply: files, memory, whatever the
 assistant says. Worse, if a dangerous action is pending, the same page can answer
 `{"text":"yes"}` and the approval gate is bypassed by the attacker, not the owner.
@@ -220,7 +220,7 @@ browser; that is precisely what CSRF is.
 An `originAllowed()` check runs before routing:
 
 - a browser-supplied `Origin` must resolve to a name in the allowlist (`localhost`,
-  `127.0.0.1`, `[::1]`, every LAN address Pinch advertises, plus `PINCH_ALLOWED_HOSTS`);
+  `127.0.0.1`, `[::1]`, every LAN address Quasnooze advertises, plus `QUASNOOZE_ALLOWED_HOSTS`);
 - the opaque `null` origin is refused;
 - requests with **no** `Origin` still work — `curl`, the CLI and native clients don't send
   one, and refusing them would be security theatre that breaks tooling;
@@ -255,16 +255,16 @@ sends `Origin: http://attacker.example` — which the naive fix above would also
 **What changed** — `src/server.js`
 
 `Host` is validated against the same allowlist, before anything else runs. Wildcards are
-supported for proxies and tunnels — `PINCH_ALLOWED_HOSTS='*.trycloudflare.com'` — and the
+supported for proxies and tunnels — `QUASNOOZE_ALLOWED_HOSTS='*.trycloudflare.com'` — and the
 matcher refuses `evil.com.attacker.net` style suffixes, which a naive `endsWith` would let
 through. Also: the request URL is now parsed against a constant base, so a forged `Host` can
-never influence how Pinch interprets its own path.
+never influence how Quasnooze interprets its own path.
 
 **Guarded by** — *a Host header that is not this machine is refused*, *a DNS-rebinding
 attempt is refused even with a matching Origin*, *loopback and LAN names are still accepted*.
 
 **Note on deployment** — this is exactly what caught the sandbox preview during this audit:
-the preview proxy's hostname was refused until it was added to `PINCH_ALLOWED_HOSTS`. That
+the preview proxy's hostname was refused until it was added to `QUASNOOZE_ALLOWED_HOSTS`. That
 is the feature working. The refusal message names the variable to change.
 
 ---
@@ -364,14 +364,14 @@ malware. These are not exotic.
 **Why it is only Medium** — because it is a denylist, and denylists are structurally
 incomplete. Obscuring a path (`rm -rf $(echo L2hvbWU=|base64 -d)`) will always get past a
 regex. The fix is therefore honest about layers: **the screen is a smoke alarm, the approval
-gate is the fire door, and the env scrub is the safe.** Pinch does not claim the screen is a
+gate is the fire door, and the env scrub is the safe.** Quasnooze does not claim the screen is a
 sandbox.
 
 **Guarded by** — 15 *screen blocks* tests and 9 *screen allows routine work* tests, which
 exist so a future "tightening" cannot silently break `rm -rf node_modules`.
 
 **Residual risk** — an obfuscated command still reaches the human for approval. That is the
-designed last line of defence, and it depends on the human reading the command. Pinch does
+designed last line of defence, and it depends on the human reading the command. Quasnooze does
 not pretend otherwise; the panel shows the exact command, with no truncation, and flags
 paths outside the workspace.
 
@@ -493,7 +493,7 @@ finding 1.
 ## How to reproduce this audit
 
 ```bash
-git clone https://github.com/pinchfoundry/Pinch && cd Pinch
+git clone https://github.com/Quasynvo/Quasnooze && cd Quasnooze
 npm install --omit=dev         # zero dependencies; this just writes nothing
 
 # the whole suite, including every regression test above
@@ -525,25 +525,25 @@ Honesty is the feature. These are known, accepted, and documented rather than hi
 
 | Risk | Why it remains | Mitigation |
 |---|---|---|
-| The command screen is a denylist | Obfuscation always wins against pattern matching | Approval gate shows the exact command; outside-workspace paths are flagged; `PINCH_AUTO_APPROVE` is off by default |
+| The command screen is a denylist | Obfuscation always wins against pattern matching | Approval gate shows the exact command; outside-workspace paths are flagged; `QUASNOOZE_AUTO_APPROVE` is off by default |
 | Approval depends on a human reading | Social engineering, approval fatigue | The prompt shows the full command, never truncated; dangerous tools are a fixed list of 4 |
 | No OS-level sandbox | No containers, no seccomp, no chroot — zero-dependency by design | Documented plainly; "run it as a user you wouldn't mind losing" is the advice, and it is in `docs/SECURITY.md` |
 | TOCTOU between `realpath` and `open` | Node exposes no `O_NOFOLLOW`-portable open | Requires concurrent local code execution, which already implies compromise |
 | Prompt injection through tool output | Anything the model reads can steer it | Guard audits replies for unbacked claims; dangerous tools still need approval; the env scrub limits what a command can reach |
 | Prompt injection through an **attachment** | A document is untrusted text by definition. An attached PDF or a screenshot can contain instructions, and closing that completely would require not reading documents | Text is wrapped in `<untrusted-document>` and the model is told to quote embedded instructions back rather than act on them. Nothing in an attachment can run anything: the extractor never shells out, never writes to disk, and the approval gate still stands between the model and every dangerous tool. Tested in `test/attachments.test.js`, not proven |
 | Shell commands can still read world-readable system files | Confinement is by workspace *path*, not by privilege | Paths outside the workspace are surfaced in the approval prompt |
-| `PINCH_ENV_PASSTHROUGH` re-admits chosen secrets | Needed for real builds | Explicit, per-name opt-in |
-| No TLS in the built-in server | A local-first tool should not ship certificate management | Put it behind a proxy if you expose it; `PINCH_ALLOWED_HOSTS` covers the hostname, not the transport |
+| `QUASNOOZE_ENV_PASSTHROUGH` re-admits chosen secrets | Needed for real builds | Explicit, per-name opt-in |
+| No TLS in the built-in server | A local-first tool should not ship certificate management | Put it behind a proxy if you expose it; `QUASNOOZE_ALLOWED_HOSTS` covers the hostname, not the transport |
 | WhatsApp channel (unofficial) | Not the official API | Off by default; ToS and ban risk documented in `docs/CHANNELS.md` |
 | Relative `cd ../../..` is not flagged by `describeEscapes` | It cannot be resolved lexically at all | The command itself is shown to the human at the approval prompt |
 | The shell screen is a denylist | An infinite space of shell syntax | Documented; the approval gate is the control, and it now shows argument values |
 | `grep` costs up to 3 s before it is killed | A worker thread per call | Bounded, and the message explains it |
 | An MCP server is arbitrary code with your user's permissions | That is what MCP is | Off by default, named in `.env`, every tool gated behind the approval prompt unless you explicitly trust the server; its output is labelled untrusted |
-| An MCP server is spawned with a scrubbed environment | Third-party code should not see your keys | `PINCH_ENV_PASSTHROUGH` re-adds a specific name if a server genuinely needs one |
-| An approval prompt can still be answered by anyone who can reach the panel | Single-user product; the key gates the panel | Keep `PINCH_KEY` set on anything but loopback |
+| An MCP server is spawned with a scrubbed environment | Third-party code should not see your keys | `QUASNOOZE_ENV_PASSTHROUGH` re-adds a specific name if a server genuinely needs one |
+| An approval prompt can still be answered by anyone who can reach the panel | Single-user product; the key gates the panel | Keep `QUASNOOZE_KEY` set on anything but loopback |
 | Telemetry records timings and counts, not message text | Deliberate: a log of every question is a second copy of your conversations | `data/telemetry.ndjson` is plain text; delete it any time |
 | A scheduled run acts with nobody watching | A timer is not a person; the approval prompt has no reader at 3am | Unattended turns **refuse** every dangerous tool before the approval gate, and cannot create further schedules. See *Scheduled runs: the risk is the missing human* |
-| A schedule reads untrusted text unattended | Reading documents is what makes the feature useful | With every machine-changing tool refused, injected instructions have nothing to reach; `PINCH_SCHEDULED_RUNS=0` is a one-variable kill switch |
+| A schedule reads untrusted text unattended | Reading documents is what makes the feature useful | With every machine-changing tool refused, injected instructions have nothing to reach; `QUASNOOZE_SCHEDULED_RUNS=0` is a one-variable kill switch |
 | A citation can name a real source that does not support the sentence | Checking that `[2]` names something the turn fetched is syntactic; checking that source 2 *says* it is a semantic judgement no cheap check makes | The registry stops invented numbers, and the footer lists only what the reply cited, so a reader can open the source and see for themselves. The reply is evidence-backed, not evidence-verified — `docs/GUIDE.md` says this in the user's words |
 
 ---
@@ -621,7 +621,7 @@ this bug — `router.js` returns.
 
 ### 15. Credential stores were inside the default sandbox — High
 
-`PINCH_WORKSPACE` defaults to `$HOME`, so "inside the workspace" included `~/.ssh`,
+`QUASNOOZE_WORKSPACE` defaults to `$HOME`, so "inside the workspace" included `~/.ssh`,
 `~/.aws`, `~/.gnupg`. The agent had no business reading them; the one time it would is the
 time it has been talked into it by a page, a tool output or a document.
 
@@ -684,7 +684,7 @@ user had attached something, which is when instructions matter most.
 
 `src/budget.js` now reserves room for the reply, never drops the system
 message, drops whole old messages instead, and records that it did so in the
-transcript. `PINCH_NUM_CTX` / `PINCH_NUM_PREDICT` make the numbers the user's
+transcript. `QUASNOOZE_NUM_CTX` / `QUASNOOZE_NUM_PREDICT` make the numbers the user's
 choice rather than the code's assumption.
 
 ---
@@ -694,16 +694,16 @@ choice rather than the code's assumption.
 `src/mcp.js` spawns a process and lets it offer tools to the model. That is a
 new attack surface, added deliberately, so here is what holds it:
 
-- **Off by default.** Nothing runs unless `PINCH_MCP` names a server. There is
+- **Off by default.** Nothing runs unless `QUASNOOZE_MCP` names a server. There is
   no registry download, no default server, no "just works" that quietly starts
   code you did not ask for.
-- **Dangerous by default.** `toPinchTool()` sets `dangerous: !trusted`, so every
+- **Dangerous by default.** `toQuasnoozeTool()` sets `dangerous: !trusted`, so every
   call to a third-party tool stops at the in-chat approval prompt — the same
   gate as `shell`. Trust is opt-in per server name, in your own `.env`.
 - **Namespaced.** `mcp__<server>__<tool>`, and `registerTool()` refuses to
   overwrite an existing name, so a server cannot ship a `shell` tool and
   intercept calls meant for ours.
-- **Scrubbed.** Servers inherit `childEnv()` — no `PINCH_KEY`, no API keys —
+- **Scrubbed.** Servers inherit `childEnv()` — no `QUASNOOZE_KEY`, no API keys —
   which is tested by asking a server to report what it can see.
 - **Bounded.** Every request has a deadline; a server that hangs times out, a
   server that dies mid-call rejects instead of hanging, and a server that fails
@@ -741,9 +741,9 @@ scheduled run should be allowed to do with nobody present*. The answer taken her
 
 | Risk | Why it remains | Mitigation |
 |---|---|---|
-| A scheduled run reads whatever the model asks it to read | Reading is not gated, by design — that is what makes the feature useful | It cannot write, execute, screenshot or control the desktop; the transcript shows every tool call; `PINCH_WORKSPACE` still confines paths |
+| A scheduled run reads whatever the model asks it to read | Reading is not gated, by design — that is what makes the feature useful | It cannot write, execute, screenshot or control the desktop; the transcript shows every tool call; `QUASNOOZE_WORKSPACE` still confines paths |
 | Prompt injection lands in a document a schedule reads unattended | Unattended reading of untrusted text is the feature | The injected instructions have nothing dangerous to reach: every machine-changing tool is refused, and a schedule cannot create schedules |
-| A schedule fires during an incident and makes it noisier | Timers do not know about incidents | `PINCH_SCHEDULED_RUNS=0` stops all scheduled runs immediately (reminders keep working); `schedule { action: "remove" }` or deleting `data/schedules.json` also works |
+| A schedule fires during an incident and makes it noisier | Timers do not know about incidents | `QUASNOOZE_SCHEDULED_RUNS=0` stops all scheduled runs immediately (reminders keep working); `schedule { action: "remove" }` or deleting `data/schedules.json` also works |
 | Twenty schedules × N rounds each is real local compute | No per-schedule cost cap beyond the context budget | `MAX_SCHEDULES = 20`, a **5-minute floor** on intervals, and one run per slot — never a catch-up burst after the machine wakes |
 | A cadence the user cannot predict | Cron syntax is a support burden disguised as a feature | Only three shapes parse: `every N m/h/d`, `daily at H[:MM]`, `weekly on <dow> at H[:MM]`; anything else is rejected with the accepted list |
 | A run duplicated across a clock change or a restart | Same class of bug as finding #16 | `nextRun` is always strictly after *now*; daily/weekly resolve in the owner's timezone via `Intl`; `markRun` is written **after** delivery succeeds, inside the same `inFlight` guard as reminders |
@@ -765,7 +765,7 @@ right". They are only visible when you run the thing and attack it — which is 
 `test/audit.test.js` and `test/http-surface.test.js` now exist, and why they are written
 from the attacker's side of the fence.
 
-The other lesson is about how a project talks about itself. Pinch's README said "approval
+The other lesson is about how a project talks about itself. Quasnooze's README said "approval
 gate, workspace sandbox, honest guard". All three were real. The sandbox still had a hole,
 and the right response to finding it is this document — not a quiet patch, and not a
 deleted paragraph in the README.
@@ -788,10 +788,10 @@ checks and reads, or make the best-effort parsers a complete document sandbox.
 
 ### Opt-in local JavaScript tools
 
-`PINCH_TOOLS_DIR` imports owner-reviewed Node.js modules before server/desktop or
+`QUASNOOZE_TOOLS_DIR` imports owner-reviewed Node.js modules before server/desktop or
 terminal CLI turns. Module initialization is executable code **outside** the
 per-call approval gate; it is not sandboxed, isolated, or forcibly timed out.
-Only configure a directory you control outside every `PINCH_WORKSPACE` root.
+Only configure a directory you control outside every `QUASNOOZE_WORKSPACE` root.
 Workspace directories (including dot-prefixed paths) and symlink module entries
 are refused so the assistant cannot normally plant a plugin via its file tools
 for execution at the next restart. Concurrent changes by other local processes

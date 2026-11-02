@@ -1,5 +1,5 @@
 /**
- * agent.js — the loop that makes Pinch an agent instead of a chat toy.
+ * agent.js — the loop that makes Quasnooze an agent instead of a chat toy.
  *
  *   user message → model → (tool call → permission? → run → observe) → … → answer
  *
@@ -204,7 +204,7 @@ export async function runAgent({
   // Do not prime a recovered model to keep claiming it is offline.
   const recent = session.messages.filter((m) =>
     (m.role === "user" || m.role === "assistant") &&
-    !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^🦞 My brain is unreachable/.test(m.content)))
+    !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^✦ My brain is unreachable/.test(m.content)))
   ).slice(social ? -6 : -24);
   // Only the last attachment-bearing message keeps its excerpt; older ones keep
   // the one-line "you attached X" note, which is enough to answer follow-ups
@@ -292,7 +292,7 @@ export async function runAgent({
     } catch (err) {
       brainFailed = true;
       finalText =
-        `🦞 My brain is unreachable: ${err.message}\n\n` +
+        `✦ My brain is unreachable: ${err.message}\n\n` +
         `Check ${activeModel.provider} / ${activeModel.model}; for Ollama use \`ollama serve\` and pull the selected model.`;
       break;
     }
@@ -440,7 +440,7 @@ export async function runAgent({
 
   if (!finalText) {
     finalText =
-      "🦞 I hit my tool limit for one turn (8 rounds) without landing an answer. " +
+      "✦ I hit my tool limit for one turn (8 rounds) without landing an answer. " +
       "Ask me to continue and I'll pick up from here.";
   }
 

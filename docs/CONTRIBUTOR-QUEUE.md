@@ -88,13 +88,13 @@ This is a publication snapshot, not a live completion claim; issue state is auth
 
 | Issue | Task type | Scope |
 |---|---|---|
-| [#85](https://github.com/pinchfoundry/Pinch/issues/85) | Feature/evidence | Readiness and latency baseline |
-| [#86](https://github.com/pinchfoundry/Pinch/issues/86) | Reliability improvement | Muted resident recovery |
-| [#87](https://github.com/pinchfoundry/Pinch/issues/87) | Portability improvement | Durable user state/migration |
-| [#89](https://github.com/pinchfoundry/Pinch/issues/89) | Reproduced bug | Growth state normalization and its own proposal cap |
-| [#90](https://github.com/pinchfoundry/Pinch/issues/90) | Feature proposal | Structured approval previews |
-| [#91](https://github.com/pinchfoundry/Pinch/issues/91) | Feature proposal | Read-only retention preview |
-| [#92](https://github.com/pinchfoundry/Pinch/issues/92) | Evaluation | Labelled retrieval-quality corpus |
-| [#93](https://github.com/pinchfoundry/Pinch/issues/93) | Feature proposal | Allowlisted local support bundle |
-| [#94](https://github.com/pinchfoundry/Pinch/issues/94) | Evaluation | Desktop accessibility acceptance |
-| [#95](https://github.com/pinchfoundry/Pinch/issues/95) | Feature proposal | Static tool/trust inventory |
+| [#85](https://github.com/Quasynvo/Quasnooze/issues/85) | Feature/evidence | Readiness and latency baseline |
+| [#86](https://github.com/Quasynvo/Quasnooze/issues/86) | Reliability improvement | Muted resident recovery |
+| [#87](https://github.com/Quasynvo/Quasnooze/issues/87) | Portability improvement | Durable user state/migration |
+| [#89](https://github.com/Quasynvo/Quasnooze/issues/89) | Reproduced bug | Growth state normalization and its own proposal cap |
+| [#90](https://github.com/Quasynvo/Quasnooze/issues/90) | Feature proposal | Structured approval previews |
+| [#91](https://github.com/Quasynvo/Quasnooze/issues/91) | Feature proposal | Read-only retention preview |
+| [#92](https://github.com/Quasynvo/Quasnooze/issues/92) | Evaluation | Labelled retrieval-quality corpus |
+| [#93](https://github.com/Quasynvo/Quasnooze/issues/93) | Feature proposal | Allowlisted local support bundle |
+| [#94](https://github.com/Quasynvo/Quasnooze/issues/94) | Evaluation | Desktop accessibility acceptance |
+| [#95](https://github.com/Quasynvo/Quasnooze/issues/95) | Feature proposal | Static tool/trust inventory |

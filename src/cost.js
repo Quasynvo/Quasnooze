@@ -4,7 +4,7 @@
  * Two reasons this is here and not in a dashboard:
  *
  *   1. The honest one. A local model costs nothing to run, and "free" is a
- *      feature. But the moment someone points Pinch at a paid provider, the
+ *      feature. But the moment someone points Quasnooze at a paid provider, the
  *      absence of a number is the problem — you cannot decide to stop spending
  *      money you are not measuring.
  *   2. The measurement problem. A price table is a fact with an expiry date.
@@ -160,7 +160,7 @@ export function costSummary({ days = 30, now = new Date() } = {}) {
 
 const usd = (n) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
 
-/** The text `pinch cost` prints. */
+/** The text `quasnooze cost` prints. */
 export function costReport({ days = 30, json = false } = {}) {
   const s = costSummary({ days });
   if (json) return JSON.stringify(s, null, 2);

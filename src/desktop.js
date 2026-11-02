@@ -122,7 +122,7 @@ export class DesktopRuntime {
           if (!when || when.at.getTime() <= Date.now()) { reply = "Please use a future time, for example: remind me in 20 minutes to stretch."; break; }
           if (!this.bridge) throw new Error("Start the Windows companion so this reminder can be delivered there.");
           addReminder({ id: `r_${randomUUID()}`, text: intent.text.slice(0, 300), at: when.at.toISOString(), address: "desktop:resident", channel: "desktop", sessionId: SESSION, fired: false, createdAt: new Date().toISOString() });
-          reply = `Reminder set for ${formatClock(when.at, config.timezone)}: ${intent.text}. Pinch must be running to deliver it.`; break;
+          reply = `Reminder set for ${formatClock(when.at, config.timezone)}: ${intent.text}. Quasnooze must be running to deliver it.`; break;
         }
         default: {
           if (!this.bridge) throw new Error("Start npm run desktop on Windows for resident model requests. Conversation history remains available in the web panel.");

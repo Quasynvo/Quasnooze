@@ -1,10 +1,10 @@
 import { desktop } from "./desktop.js";
 import { AUDIO_MAX_BYTES, AUDIO_TYPES, transcribeAudio } from "./voice.js";
 /**
- * server.js — Pinch's local HTTP surface: web panel, REST API, SSE stream.
+ * server.js — Quasnooze's local HTTP surface: web panel, REST API, SSE stream.
  *
- * Binds to 0.0.0.0 so your phone can reach it over Wi-Fi. If PINCH_KEY is
- * set, every request must present it (?key=, x-pinch-key header, or the
+ * Binds according to config (keyless default is loopback). If QUASNOOZE_KEY is
+ * set, every request must present it (?key=, x-quasnooze-key header (legacy x-pinch-key accepted), or the
  * cookie the panel sets after one successful load).
  */
 import { createServer } from "node:http";
@@ -81,7 +81,7 @@ function methodOf(value) {
 /** What a client is allowed to be told, by status code. */
 const STATUS_TEXT = {
   400: "bad request — check the body and the URL encoding",
-  401: "bad or missing PINCH_KEY",
+  401: "bad or missing QUASNOOZE_KEY",
   403: "refused",
   404: "not found",
   405: "method not allowed",
@@ -181,7 +181,7 @@ function hostnameOf(value) {
 
 function originAllowed(req, names) {
   const hostHeader = hostnameOf(req.headers.host);
-  if (hostHeader && !matchesAny(hostHeader, names)) return { ok: false, why: `host "${hostHeader}" is not one Pinch answers on` };
+  if (hostHeader && !matchesAny(hostHeader, names)) return { ok: false, why: `host "${hostHeader}" is not one Quasnooze answers on` };
 
   const origin = req.headers.origin;
   if (!origin) return { ok: true };
@@ -210,7 +210,7 @@ function originAllowed(req, names) {
  */
 function authorised(req, url) {
   if (!config.authKey) return true;
-  const header = req.headers["x-pinch-key"];
+  const header = req.headers["x-quasnooze-key"] ?? req.headers["x-pinch-key"];
   const query = url.searchParams.get("key");
   if ([header, query].includes(config.authKey)) return true;
 
@@ -367,7 +367,7 @@ async function handleApi(req, res, url) {
     if (!AUDIO_TYPES.has(mime)) return json(res, 415, { error: "Unsupported audio MIME type; use WebM, Ogg, WAV, MP3, MP4 or FLAC." });
     const raw = await readRaw(req, AUDIO_MAX_BYTES);
     if (!raw.length) throw new HTTPError(400, "Audio upload is empty; record a clip first.");
-    if (!config.whisperUrl) return json(res, 502, { error: "WHISPER_URL is not configured; set it to an OpenAI-compatible transcription endpoint and restart Pinch." });
+    if (!config.whisperUrl) return json(res, 502, { error: "WHISPER_URL is not configured; set it to an OpenAI-compatible transcription endpoint and restart Quasnooze." });
     try {
       const text = await transcribeAudio(raw, mime, config.whisperUrl);
       return json(res, 200, { text });
@@ -387,7 +387,7 @@ async function handleApi(req, res, url) {
     const name = String(req.headers["x-filename"] || "attachment").slice(0, 200);
     // The queue is keyed by the session the file belongs to, so two people on
     // the same Wi-Fi cannot consume or evict each other's pending uploads.
-    const owner = String(req.headers["x-pinch-session"] || url.searchParams.get("session") || "web-main")
+    const owner = String(req.headers["x-quasnooze-session"] || req.headers["x-pinch-session"] || url.searchParams.get("session") || "web-main")
       .replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     const record = extract(raw, name);
     const id = putAttachment(record, owner);
@@ -425,7 +425,7 @@ async function handleApi(req, res, url) {
       const no = /^(no|n|deny|stop|cancel)$/i.test(text);
       if (yes || no) {
         answerApprovalFor({ sessionId, channel: "web" }, yes);
-        stream.send("final", { text: yes ? "🦞 Allowed. On it." : "🦞 Denied — I'll leave that alone.", trace: [], sessionId });
+        stream.send("final", { text: yes ? "✦ Allowed. On it." : "✦ Denied — I'll leave that alone.", trace: [], sessionId });
         return stream.close();
       }
     }
@@ -460,7 +460,7 @@ async function handleApi(req, res, url) {
       // The client gets a stable sentence; the detail goes to the server log.
       // An internal error message is a map of the internals, and this stream is
       // reachable from any device on the LAN.
-      console.error("[pinch] chat failed:", err);
+      console.error("[quasnooze] chat failed:", err);
       stream.send("error", { message: "the agent hit an internal error — see the server log" });
     }
     return stream.close();
@@ -528,7 +528,7 @@ async function handleApi(req, res, url) {
   return json(res, 404, { error: "unknown endpoint" });
 }
 
-export function createPinchServer() {
+export function createQuasnoozeServer() {
   ensureData();
   return createServer(async (req, res) => {
     try {
@@ -548,7 +548,7 @@ export function createPinchServer() {
       // newline into the log nor smuggle a %s into the format.
       // Nothing derived from the request reaches the log — not the URL, not
       // even its length. A method from a fixed set, the status, and the error.
-      console.error("[pinch] %s request failed %d:", methodOf(req.method), status, err);
+      console.error("[quasnooze] %s request failed %d:", methodOf(req.method), status, err);
       if (!res.headersSent) json(res, status, { error: message });
       else res.end();
     }
@@ -580,26 +580,26 @@ async function respond(req, res) {
       if (sameOrigin) res.setHeader("access-control-allow-origin", req.headers.origin);
     }
     res.setHeader("vary", "origin");
-    res.setHeader("access-control-allow-headers", "content-type, x-pinch-key");
+    res.setHeader("access-control-allow-headers", "content-type, x-quasnooze-key, x-pinch-key, x-quasnooze-session, x-pinch-session");
     res.setHeader("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
     if (req.method === "OPTIONS") return res.writeHead(204).end();
 
     if (!origin.ok) {
       if (url.pathname.startsWith("/api/")) return json(res, 403, { error: `refused: ${origin.why}` });
       res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
-      return res.end(`Pinch refused this request: ${origin.why}.\nAdd the name to PINCH_ALLOWED_HOSTS if this is your own proxy.\n`);
+      return res.end(`Quasnooze refused this request: ${origin.why}.\nAdd the name to QUASNOOZE_ALLOWED_HOSTS if this is your own proxy.\n`);
     }
 
     if (!authorised(req, url)) {
-      if (url.pathname.startsWith("/api/")) return json(res, 401, { error: "bad or missing PINCH_KEY" });
+      if (url.pathname.startsWith("/api/")) return json(res, 401, { error: "bad or missing QUASNOOZE_KEY" });
       res.writeHead(401, { "content-type": "text/html; charset=utf-8" });
       return res.end(
-        `<!doctype html><meta charset="utf-8"><title>Pinch — locked</title>` +
-        `<body style="font-family:ui-sans-serif,system-ui;background:#12080a;color:#ffd9c7;display:grid;place-items:center;height:100vh;margin:0">` +
-        `<div style="max-width:34rem;padding:2rem"><h1>🦞 Pinch is locked</h1>` +
-        `<p>This instance requires a key. Append <code>?key=YOUR_PINCH_KEY</code> to the URL once — ` +
-        `Pinch will remember it in a cookie.</p>` +
-        `<p style="opacity:.6">The key lives in <code>.env</code> as <code>PINCH_KEY</code>.</p></div>`
+        `<!doctype html><meta charset="utf-8"><title>Quasnooze — locked</title>` +
+        `<body style="font-family:ui-sans-serif,system-ui;background:#090d1b;color:#e7f3ff;display:grid;place-items:center;height:100vh;margin:0">` +
+        `<div style="max-width:34rem;padding:2rem"><h1>✦ Quasnooze is locked</h1>` +
+        `<p>This instance requires a key. Append <code>?key=YOUR_QUASNOOZE_KEY</code> to the URL once — ` +
+        `Quasnooze will remember it in a cookie.</p>` +
+        `<p style="opacity:.6">The key lives in <code>.env</code> as <code>QUASNOOZE_KEY</code>.</p></div>`
       );
     }
 
@@ -614,3 +614,6 @@ async function respond(req, res) {
     if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url);
     return await serveStatic(req, res, url.pathname === "/" ? "/desktop.html" : url.pathname);
 }
+
+// Legacy programmatic import: preserve integrations during the product rename.
+export { createQuasnoozeServer as createPinchServer };

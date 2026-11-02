@@ -1,6 +1,6 @@
 name: Issue Lifecycle & Labeler Bot
 
-# 1. Auto-routes newly opened human issues to Pinch domain labels (area/*, type/*).
+# 1. Auto-routes newly opened human issues to Quasnooze domain labels (area/*, type/*).
 # 2. When a PR with `Closes #N` merges, marks #N with `status/pending-release` and records the
 #    merge commit SHA so merged-but-unreleased work is explicitly tracked.
 
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   label-issue:
-    name: Route new issue to Pinch area labels
+    name: Route new issue to Quasnooze area labels
     if: github.event_name == 'issues' && github.event.issue.user.type != 'Bot'
     runs-on: ubuntu-latest
     timeout-minutes: 5

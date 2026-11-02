@@ -1,10 +1,10 @@
 # Security notes
 
-**Reporting a vulnerability:** use [GitHub's private advisory form](https://github.com/pinchfoundry/Pinch/security/advisories/new) —
+**Reporting a vulnerability:** use [GitHub's private advisory form](https://github.com/Quasynvo/Quasnooze/security/advisories/new) —
 not a public issue. The full policy (what is in scope, response times, what is
 already known and accepted) is in the [repository security policy](../SECURITY.md).
 
-Pinch is an agent with a shell. Read this before you leave it running.
+Quasnooze is an agent with a shell. Read this before you leave it running.
 
 > **Audited.** This file describes the design. What an external attacker actually
 > achieved against a running build — six defects, including two critical ones — is in
@@ -17,7 +17,7 @@ Pinch is an agent with a shell. Read this before you leave it running.
 | Adversary | In scope? | Defence |
 |---|---|---|
 | A stranger who guesses your bot's username | Yes | per-channel allowlists (ids, channels, numbers) |
-| Another device on your Wi-Fi | Yes | `PINCH_KEY` on every page and `/api` call |
+| Another device on your Wi-Fi | Yes | `QUASNOOZE_KEY` on every page and `/api` call |
 | A malicious web page or file read by the model (prompt injection) | Yes | approval gate on every mutating action; the model cannot bypass it |
 | A buggy or over-eager model | Yes | 8-round cap, command screen, workspace sandbox |
 | Someone with physical/OS access to the machine | No | full-disk encryption is on you |
@@ -52,13 +52,13 @@ Pinch is an agent with a shell. Read this before you leave it running.
 7. **Child processes get a scrubbed environment** — `childEnv()` strips every variable that
    looks like a credential (`TOKEN`, `SECRET`, `PASSWORD`, `API_KEY`, `_KEY`, `SESSION`,
    `COOKIE`, …) before `runShell` spawns anything, so a command the model runs — or a
-   `postinstall` script in a repo it clones — cannot read `PINCH_KEY`, `TELEGRAM_TOKEN` or
-   `OPENAI_API_KEY`. Specific names can be re-admitted with `PINCH_ENV_PASSTHROUGH`.
+   `postinstall` script in a repo it clones — cannot read `QUASNOOZE_KEY`, `TELEGRAM_TOKEN` or
+   `OPENAI_API_KEY`. Specific names can be re-admitted with `QUASNOOZE_ENV_PASSTHROUGH`.
 8. **Host and Origin are validated** — every request is checked before routing: a forged
    `Host` (DNS rebinding) is refused, a foreign `Origin` (CSRF from any page you visit) is
    refused, and `Access-Control-Allow-Origin` is never reflected blindly. Requests with no
    `Origin` still work, so `curl` and the CLI are unaffected. Extra names go in
-   `PINCH_ALLOWED_HOSTS`, wildcards included.
+   `QUASNOOZE_ALLOWED_HOSTS`, wildcards included.
 9. **Timeouts kill the process group** — a command that backgrounds children is killed with
    `process.kill(-pid, 'SIGKILL')`, so nothing survives the 120 s cap.
 10. **Resource bounds** — 8 tool rounds per turn, 120 s per command, stdout capped at 60 KB,
@@ -83,14 +83,14 @@ Pinch is an agent with a shell. Read this before you leave it running.
 
 ## Hardening checklist
 
-- [ ] `PINCH_KEY` set (the wizard generates one)
-- [ ] `PINCH_AUTO_APPROVE=false`
-- [ ] `PINCH_WORKSPACE` narrow — a projects folder, not `~`
-- [ ] `PINCH_ENV_PASSTHROUGH` empty unless a build genuinely needs one named secret
-- [ ] `PINCH_ALLOWED_HOSTS` set only for a proxy or tunnel you control
+- [ ] `QUASNOOZE_KEY` set (the wizard generates one)
+- [ ] `QUASNOOZE_AUTO_APPROVE=false`
+- [ ] `QUASNOOZE_WORKSPACE` narrow — a projects folder, not `~`
+- [ ] `QUASNOOZE_ENV_PASSTHROUGH` empty unless a build genuinely needs one named secret
+- [ ] `QUASNOOZE_ALLOWED_HOSTS` set only for a proxy or tunnel you control
 - [ ] `node --test` green — 91 tests, including `test/audit.test.js` and `test/http-surface.test.js`
 - [ ] allowlists filled for every enabled channel
 - [ ] `data/` backed up or excluded from anything you sync to a cloud drive
-- [ ] if you only use one machine: `PINCH_HOST=127.0.0.1`
-- [ ] honesty guard left on (`PINCH_GUARD=on`)
+- [ ] if you only use one machine: `QUASNOOZE_HOST=127.0.0.1`
+- [ ] honesty guard left on (`QUASNOOZE_GUARD=on`)
 - [ ] `data/profile.md` contains nothing you would not put in a plain text file

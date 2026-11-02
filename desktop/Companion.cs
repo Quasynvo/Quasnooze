@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 
-public sealed class PinchWindow : Form {
+public sealed class QuasnoozeWindow : Form {
     public Action Hotkey;
     protected override void WndProc(ref Message m) {
         if (m.Msg == 0x0312 && Hotkey != null) Hotkey();
@@ -55,13 +55,13 @@ public sealed class SpeechSessionGate {
     }
 }
 
-public static class PinchCompanion {
+public static class QuasnoozeCompanion {
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint key);
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
     [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static readonly object OutputLock = new object();
-    static PinchWindow Window;
+    static QuasnoozeWindow Window;
     static Label State, Detail, Brand;
     static TextBox Input;
     static Button Wake, Allow, Deny;
@@ -74,14 +74,14 @@ public static class PinchCompanion {
     static Icon BrandIcon;
     static bool WantWake, Quitting, Working, FollowUps;
     static string Panel = "", Root = "", Node = "", Launcher = "", Approval = "", ApprovalText = "";
-    static readonly Color Coral = Color.FromArgb(255, 111, 82);
+    static readonly Color Cyan = Color.FromArgb(131, 245, 237);
 
     static void Emit(object value) { lock (OutputLock) { try { Console.Out.WriteLine(Json.Serialize(value)); Console.Out.Flush(); } catch (IOException) { } } }
     static void Post(Action action) { if (Window != null && !Window.IsDisposed && Window.IsHandleCreated) Window.BeginInvoke(action); }
     static string Value(Dictionary<string, object> m, string key) { object v; return m.TryGetValue(key, out v) && v != null ? Convert.ToString(v) : ""; }
     static void Phase(string phase, string detail) {
         State.Text = phase.ToUpperInvariant(); Detail.Text = detail;
-        Tray.Text = ("Pinch - " + phase).Substring(0, Math.Min(63, ("Pinch - " + phase).Length));
+        Tray.Text = ("Quasnooze - " + phase).Substring(0, Math.Min(63, ("Quasnooze - " + phase).Length));
     }
     static void Voice(bool mic, string detail) { Emit(new { type = "voice", mic = mic, detail = detail }); }
     static void SpeechStatus(string status, string detail, string text = "", double? confidence = null) {
@@ -99,7 +99,7 @@ public static class PinchCompanion {
                     SpeechStopTimer.Stop();
                     if (!SpeechGate.Stopping) return;
                     WantWake = false; Wake.Text = "Enable local wake";
-                    SpeechStatus("error", "Windows did not acknowledge microphone cancellation within 5 seconds. No replacement recognizer was started. Quit and restart Pinch; microphone release is not confirmed.");
+                    SpeechStatus("error", "Windows did not acknowledge microphone cancellation within 5 seconds. No replacement recognizer was started. Quit and restart Quasnooze; microphone release is not confirmed.");
                 };
                 SpeechStopTimer.Start();
                 Recognizer.RecognizeAsyncCancel();
@@ -112,8 +112,8 @@ public static class PinchCompanion {
         Window.Show(); Window.Activate();
         SpeechStatus("permission", "Accept the native microphone consent dialog to begin; no browser microphone is used.");
         bool allowed = MessageBox.Show(Window,
-            "Enable local microphone listening? Windows System.Speech will listen for 'Hey Pinch', then capture one request. Audio is not saved or sent by this component. Recognition needs an installed English desktop speech pack. A wake phrase is NOT authentication: nearby people or speakers can activate it. Use Mute at any time. Restarting Pinch starts muted.",
-            "Pinch - local microphone permission", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+            "Enable local microphone listening? Windows System.Speech will listen for 'Hey Quasnooze', then capture one request. Audio is not saved or sent by this component. Recognition needs an installed English desktop speech pack. A wake phrase is NOT authentication: nearby people or speakers can activate it. Use Mute at any time. Restarting Quasnooze starts muted.",
+            "Quasnooze - local microphone permission", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
         if (!allowed) SpeechStatus("denied", "Microphone permission was declined. Press Talk and accept the native consent dialog to retry.");
         return allowed;
     }
@@ -123,8 +123,8 @@ public static class PinchCompanion {
         builder.Append(new Choices("what time is it", "what is the time", "time", "system status", "computer status",
             "open calculator", "open notepad", "open file explorer", "open github", "open youtube", "open google",
             "read my clipboard", "read clipboard", "mute microphone", "stop listening"));
-        engine.LoadGrammar(new Grammar(builder) { Name = "PinchQuickCommands", Priority = 10 });
-        engine.LoadGrammar(new DictationGrammar() { Name = "PinchDictation" });
+        engine.LoadGrammar(new Grammar(builder) { Name = "QuasnoozeQuickCommands", Priority = 10 });
+        engine.LoadGrammar(new DictationGrammar() { Name = "QuasnoozeDictation" });
     }
     static void StartRecognition(bool capture) {
         if (!WantWake || Working || Quitting || CurrentPrompt != null) return;
@@ -135,12 +135,12 @@ public static class PinchCompanion {
         try {
             var infos = SpeechRecognitionEngine.InstalledRecognizers();
             var info = infos.FirstOrDefault(x => x.Culture.Name == "en-IN") ?? infos.FirstOrDefault(x => x.Culture.Name == "en-US") ?? infos.FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName == "en");
-            if (info == null) throw new InvalidOperationException("No English desktop speech recognizer. Install an English speech pack in Windows Settings, then restart Pinch. No cloud fallback is used.");
+            if (info == null) throw new InvalidOperationException("No English desktop speech recognizer. Install an English speech pack in Windows Settings, then restart Quasnooze. No cloud fallback is used.");
             rec = new SpeechRecognitionEngine(info); Recognizer = rec;
             if (capture) LoadCaptureGrammars(rec, info.Culture);
             else {
                 var builder = new GrammarBuilder(); builder.Culture = info.Culture;
-                builder.Append(new Choices("hey pinch", "pinch")); rec.LoadGrammar(new Grammar(builder));
+                builder.Append(new Choices("hey quasnooze", "quasnooze")); rec.LoadGrammar(new Grammar(builder));
             }
             rec.InitialSilenceTimeout = TimeSpan.FromSeconds(12);
             rec.BabbleTimeout = TimeSpan.FromSeconds(8);
@@ -159,7 +159,7 @@ public static class PinchCompanion {
             });
             rec.AudioSignalProblemOccurred += (s, e) => Post(() => {
                 if (Object.ReferenceEquals(Recognizer, rec) && !SpeechGate.Stopping && !Working)
-                    SpeechStatus("audio-problem", "Windows reports " + e.AudioSignalProblem + ". Check Windows Settings > System > Sound > Input; Pinch uses the Windows default recording device, not the browser's selected device.");
+                    SpeechStatus("audio-problem", "Windows reports " + e.AudioSignalProblem + ". Check Windows Settings > System > Sound > Input; Quasnooze uses the Windows default recording device, not the browser's selected device.");
             });
             rec.SpeechRecognitionRejected += (s, e) => Post(() => {
                 if (!Object.ReferenceEquals(Recognizer, rec) || SpeechGate.Stopping || Working || !capture) return;
@@ -175,7 +175,7 @@ public static class PinchCompanion {
                 if (capture) {
                     string text = e.Result.Text;
                     if (text.Length == 0 || text.Length > 2000) return;
-                    reported = true; SpeechStatus("heard", "Recognized locally; sending this instruction to Pinch.", text, e.Result.Confidence);
+                    reported = true; SpeechStatus("heard", "Recognized locally; sending this instruction to Quasnooze.", text, e.Result.Confidence);
                     StopRecognition(); Working = true; Phase("working", text); Emit(new { type = "command", text = text });
                 } else { StartRecognition(true); }
             });
@@ -239,7 +239,7 @@ public static class PinchCompanion {
         Uri uri;
         return url.Length <= 2000 && Uri.TryCreate(url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps && String.IsNullOrEmpty(uri.UserInfo);
     }
-    static bool Confirm(string text) { return MessageBox.Show(Window, text, "Pinch - confirm action", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes; }
+    static bool Confirm(string text) { return MessageBox.Show(Window, text, "Quasnooze - confirm action", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes; }
     static void NativeAction(Dictionary<string, object> m) {
         string id = Value(m, "id"), action = Value(m, "action"), result = "";
         bool ok = false;
@@ -278,9 +278,9 @@ public static class PinchCompanion {
     }
     static void Startup() {
         if (Root.Length == 0) return;
-        string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Pinch.lnk");
+        string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Quasnooze.lnk");
         bool remove = File.Exists(shortcut);
-        if (!Confirm(remove ? "Remove Pinch from your Windows login startup?" : "Start Pinch when you sign in to Windows? It will still start with its microphone muted. This changes only your user's Startup folder.")) return;
+        if (!Confirm(remove ? "Remove Quasnooze from your Windows login startup?" : "Start Quasnooze when you sign in to Windows? It will still start with its microphone muted. This changes only your user's Startup folder.")) return;
         try {
             string args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + Path.Combine(Root, "desktop", "startup.ps1") + "\" -NodePath \"" + Node + "\" -Launcher \"" + Launcher + "\"" + (remove ? " -Remove" : "");
             var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), args) { UseShellExecute = false, CreateNoWindow = true };
@@ -297,7 +297,7 @@ public static class PinchCompanion {
             var m = Json.Deserialize<Dictionary<string, object>>(line); string op = Value(m, "op");
             switch (op) {
                 case "init":
-                    Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "PINCH  /  " + Value(m, "owner");
+                    Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "QUASNOOZE  /  " + Value(m, "owner");
                     try {
                         using (var bitmap = new Bitmap(Path.Combine(Root, "public", "favicon-32.png"))) {
                             var handle = bitmap.GetHicon(); BrandIcon = (Icon)Icon.FromHandle(handle).Clone(); DestroyIcon(handle); Window.Icon = BrandIcon; Tray.Icon = BrandIcon;
@@ -318,8 +318,8 @@ public static class PinchCompanion {
         } catch { Phase("attention", "An invalid companion message was refused."); }
     }
     static Button ButtonAt(string text, int x, int y, int width, Action click) {
-        var b = new Button { Text = text, Left = x, Top = y, Width = width, Height = 30, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, BackColor = Color.FromArgb(37, 31, 32) };
-        b.FlatAppearance.BorderColor = Color.FromArgb(78, 55, 51); b.Click += (s, e) => click(); Window.Controls.Add(b); return b;
+        var b = new Button { Text = text, Left = x, Top = y, Width = width, Height = 30, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, BackColor = Color.FromArgb(20, 33, 54) };
+        b.FlatAppearance.BorderColor = Color.FromArgb(50, 78, 99); b.Click += (s, e) => click(); Window.Controls.Add(b); return b;
     }
     static void Submit() {
         string text = Input.Text.Trim(); if (Working || text.Length == 0 || text.Length > 2000) return;
@@ -333,12 +333,12 @@ public static class PinchCompanion {
     public static void Run() {
         Console.OutputEncoding = new UTF8Encoding(false); Console.InputEncoding = new UTF8Encoding(false);
         Application.EnableVisualStyles();
-        Window = new PinchWindow { Text = "Pinch - resident assistant", Width = 470, Height = 345, FormBorderStyle = FormBorderStyle.FixedToolWindow, TopMost = true, BackColor = Color.FromArgb(19, 17, 19), ForeColor = Color.White, StartPosition = FormStartPosition.Manual, Font = new Font("Segoe UI", 10), ShowInTaskbar = false };
+        Window = new QuasnoozeWindow { Text = "Quasnooze - resident assistant", Width = 470, Height = 345, FormBorderStyle = FormBorderStyle.FixedToolWindow, TopMost = true, BackColor = Color.FromArgb(9, 13, 27), ForeColor = Color.White, StartPosition = FormStartPosition.Manual, Font = new Font("Segoe UI", 10), ShowInTaskbar = false };
         var area = Screen.PrimaryScreen.WorkingArea; Window.Location = new Point(area.Right - Window.Width - 20, area.Bottom - Window.Height - 20);
-        Brand = new Label { Text = "PINCH  /  DESKTOP COMPANION", Left = 20, Top = 16, Width = 420, ForeColor = Coral, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
-        State = new Label { Text = "MUTED", Left = 20, Top = 49, Width = 420, ForeColor = Color.FromArgb(239, 219, 205) };
+        Brand = new Label { Text = "QUASNOOZE  /  DESKTOP COMPANION", Left = 20, Top = 16, Width = 420, ForeColor = Cyan, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
+        State = new Label { Text = "MUTED", Left = 20, Top = 49, Width = 420, ForeColor = Color.FromArgb(220, 231, 247) };
         Detail = new Label { Text = "Always here while running. Enable local wake when you're ready; the microphone starts off.", Left = 20, Top = 78, Width = 420, Height = 83, AutoEllipsis = true };
-        Input = new TextBox { Left = 20, Top = 171, Width = 330, MaxLength = 2000, BackColor = Color.FromArgb(35, 29, 31), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
+        Input = new TextBox { Left = 20, Top = 171, Width = 330, MaxLength = 2000, BackColor = Color.FromArgb(18, 28, 46), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
         Input.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Submit(); } };
         Window.Controls.AddRange(new Control[] { Brand, State, Detail, Input });
         ButtonAt("Run", 360, 169, 75, Submit);
@@ -349,21 +349,21 @@ public static class PinchCompanion {
         Allow = ButtonAt("Allow once", 20, 253, 125, () => { if (Approval.Length > 0 && Confirm("Allow this exact action once?\n\n" + ApprovalText)) { Emit(new { type = "approval", id = Approval, allowed = true }); Approval = ""; Allow.Visible = Deny.Visible = false; } });
         Deny = ButtonAt("Deny", 155, 253, 95, () => { if (Approval.Length > 0) Emit(new { type = "approval", id = Approval, allowed = false }); Approval = ""; Allow.Visible = Deny.Visible = false; });
         Allow.Visible = Deny.Visible = false;
-        var shortcutHint = new Label { Text = "Ctrl+Alt+P to talk - local speech - no audio recording", Left = 20, Top = 291, Width = 425, ForeColor = Color.FromArgb(159, 144, 140), Font = new Font("Segoe UI", 8) }; Window.Controls.Add(shortcutHint);
+        var shortcutHint = new Label { Text = "Ctrl+Alt+P to talk - local speech - no audio recording", Left = 20, Top = 291, Width = 425, ForeColor = Color.FromArgb(151, 173, 197), Font = new Font("Segoe UI", 8) }; Window.Controls.Add(shortcutHint);
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Show Pinch", null, (s, e) => Window.Show());
+        menu.Items.Add("Show Quasnooze", null, (s, e) => Window.Show());
         menu.Items.Add("Mute / enable local wake", null, (s, e) => ToggleWake());
         var conversation = new ToolStripMenuItem("Conversational follow-ups (local)");
         conversation.Click += (s, e) => {
-            if (!FollowUps && !Confirm("Enable conversational follow-ups? After each spoken answer, Pinch will wait up to 12 seconds for one more instruction without another wake phrase, then return to wake mode on silence. A spoken utterance can last longer than that initial-silence window. Nearby speech can trigger actions; sensitive actions still require approval. Mute stops listening. This does not enable the microphone by itself.")) return;
+            if (!FollowUps && !Confirm("Enable conversational follow-ups? After each spoken answer, Quasnooze will wait up to 12 seconds for one more instruction without another wake phrase, then return to wake mode on silence. A spoken utterance can last longer than that initial-silence window. Nearby speech can trigger actions; sensitive actions still require approval. Mute stops listening. This does not enable the microphone by itself.")) return;
             FollowUps = !FollowUps; conversation.Checked = FollowUps;
             if (!FollowUps && WantWake && !Working && CurrentPrompt == null) StartRecognition(false);
         };
         menu.Items.Add(conversation);
         menu.Items.Add("Command deck", null, (s, e) => ShowDeck());
         menu.Items.Add("Toggle start with Windows", null, (s, e) => Startup());
-        menu.Items.Add("Quit Pinch", null, (s, e) => { Emit(new { type = "quit" }); Quitting = true; Window.Close(); });
-        Tray = new NotifyIcon { Icon = SystemIcons.Application, Text = "Pinch - muted", Visible = true, ContextMenuStrip = menu };
+        menu.Items.Add("Quit Quasnooze", null, (s, e) => { Emit(new { type = "quit" }); Quitting = true; Window.Close(); });
+        Tray = new NotifyIcon { Icon = SystemIcons.Application, Text = "Quasnooze - muted", Visible = true, ContextMenuStrip = menu };
         Tray.DoubleClick += (s, e) => Window.Show();
         Window.Hotkey = ListenOnce;
         Window.FormClosing += (s, e) => { if (!Quitting) { e.Cancel = true; Window.Hide(); } };

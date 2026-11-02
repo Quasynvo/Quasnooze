@@ -4,9 +4,9 @@
  * The unit tests prove the extractor parses a PDF. They do not prove that a
  * file attached in the panel ever reaches the model, which is the actual
  * complaint: every comparable assistant lets you drop a document in and ask
- * about it; Pinch did not.
+ * about it; Quasnooze did not.
  *
- * So this test stands up a fake model server, points a real Pinch at it, posts
+ * So this test stands up a fake model server, points a real Quasnooze at it, posts
  * a real PDF through the real upload endpoint, and then asserts on the request
  * body the model actually received. If the wiring breaks anywhere — endpoint,
  * queue, agent, brain message shape — this fails.
@@ -195,4 +195,18 @@ test("a file name cannot escape the response, whatever it contains", async () =>
   });
   const info = await res.json();
   assert.equal(info.name, "passwd", "the path is stripped to a display name");
+});
+
+test('canonical and legacy session headers preserve upload ownership', async () => {
+  for (const header of ['x-quasnooze-session', 'x-pinch-session']) {
+    const owner=header+'-owner', sentinel='private-document-'+header;
+    const upload=await fetch(`http://127.0.0.1:${pinchPort}/api/attach`,{method:'POST',headers:{'content-type':'text/plain','x-filename':'private.txt',[header]:owner},body:sentinel});
+    assert.equal(upload.status,200);const {id}=await upload.json();
+    received=[];
+    const wrong=await fetch(`http://127.0.0.1:${pinchPort}/api/chat`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'summarize',sessionId:owner+'-other',attachments:[id]})});
+    await wrong.text();assert.ok(received.length>0);assert.ok(!JSON.stringify(received).includes(sentinel),'other session must not receive the document');
+    received=[];
+    const right=await fetch(`http://127.0.0.1:${pinchPort}/api/chat`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'summarize',sessionId:owner,attachments:[id]})});
+    await right.text();assert.ok(JSON.stringify(received).includes(sentinel),'rightful owner must still receive its document');
+  }
 });

@@ -8,8 +8,8 @@ scans will be clean or that the project is vulnerability-free.
 
 | Alert | Finding | Change | Regression coverage |
 |---|---|---|---|
-| [56](https://github.com/pinchfoundry/Pinch/security/code-scanning/56) | `js/trivial-conditional` in Telegram reply formatting | The header-shrinking loop always truncates, so it now appends the ellipsis directly instead of assigning `true` and immediately testing it. The initial, conditional ellipsis remains necessary. | Exact 400-character serialized boundary; one character over; valid JSON escaping for quotes, backslashes and control characters; supplementary Unicode; unchanged incoming body. |
-| [55](https://github.com/pinchfoundry/Pinch/security/code-scanning/55) | `js/unused-local-variable`: unused `readJson` helper in exports | Remove the unused helper. Actual store loading and telemetry parsing remain unchanged. | Existing export/corrupt-session tests plus malformed telemetry lines, preserved valid records, missing optional telemetry and default telemetry exclusion. |
+| [56](https://github.com/Quasynvo/Quasnooze/security/code-scanning/56) | `js/trivial-conditional` in Telegram reply formatting | The header-shrinking loop always truncates, so it now appends the ellipsis directly instead of assigning `true` and immediately testing it. The initial, conditional ellipsis remains necessary. | Exact 400-character serialized boundary; one character over; valid JSON escaping for quotes, backslashes and control characters; supplementary Unicode; unchanged incoming body. |
+| [55](https://github.com/Quasynvo/Quasnooze/security/code-scanning/55) | `js/unused-local-variable`: unused `readJson` helper in exports | Remove the unused helper. Actual store loading and telemetry parsing remain unchanged. | Existing export/corrupt-session tests plus malformed telemetry lines, preserved valid records, missing optional telemetry and default telemetry exclusion. |
 
 These are CodeQL correctness/maintainability findings, not confirmed exploitable
 vulnerabilities. The changes preserve intended behavior; the new tests pin that
@@ -20,7 +20,7 @@ source revision; default-branch alert closure requires merge and a subsequent
 
 ## Alert 1: branch protection — independent-review rollout
 
-[OpenSSF Scorecard's Branch-Protection finding](https://github.com/pinchfoundry/Pinch/security/code-scanning/1)
+[OpenSSF Scorecard's Branch-Protection finding](https://github.com/Quasynvo/Quasnooze/security/code-scanning/1)
 is a repository-governance finding, not a JavaScript defect. It cannot be resolved
 by changing application code or dismissing the alert.
 
