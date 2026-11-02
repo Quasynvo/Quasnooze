@@ -85,6 +85,11 @@ export const config = Object.freeze({
     openaiBaseUrl: (env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
     openaiKey: env.OPENAI_API_KEY || "",
     openaiModel: env.OPENAI_MODEL || "gpt-4o-mini",
+    // Which provider a turn may fall back to when the selected one fails. Empty by default:
+    // failing over from a local model to a cloud endpoint would send the conversation off the
+    // machine to keep a turn alive, and that is the user's decision, not a default. Set it to
+    // ollama or openai to opt in; "mock" is never accepted as a fallback.
+    fallback: (env.LLM_FALLBACK || "").toLowerCase(),
   }),
 
   workspaceRoots: workspaceRoots.length ? workspaceRoots : [homedir()],

@@ -39,6 +39,7 @@ ${c.coral("✦ quasnooze")} — local, private, yours
   ${c.bold("quasnooze setup")}           guided setup — brain, Telegram, Discord, Slack, WhatsApp, voice
   ${c.bold("quasnooze desktop")}         Windows resident assistant; microphone starts muted
   ${c.bold("quasnooze doctor")}          verify configuration and connectivity
+  ${c.bold("quasnooze health")}          provider matrix, routing plan, and a verdict (--json for scripts)
   ${c.bold("quasnooze chat")}            chat in the terminal
   ${c.bold("quasnooze ask")} "question"  one-shot answer
   ${c.bold("quasnooze pair")}            print a QR + URL to open Quasnooze on your phone
@@ -86,6 +87,9 @@ switch (command) {
   case "doctor":
   case "check":
     run("scripts/setup.js", ["--check"]);
+    break;
+  case "health":
+    run("scripts/doctor.js", rest);
     break;
   case "chat":
     run("src/cli.js", ["chat"]);
