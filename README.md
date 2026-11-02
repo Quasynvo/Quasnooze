@@ -262,17 +262,22 @@ Full method, results and **what is still not fixed**: [`docs/AUDIT.md`](docs/AUD
 
 | Channel | Setup | Voice |
 |---|---|---|
-| 🌐 **Web panel** | none — `http://localhost:7777`, installable on your phone | 🎙️ dictation, spoken replies, optional "Hey Pinch" |
+| 🌐 **Web panel** | none — `http://localhost:7777`, installable on your phone | 🎙️ dictation, 🔊 opt-in spoken replies with an installed local voice, optional "Hey Pinch" |
 | ✈️ **Telegram** | ~2 min, approvals arrive as buttons | voice notes (with local Whisper) |
 | 🎮 **Discord** | ~5 min | dictation |
 | 💼 **Slack** | ~5 min | dictation |
 | 💬 **WhatsApp** | unofficial, **off by default** — [read this first](docs/CHANNELS.md) | dictation |
+
+Browser dictation may send microphone audio to the browser vendor. Spoken replies are opt-in, use
+only installed local voices and are available in the web panel and Windows companion — chat apps
+still get text. [Voice evidence and boundaries](docs/VOICE.md).
 
 ## Documentation
 
 | | |
 |---|---|
 | **[Guide](docs/GUIDE.md)** | architecture, voice, reminders, honesty guard, configuration, extending, FAQ |
+| **[Voice evidence](docs/VOICE.md)** | what speaks back, what stays local, the tests and the boundaries |
 | **[Security audit](docs/AUDIT.md)** | how it was attacked, what was found, what was fixed, what remains |
 | **[Security model](docs/SECURITY.md)** | threat model and the hardening checklist |
 | **[Channels](docs/CHANNELS.md)** | Telegram, Discord, Slack, WhatsApp in detail |
@@ -287,6 +292,7 @@ Full method, results and **what is still not fixed**: [`docs/AUDIT.md`](docs/AUD
 - **WhatsApp is unofficial** and can get a number banned. Telegram does the same job, officially.
 - **The command screen is a denylist.** Obfuscated commands still reach you for approval; that is the design.
 - **The tier check is a convenience, not a sandbox.** It saves you prompts on `ls` and `git status`; it cannot contain a destructive command that looks read-only, so the deny rules and the approval gate still do the real work.
+- **Browser dictation may send audio to the browser vendor**; the Windows companion keeps recognition and TTS on the device. Spoken replies are opt-in and refuse network-only voices — [voice evidence](docs/VOICE.md).
 - **[More limits in the guide](docs/GUIDE.md#honest-limitations)**, including screenshots, voice notes and wake-word caveats.
 
 ---

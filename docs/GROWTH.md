@@ -68,8 +68,9 @@ Three things the researcher refuses to do:
   `out-of-scope` — four of six competitors ship them, and it is still not
   backlog, because Pinch is one person on one laptop. A gap the product has
   decided not to close is not a work item.
-- **Confuse partial with missing.** A `partial` capability (voice, file upload)
-  is usually cheaper to close than a missing one and is scored accordingly.
+- **Confuse partial with missing.** A `partial` capability (for example, file upload)
+  is usually cheaper to close than a missing one and is scored accordingly. Voice used to be the
+  example here; it is `have` now, with evidence in [VOICE.md](VOICE.md).
 
 Run it yourself: `node scripts/market.js`. With `--offline` it reuses the last
 snapshot in `docs/market-snapshot.json` instead of the network.

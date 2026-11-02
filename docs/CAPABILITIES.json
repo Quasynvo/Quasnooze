@@ -1,7 +1,7 @@
 {
   "$comment": "Pinch's capability inventory. Every entry claims evidence — a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
   "$policy": "in-scope may be proposed. settled has been decided and is only shown so the decision stays visible. out-of-scope contradicts the product identity in .github/prompts/self-improvement.md; the researcher reports it and the proposer is forbidden from acting on it.",
-  "updated": "2026-11-01",
+  "updated": "2026-11-02",
   "capabilities": [
     {
       "id": "local-model",
@@ -153,12 +153,18 @@
         "hands-free",
         "wake word"
       ],
-      "status": "partial",
+      "status": "have",
       "policy": "in-scope",
       "evidence": [
-        "src/server.js: WHISPER_URL for incoming audio"
+        "public/index.html: createSpeechOut() reads completed answers and reminders with a localService=true SpeechSynthesisVoice; speakToggle is opt-in",
+        "public/index.html: speechChunks() preserves long replies and stop()/generation invalidates cancelled utterances; the speech-out block makes no network call",
+        "desktop/Companion.cs: System.Speech SpeechSynthesizer reads results back, with local wake/dictation recognition on Windows",
+        "src/voice.js: optional OpenAI-compatible Whisper adapter for recorded audio",
+        "src/server.js: /api/transcribe keeps audio uploads behind the existing host, origin, key and MIME guards",
+        "test/voice-reply.test.js: the whole panel module boots with a fake DOM and speech synthesis; replies are spoken, remote voices are refused, long replies are chunked and off cancels",
+        "docs/VOICE.md: reproduction commands, the offline boundary and what is not claimed"
       ],
-      "note": "Input works with a configured whisper endpoint. Replies are not spoken back, and nothing is offline out of the box."
+      "note": "Web dictation uses browser SpeechRecognition, which may send microphone audio to the browser vendor; the Windows companion keeps recognition and TTS on the device with System.Speech. Web spoken replies are opt-in per device, use only voices with localService=true, and need no WHISPER_URL, server TTS endpoint or cloud account. Telegram voice notes still need WHISPER_URL; chat channels get text, not audio replies. Long replies are capped and chunked; devices with no installed local voice stay silent rather than using a network voice. See docs/VOICE.md."
     },
     {
       "id": "memory",
