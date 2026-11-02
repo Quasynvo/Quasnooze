@@ -1,0 +1,171 @@
+{
+  "review_date": "2026-11-03",
+  "method": "Live GitHub REST metadata and default-branch commit-pinned README review. Purposive relevance sample, not an exhaustive GitHub ranking. Stars are popularity signals, not safety or speed measurements. No competitor was installed or benchmarked.",
+  "pinch_base": "295c9c768c73cbcce7c9234e2cdf2b831fc5c6e6",
+  "projects": [
+    {
+      "repo": "openclaw/openclaw",
+      "stars": 393744,
+      "default_branch": "main",
+      "commit": "cd56ab1a54c81b3a515388ca1014d2d22deab1cb",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "archived": false,
+      "description": "The AI that really does things. Any OS. Any Platform. The lobster way. \ud83e\udd9e ",
+      "readme_url": "https://github.com/openclaw/openclaw/blob/cd56ab1a54c81b3a515388ca1014d2d22deab1cb/README.md",
+      "homepage": "https://openclaw.ai",
+      "source_id": "S1"
+    },
+    {
+      "repo": "open-webui/open-webui",
+      "stars": 157572,
+      "default_branch": "main",
+      "commit": "f7ac7ee10962ddec0017f5c29b6740d9b9c5faca",
+      "license": {
+        "key": "other",
+        "name": "Other",
+        "spdx_id": "NOASSERTION",
+        "url": null,
+        "node_id": "MDc6TGljZW5zZTA="
+      },
+      "archived": false,
+      "description": "User-friendly AI Interface (Supports Ollama, OpenAI API, ...)",
+      "readme_url": "https://github.com/open-webui/open-webui/blob/f7ac7ee10962ddec0017f5c29b6740d9b9c5faca/README.md",
+      "homepage": "https://openwebui.com",
+      "license_file": "LICENSE",
+      "source_id": "S2"
+    },
+    {
+      "repo": "openinterpreter/openinterpreter",
+      "stars": 68779,
+      "default_branch": "main",
+      "commit": "79c297a088b1d8dec415747f330f21023b7da8fc",
+      "license": {
+        "key": "apache-2.0",
+        "name": "Apache License 2.0",
+        "spdx_id": "Apache-2.0",
+        "url": "https://api.github.com/licenses/apache-2.0",
+        "node_id": "MDc6TGljZW5zZTI="
+      },
+      "archived": false,
+      "description": "A coding agent for open models like Kimi K3 and GLM 5.3",
+      "readme_url": "https://github.com/openinterpreter/open-interpreter/blob/79c297a088b1d8dec415747f330f21023b7da8fc/README.md",
+      "homepage": "http://openinterpreter.com/",
+      "source_id": "S3"
+    },
+    {
+      "repo": "Mintplex-Labs/anything-llm",
+      "stars": 67861,
+      "default_branch": "master",
+      "commit": "9caf2b4c29d9782f1cba4142be2525ebfa0ecd43",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "archived": false,
+      "description": "Stop renting your intelligence. Own it with AnythingLLM. Everything you need for a powerful local-first agent experience ",
+      "readme_url": "https://github.com/Mintplex-Labs/anything-llm/blob/9caf2b4c29d9782f1cba4142be2525ebfa0ecd43/README.md",
+      "homepage": "https://anythingllm.com",
+      "source_id": "S4"
+    },
+    {
+      "repo": "LibreChat-AI/LibreChat",
+      "stars": 46644,
+      "default_branch": "main",
+      "commit": "f4154b649efa37e1345ccc517a4d8d1ed2178c82",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "archived": false,
+      "description": "Enhanced ChatGPT Clone: Features Agents, MCP, Skills, DeepSeek, Anthropic, AWS, OpenAI, Responses API, Azure, Groq, o1, GPT-5, Mistral, OpenRouter, Vertex AI, Gemini, Artifacts, AI model switching, message search, Code Interpreter, langchain, DALL-E-3, OpenAPI Actions, Functions, Secure Multi-User Auth, Presets, open-source for self-hosting. Active",
+      "readme_url": "https://github.com/danny-avila/LibreChat/blob/f4154b649efa37e1345ccc517a4d8d1ed2178c82/README.md",
+      "homepage": "https://librechat.ai/",
+      "source_id": "S5"
+    },
+    {
+      "repo": "janhq/jan",
+      "stars": 45332,
+      "default_branch": "main",
+      "commit": "e3a75ab41ee9d3352e1109d38839ac61cc52d7f2",
+      "license": {
+        "key": "other",
+        "name": "Other",
+        "spdx_id": "NOASSERTION",
+        "url": null,
+        "node_id": "MDc6TGljZW5zZTA="
+      },
+      "archived": false,
+      "description": "Jan is an open source alternative to ChatGPT that runs 100% offline on your computer.",
+      "readme_url": "https://github.com/menloresearch/jan/blob/e3a75ab41ee9d3352e1109d38839ac61cc52d7f2/README.md",
+      "homepage": "https://jan.ai/",
+      "license_file": "LICENSE",
+      "source_id": "S6"
+    },
+    {
+      "repo": "khoj-ai/khoj",
+      "stars": 37946,
+      "default_branch": "master",
+      "commit": "ae229ca894c0b80ad84664afcfdde523b5e87057",
+      "license": {
+        "key": "agpl-3.0",
+        "name": "GNU Affero General Public License v3.0",
+        "spdx_id": "AGPL-3.0",
+        "url": "https://api.github.com/licenses/agpl-3.0",
+        "node_id": "MDc6TGljZW5zZTE="
+      },
+      "archived": false,
+      "description": "Your AI second brain. Self-hostable. Get answers from the web or your docs. Build custom agents, schedule automations, do deep research. Turn any online or local LLM into your personal, autonomous AI (gpt, claude, gemini, llama, qwen, mistral). Get started - free.",
+      "readme_url": "https://github.com/khoj-ai/khoj/blob/ae229ca894c0b80ad84664afcfdde523b5e87057/README.md",
+      "homepage": "https://khoj.dev",
+      "source_id": "S7"
+    },
+    {
+      "repo": "ggml-org/llama.cpp",
+      "stars": 133176,
+      "default_branch": "master",
+      "commit": "29c720eaf72fcf8e4e61a56a88b994d92668261d",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "archived": false,
+      "description": "LLM inference in C/C++",
+      "readme_url": "https://github.com/ggml-org/llama.cpp/blob/29c720eaf72fcf8e4e61a56a88b994d92668261d/README.md",
+      "homepage": "https://llama.app",
+      "source_id": "S8"
+    },
+    {
+      "repo": "microsoft/PowerToys",
+      "stars": 140428,
+      "default_branch": "main",
+      "commit": "780daf2c6aeb67bb6e19067a979d139435e02f94",
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "archived": false,
+      "description": "Microsoft PowerToys is a collection of utilities that supercharge productivity and customization on Windows",
+      "readme_url": "https://github.com/microsoft/PowerToys/blob/780daf2c6aeb67bb6e19067a979d139435e02f94/README.md",
+      "homepage": "",
+      "source_id": "S9"
+    }
+  ]
+}
