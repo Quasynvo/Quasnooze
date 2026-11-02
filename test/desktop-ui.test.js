@@ -72,3 +72,11 @@ test('reviewing rejected speech only opens an editable draft and never dispatche
   assert.equal(calls.length,count);
   assert.equal(calls.some(([,method])=>method==='POST'),false);
 });
+
+
+test('safe in-progress model text is displayed before request completion',async()=>{
+  const live={...state,busy:true,phase:'working',draft:'Hello!',text:'Working…'};
+  const ui=deck(async path=>response(path==='/api/desktop'?live:{model:'test',provider:'mock'}));
+  await ui.refresh();assert.equal(ui.element('result').textContent,'Hello!');
+  assert.match(ui.element('resultKind').textContent,/RESPONDING/);
+});

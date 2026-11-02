@@ -11,7 +11,8 @@
  */
 import { config } from "./config.js";
 import { brain } from "./brain.js";
-import { buildSystemPrompt } from "./prompt.js";
+import { assistantText } from "./assistant-text.js";
+import { buildSystemPrompt, buildConversationPrompt, isSocialTurn } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, describeTier, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
@@ -188,6 +189,7 @@ export async function runAgent({
   autonomy = "interactive",
   allowSchedule = true,
 }) {
+  const social = isSocialTurn(text, attachments);
   const activeModel = brain.active; // Pin provider/model for the entire tool loop.
   const unattended = autonomy === "unattended";
   const startedAt = Date.now();
@@ -196,14 +198,14 @@ export async function runAgent({
   // Do not prime a recovered model to keep claiming it is offline.
   const recent = session.messages.filter((m) =>
     (m.role === "user" || m.role === "assistant") &&
-    !(m.role === "assistant" && (m.error === "brain-unreachable" || /^🦞 My brain is unreachable/.test(m.content)))
-  ).slice(-24);
+    !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^🦞 My brain is unreachable/.test(m.content)))
+  ).slice(social ? -6 : -24);
   // Only the last attachment-bearing message keeps its excerpt; older ones keep
   // the one-line "you attached X" note, which is enough to answer follow-ups
   // without carrying 2 KB of document per turn.
   const lastAttached = recent.map((m) => Boolean(m.attachments?.length)).lastIndexOf(true);
   const history = recent.map((m, i) => {
-    if (!m.attachments?.length) return { role: m.role, content: m.content };
+    if (!m.attachments?.length) return { role: m.role, content: m.role === "assistant" ? assistantText(m.content).text : m.content };
     const names = m.attachments.map((a) => `${a.name} (${a.kind})`).join(", ");
     const note = `[attached: ${names}]`;
     return { role: m.role, content: i === lastAttached && m.excerpt ? `${m.content}\n\n${note}\n${m.excerpt}` : `${m.content}\n\n${note}` };
@@ -240,7 +242,7 @@ export async function runAgent({
   if (attachmentBlock.images.length) userTurn.images = attachmentBlock.images;
 
   let messages = [
-    { role: "system", content: buildSystemPrompt({ channel }) },
+    { role: "system", content: social ? buildConversationPrompt({ channel }) : buildSystemPrompt({ channel }) },
     ...history,
     userTurn,
   ];
@@ -248,7 +250,7 @@ export async function runAgent({
   const trace = [];
   const toolOutputs = [];
   let finalText = "";
-  let brainFailed = false;
+  let brainFailed = false, modelOutputFailed = false, firstTextMs = null;
   let rounds = 0;
   let tokens = 0;
   let toolBudget = TOOL_OUTPUT_BUDGET;
@@ -271,8 +273,10 @@ export async function runAgent({
       // usually produce no text, so this costs nothing when it does not apply.
       out = await brain.chat(messages, {
         selection: activeModel,
-        tools: toolSchemas(),
+        tools: social ? [] : toolSchemas(),
+        ...(social ? {maxTokens:128,think:false} : {}),
         onDelta: (chunk) => {
+          if (firstTextMs === null) firstTextMs = Date.now() - startedAt;
           streamed += chunk;
           onEvent({ type: "delta", text: chunk });
         },
@@ -287,8 +291,14 @@ export async function runAgent({
 
     tokens += out.tokens || 0;
 
+    if (social && out.toolCalls?.length) {
+      modelOutputFailed = true;
+      finalText = "The model tried to call a tool during a greeting. No action was taken; please state your request.";
+      break;
+    }
     if (!out.toolCalls?.length) {
-      finalText = (out.content || "").trim() || "(The model returned an empty reply.)";
+      modelOutputFailed = Boolean(out.reasoningFiltered && !out.content?.trim());
+      finalText = (out.content || "").trim() || (modelOutputFailed ? "The model returned internal reasoning without a final answer. Check its non-thinking mode or select a conversational model." : "(The model returned an empty reply.)");
       break;
     }
 
@@ -429,7 +439,7 @@ export async function runAgent({
   const citations = validateCitations({ text: finalText, sources: listSources(sources) });
 
   let guard = { flags: [], clean: true };
-  if (!config.disableGuard && !brainFailed) {
+  if (!config.disableGuard && !brainFailed && !modelOutputFailed) {
     guard = auditReply({
       reply: finalText,
       trace,
@@ -462,7 +472,7 @@ export async function runAgent({
     });
   }
 
-  appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags, ...(brainFailed ? { error: "brain-unreachable" } : {}) });
+  appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
 
   const ms = Date.now() - startedAt;
   record({
@@ -475,17 +485,20 @@ export async function runAgent({
     // "we spent tokens on openai" is not a number anyone can act on.
     model: activeModel.model,
     ms,
+    firstTextMs,
+    mode: social ? "conversation" : "agent",
     rounds,
     tokens,
     tools: trace.length,
     auto: autoRan,
     guardFlags: guard.flags.length,
-    error: brainFailed ? "brain-unreachable" : null,
+    error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
   });
 
   return {
     text: finalText,
-    error: brainFailed ? "brain-unreachable" : null,
+    firstTextMs,
+    error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
     trace,
     sessionId,
     guard: guard.flags,

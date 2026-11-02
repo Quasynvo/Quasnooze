@@ -17,6 +17,7 @@ process.env.PINCH_AUTO_APPROVE = "false";
 
 const modelRequests = [];
 let tagsFail = false;
+let replyOverride = null, streamWithoutNewline = false;
 let modelFailure = false, modelRedirect = false, redirectedRequests = 0;
 const modelServer = createServer(async (req, res) => {
   if (req.url === "/redirect-target") { redirectedRequests++; return res.end("{}"); }
@@ -32,12 +33,12 @@ const modelServer = createServer(async (req, res) => {
   if (local && modelFailure) { res.writeHead(404); return res.end(JSON.stringify({ error: "model not found" })); }
   if (local && modelRedirect) { res.writeHead(302, { location: "/redirect-target" }); return res.end(); }
   const toolRound = local && body.messages.some((m) => m.role === "user" && m.content === "force-tool-loop") && !body.messages.some((m) => m.role === "tool");
-  const message = toolRound
+  const message = replyOverride || (toolRound
     ? { content: "", tool_calls: [{ function: { name: "calculator", arguments: { expression: "2+2" } } }] }
-    : { content: `${local ? "local" : "cloud"} ${body.model}` };
+    : { content: `${local ? "local" : "cloud"} ${body.model}` });
   if (local) {
     res.setHeader("content-type", body.stream ? "application/x-ndjson" : "application/json");
-    return res.end(JSON.stringify({ message, done: true }) + (body.stream ? "\n" : ""));
+    return res.end(JSON.stringify({ message, done: true }) + (body.stream && !streamWithoutNewline ? "\n" : ""));
   }
   if (body.stream) {
     res.setHeader("content-type", "text/event-stream");
@@ -225,4 +226,72 @@ test("model requests never follow redirects, in streaming or non-streaming mode"
     await assert.rejects(brain.chat([{ role: "user", content: "hello" }], { onDelta() {} }));
     assert.equal(redirectedRequests, 0);
   } finally { modelRedirect = false; brain.resetModel(); }
+});
+
+
+test("real-model greetings use a small no-tools request, not a canned bypass", async () => {
+  const { brain } = await import("../src/brain.js");
+  brain.resetModel(); await brain.setModel({ provider:"ollama",model:"fast:latest" });
+  try {
+    replyOverride={content:"Hello! What would you like to talk about?"};
+    const count=modelRequests.length, events=[];
+    const out=await runAgent({sessionId:"social-small",text:"hi",onEvent:e=>events.push(e)});
+    assert.equal(modelRequests.length,count+1);
+    assert.equal(out.text,replyOverride.content);
+    assert.equal(modelRequests.at(-1).body.tools,undefined);
+    assert.equal(modelRequests.at(-1).body.options.num_predict,128);
+    assert.ok(!modelRequests.at(-1).body.messages[0].content.includes("## How you work on development tasks"));
+    assert.ok(out.firstTextMs >= 0);
+    assert.equal(events.filter(e=>e.type==="delta").map(e=>e.text).join(''),out.text);
+  } finally { replyOverride=null;brain.resetModel(); }
+});
+
+test("reasoning is absent from live deltas, stored reply and the next model prompt",async()=>{
+  const { brain }=await import("../src/brain.js");
+  const { loadSession, appendMessage }=await import("../src/store.js");
+  brain.resetModel();await brain.setModel({provider:"ollama",model:"fast:latest"});
+  const leaked='Okay, the user said "Hi". Let me think about how to respond. PRIVATE_TRACE</think> Hello!';
+  appendMessage("legacy-reasoning",{role:"assistant",content:leaked});
+  try {
+    replyOverride={content:leaked,thinking:"SEPARATE_PRIVATE_THINKING"};
+    const events=[];const out=await runAgent({sessionId:"legacy-reasoning",text:"hello",onEvent:e=>events.push(e)});
+    assert.equal(out.text,"Hello!");
+    assert.equal(events.filter(e=>e.type==='delta').map(e=>e.text).join(''),"Hello!");
+    assert.equal(loadSession("legacy-reasoning").messages.at(-1).content,"Hello!");
+    assert.doesNotMatch(JSON.stringify(modelRequests.at(-1).body.messages),/PRIVATE_TRACE/);
+    replyOverride={content:'<think>PRIVATE_TRACE with no answer'};
+    const invalid=await runAgent({sessionId:"reasoning-only",text:"hi"});
+    assert.equal(invalid.error,"model-output-invalid");assert.doesNotMatch(invalid.text,/PRIVATE_TRACE/);
+  } finally {replyOverride=null;brain.resetModel();}
+});
+
+test("NDJSON final frames without a newline are consumed",async()=>{
+  const {brain}=await import("../src/brain.js");brain.resetModel();await brain.setModel({provider:"ollama",model:"fast:latest"});
+  try {streamWithoutNewline=true;replyOverride={content:'Hello!'};const out=await brain.chat([{role:'user',content:'hi'}],{onDelta(){}});assert.equal(out.content,'Hello!');}
+  finally {streamWithoutNewline=false;replyOverride=null;brain.resetModel();}
+});
+
+test("a model cannot execute tools on the no-tools social route",async()=>{
+  const {brain}=await import("../src/brain.js");brain.resetModel();await brain.setModel({provider:"ollama",model:"fast:latest"});
+  try {
+    replyOverride={content:'',tool_calls:[{function:{name:'calculator',arguments:{expression:'2+2'}}}]};
+    const out=await runAgent({sessionId:'social-tool-refused',text:'hi'});
+    assert.equal(out.error,'model-output-invalid');assert.deepEqual(out.trace,[]);assert.match(out.text,/No action was taken/);
+  } finally {replyOverride=null;brain.resetModel();}
+});
+
+
+test("Qwen3 non-thinking control is explicit, without modifying stored/user messages",async()=>{
+  const {brain}=await import("../src/brain.js");brain.resetModel();await brain.setModel({provider:"ollama",model:"fast:latest"});
+  try {
+    replyOverride={content:'Hi!'};
+    const messages=[{role:'system',content:'Be conversational.'},{role:'user',content:'hi'}];
+    await brain.chat(messages,{model:'qwen3:4b',think:false});
+    assert.equal(modelRequests.at(-1).body.think,false);
+    assert.match(modelRequests.at(-1).body.messages[0].content,/\/no_think/);
+    assert.equal(messages[0].content,'Be conversational.');
+    await brain.chat(messages,{model:'qwen3:4b',think:true});
+    assert.equal(modelRequests.at(-1).body.think,true);
+    assert.doesNotMatch(modelRequests.at(-1).body.messages[0].content,/\/no_think/);
+  } finally {replyOverride=null;brain.resetModel();}
 });

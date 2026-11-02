@@ -12,6 +12,7 @@
  *   mock    — deterministic canned answers, for tests and for
  *             `npm run demo` on a machine with no model installed
  */
+import { AssistantTextStream, assistantText } from "./assistant-text.js";
 import { config } from "./config.js";
 import { fit, ctx } from "./budget.js";
 
@@ -56,25 +57,26 @@ async function streamLines(res, onObject, isSse) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n");
-    buffer = parts.pop() || "";
-    for (const line of parts) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const payload = isSse ? (trimmed.startsWith("data:") ? trimmed.slice(5).trim() : null) : trimmed;
-      if (!payload) continue;
-      if (payload === "[DONE]") return;
-      try {
-        onObject(JSON.parse(payload));
-      } catch {
-        /* keep-alive or partial frame — ignore */
-      }
-    }
+  let ended = false;
+  function line(raw) {
+    const trimmed = raw.trim(); if (!trimmed || ended) return;
+    const payload = isSse ? (trimmed.startsWith("data:") ? trimmed.slice(5).trim() : null) : trimmed;
+    if (!payload) return;
+    if (payload === "[DONE]") { ended = true; return; }
+    let object;
+    try { object = JSON.parse(payload); } catch { return; }
+    onObject(object); // Provider/callback errors must propagate, not look like keep-alives.
   }
+  try {
+    while (!ended) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n"); buffer = parts.pop() || "";
+      for (const part of parts) line(part);
+    }
+    buffer += decoder.decode(); line(buffer);
+  } finally { if (ended) await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
 async function postStream(url, body, headers = {}) {
@@ -120,18 +122,24 @@ function toOllamaMessages(messages) {
 const ollama = {
   name: "ollama",
 
-  async chat(messages, { tools = [], model, onDelta } = {}) {
+  async chat(messages, { tools = [], model, onDelta, maxTokens = ctx.numPredict, think = config.llm.ollamaThink } = {}) {
     // Trim to the window *before* the provider does it for us. Ollama drops
     // from the front on overflow, which deletes the system prompt first.
-    const { messages: fitted, dropped } = fit(messages, { tools });
+    const { messages: fitted, dropped } = fit(messages, { tools, numPredict: maxTokens });
     const body = {
       model: model || config.llm.ollamaModel,
       // Interactive default: do not spend time generating hidden reasoning.
-      think: config.llm.ollamaThink,
+      think,
       messages: toOllamaMessages(fitted),
       stream: Boolean(onDelta),
-      options: { temperature: 0.4, num_ctx: ctx.numCtx, num_predict: ctx.numPredict },
+      options: { temperature: 0.4, num_ctx: ctx.numCtx, num_predict: maxTokens },
     };
+    if (!think && /(?:^|\/)qwen3(?=[:.\-]|$)/i.test(body.model)) {
+      // Older Qwen3 templates also need their soft non-thinking switch.
+      const system = body.messages.find(message => message.role === "system");
+      if (system) system.content += "\n/no_think";
+      else body.messages.unshift({role:"system",content:"Reply directly to the user. /no_think"});
+    }
     if (tools.length) body.tools = tools;
 
     const url = `${config.llm.ollamaUrl}/api/chat`;
@@ -156,6 +164,8 @@ const ollama = {
     const calls = [];
     try {
       await streamLines(res, (chunk) => {
+        if (chunk.error) throw new Error(String(chunk.error));
+        if (chunk.done_reason === "length") throw new Error("the model reached its response token limit before finishing");
         if (chunk.done === true) finished = true;
         const piece = chunk.message?.content;
         if (piece) {
@@ -226,14 +236,14 @@ function toOpenAiMessages(messages) {
 const openai = {
   name: "openai",
 
-  async chat(messages, { tools = [], model, onDelta } = {}) {
+  async chat(messages, { tools = [], model, onDelta, maxTokens = ctx.numPredict } = {}) {
     if (!config.llm.openaiKey) throw new Error("OPENAI_API_KEY is not set");
-    const { messages: fitted, dropped } = fit(messages, { tools });
+    const { messages: fitted, dropped } = fit(messages, { tools, numPredict: maxTokens });
     const body = {
       model: model || config.llm.openaiModel,
       messages: toOpenAiMessages(fitted),
       temperature: 0.4,
-      max_tokens: ctx.numPredict,
+      max_tokens: maxTokens,
     };
     if (tools.length) {
       body.tools = tools.map((t) => ({ type: "function", function: t.function }));
@@ -264,6 +274,7 @@ const openai = {
     const partial = new Map();
     try {
       await streamLines(res, (chunk) => {
+        if (chunk.error) throw new Error(String(chunk.error.message || chunk.error));
         const choice = chunk.choices?.[0];
         if (!choice) return;
         if (choice.finish_reason) finishReason = choice.finish_reason;
@@ -508,9 +519,13 @@ export const brain = {
     return this.active;
   },
 
-  chat(messages, options = {}) {
-    const { selection = this.active, ...rest } = options;
-    return PROVIDERS[selection.provider].chat(messages, { ...rest, model: rest.model || selection.model });
+  async chat(messages, options = {}) {
+    const { selection = this.active, onDelta, ...rest } = options;
+    if (rest.maxTokens !== undefined) rest.maxTokens = Math.max(1, Math.min(ctx.numPredict, Number.isFinite(rest.maxTokens) ? Math.floor(rest.maxTokens) : ctx.numPredict));
+    const stream = onDelta ? new AssistantTextStream(onDelta) : null;
+    const out = await PROVIDERS[selection.provider].chat(messages, { ...rest, model: rest.model || selection.model, ...(stream ? {onDelta:piece=>stream.push(piece)} : {}) });
+    const cleaned = stream ? stream.finish(out.content) : assistantText(out.content);
+    return {...out, content:cleaned.text, reasoningFiltered:cleaned.filtered};
   },
 
   /** Probe every provider, cached for 30 s — the panel asks on every load. */
