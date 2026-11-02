@@ -59,3 +59,14 @@ test("command deck is served as a real local asset and contains no external runt
   assert.match(source, /api\/desktop/);
   assert.doesNotMatch(html, /<script[^>]+src=["']https?:|<link[^>]+href=["']https?:/);
 });
+
+test("cosmic brand preview is opt-in and its local assets use correct MIME types", async () => {
+  const response = await fetch(base + "/cosmic.html", { headers });
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Quasnooze/);
+  const image = await fetch(base + "/brand/cosmic-sloth.webp", { headers });
+  assert.equal(image.status, 200); assert.match(image.headers.get("content-type"), /image\/webp/);
+  assert.ok((await image.arrayBuffer()).byteLength < 200_000);
+  for (const path of ["/cosmic.js", "/cosmic.css", "/brand/cosmic-mark.svg"]) assert.equal((await fetch(base + path, { headers })).status, 200);
+  assert.match(await (await fetch(base + "/", { headers })).text(), /Command Deck/);
+});
