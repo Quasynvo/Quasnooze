@@ -13,7 +13,11 @@ These are medium/hard engineering tasks, not good-first-issue labels.
 - Complete `ready` entries are preferred, then complete `backlog` entries. Historical
   markers `<!-- roadmap:ID -->` prevent duplicate filing across open **and closed**
   issues. Closing a declined task does not cause it to be re-filed.
-- At most four curated issues and three easy issues are open under current caps.
+- At most ten open contributor tasks share the board across roadmap and Growth
+  publishers; the easy roadmap-task cap remains three. This is a ceiling, not ten
+  new issues daily. PRs and the rolling status dashboard do not occupy task slots.
+  Markers or contributor labels identify tasks; ordinary unlabelled user reports
+  are not automatically treated as approved contributor work.
   Ordinary analysis may still produce no eligible work; the bot never invents tasks.
 - `auto_file: false` is an explicit gate even when the body is complete and status
   is `ready`. NEXT entries remain gated until a maintainer reviews prerequisite
@@ -56,3 +60,41 @@ Before a non-dry run, inspect selection against real issue history:
 Input is an array with issue `body` and `state`, not a secret-bearing dump. Preserve
 markers when editing issues; use the workflow's dry-run input to inspect candidates
 without filing, commenting or closing.
+
+
+## Ten-task shared board
+
+The reviewed manifest sets `open_curated_cap: 10`. Both automatic publishers use
+that ceiling and the same Actions concurrency group to serialize publishing.
+Growth keeps its separate earned quota and proposal sub-cap; these are not raised.
+Roadmap selection counts open growth proposals and contributor-labelled tasks as
+well as roadmap markers. Growth counts the same board before proposing anything.
+All open issues are considered for Growth board counts even when the recent history
+window contains many PRs. Existing deduplication rules and NEXT manual gates remain.
+
+If people manually open tasks during a run, they can race the snapshot; this is a
+bot-side ceiling, not an atomic GitHub server quota. The bot does not delete or close
+human reports to force a count of ten. More than ten manually opened tasks causes
+future automatic filing to pause. Hourly checks cover every day, but an empty
+eligible backlog is a valid no-op; no issues are fabricated to fill ten slots.
+
+The seven additional entries distinguish one reproduced Growth planner state-case
+bug from six feature/evaluation proposals. See each issue for source evidence,
+prerequisites, acceptance criteria and unperformed physical Windows checks.
+
+### Initial ten-task board (2026-11-03)
+
+This is a publication snapshot, not a live completion claim; issue state is authoritative.
+
+| Issue | Task type | Scope |
+|---|---|---|
+| [#85](https://github.com/pinchfoundry/Pinch/issues/85) | Feature/evidence | Readiness and latency baseline |
+| [#86](https://github.com/pinchfoundry/Pinch/issues/86) | Reliability improvement | Muted resident recovery |
+| [#87](https://github.com/pinchfoundry/Pinch/issues/87) | Portability improvement | Durable user state/migration |
+| [#89](https://github.com/pinchfoundry/Pinch/issues/89) | Reproduced bug | Growth state normalization and its own proposal cap |
+| [#90](https://github.com/pinchfoundry/Pinch/issues/90) | Feature proposal | Structured approval previews |
+| [#91](https://github.com/pinchfoundry/Pinch/issues/91) | Feature proposal | Read-only retention preview |
+| [#92](https://github.com/pinchfoundry/Pinch/issues/92) | Evaluation | Labelled retrieval-quality corpus |
+| [#93](https://github.com/pinchfoundry/Pinch/issues/93) | Feature proposal | Allowlisted local support bundle |
+| [#94](https://github.com/pinchfoundry/Pinch/issues/94) | Evaluation | Desktop accessibility acceptance |
+| [#95](https://github.com/pinchfoundry/Pinch/issues/95) | Feature proposal | Static tool/trust inventory |

@@ -195,3 +195,15 @@ test('status dashboard distinguishes manually gated work from auto-filing candid
   const output=renderStatusMarkdown({items:[item({id:'gated',auto_file:false})]},[]);
   assert.match(output,/Maintainer approval required/);
 });
+test('medium candidates use the reviewed total cap, not easy-cap plus one',()=>{
+ const {path,cleanup}=fixture({meta:{open_easy_cap:3,open_curated_cap:10},items:Array.from({length:10},(_,i)=>item({id:`medium-${i}`,difficulty:'medium'}))});
+ try {assert.equal(run(path).code,0);} finally {cleanup();}
+});
+test('a cap beyond the authorized ten-issue ceiling is rejected',()=>{
+ const {path,cleanup}=fixture({meta:{open_easy_cap:3,open_curated_cap:11},items:[]});
+ try {const result=run(path);assert.equal(result.code,1);assert.match(result.out,/1 to 10/);} finally {cleanup();}
+});
+test('both automated issue publishers share a serialization group',async()=>{
+ const {readFileSync}=await import('node:fs');
+ for (const name of ['growth','contributor-queue']) assert.match(readFileSync(`.github/workflows/${name}.yml`,'utf8'),/group: contributor-issue-publishing/);
+});

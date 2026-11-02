@@ -486,3 +486,8 @@ test("demand skips its own proposals and security-labelled issues", () => {
   assert.equal(found[0].action, "annotate");
   assert.ok(found[0].score > 0);
 });
+test('shared contributor board cap stops growth even with uppercase REST/GraphQL states',()=>{
+ const existing=Array.from({length:10},(_,i)=>({number:1000+i,state:i%2?'OPEN':'open',body:`<!-- roadmap:task-${i} -->`,labels:[]}));
+ const result=plan([strong()],existing,{quota:5,maxOpen:20,boardCap:10});
+ assert.equal(result.decision,'skip');assert.equal(result.files.length,0);assert.match(result.reason,/shared contributor cap/);
+});

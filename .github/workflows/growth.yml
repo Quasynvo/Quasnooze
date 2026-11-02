@@ -43,7 +43,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: growth-loop
+  group: contributor-issue-publishing
   cancel-in-progress: false
 
 jobs:
@@ -104,7 +104,13 @@ jobs:
           # proposal declined last month should not be re-filed tomorrow.
           gh issue list --state all --limit 300 \
             --json number,title,state,body,labels,comments,updatedAt,createdAt \
-            > /tmp/issues.json
+            > /tmp/recent-issues.json
+          # Count the open board even when recent history is dominated by PRs.
+          # Any truncation at 10,000 open items still fails the 10-item cap closed.
+          gh issue list --state open --limit 10000 \
+            --json number,title,state,body,labels,comments,updatedAt,createdAt > /tmp/open-issues.json
+          jq -s '.[0] as $recent | .[1] as $open | ($open | map(.number)) as $numbers | $open + [$recent[] | select(.number as $n | $numbers | index($n) | not)]' \
+            /tmp/recent-issues.json /tmp/open-issues.json > /tmp/issues.json
 
           OPEN_PRS="$(gh pr list --state open --label growth --limit 10 --json number --jq 'length')"
           echo "open_prs=$OPEN_PRS" >> "$GITHUB_OUTPUT"
@@ -118,6 +124,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          node scripts/validate-roadmap.js
           node scripts/growth.js --existing /tmp/issues.json --market /tmp/market.json \
             --merged "${{ steps.rate.outputs.merged }}" --hour "$(date -u +%H)" \
             --json > /tmp/decision.json
