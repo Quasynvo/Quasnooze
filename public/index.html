@@ -229,7 +229,7 @@
         <option value="hi-IN">हिन्दी</option>
       </select>
       <button class="hbtn" id="wakeToggle" title="Listen for &quot;Hey Pinch&quot; while this page is open">👂</button>
-      <button class="hbtn" id="speakToggle" title="Speak replies out loud">🔈</button>
+      <button class="hbtn" id="speakToggle" title="Read replies aloud with an installed local voice" aria-pressed="false">🔈</button>
       <button class="hbtn" id="memBtn" title="Memory & status">🧠</button>
     </header>
 
@@ -249,7 +249,7 @@
       </div>
       <div class="hint">
         <span><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> newline</span>
-        <span id="voiceHint">🎙️ voice works in Safari & Chrome</span>
+        <span id="voiceHint">🎙️ voice · 🔈 spoken replies</span>
       </div>
     </div>
   </main>
@@ -379,7 +379,7 @@ function toast(text, ms = 4000) {
 }
 
 if (!SR) {
-  $("voiceHint").textContent = "🎙️ this browser has no speech engine — try Safari on iPhone or Chrome on Android";
+  // The hint is rendered by showVoiceStatus(), which also reports output voices.
   $("mic").style.opacity = ".45";
   $("wakeToggle").style.opacity = ".4";
 } else {
@@ -473,52 +473,204 @@ $("wakeToggle").onclick = () => {
 };
 if (wakeMode) setWake(true);
 
-/* ── speech out: queue sentences so talking starts immediately ───────────── */
-const speech = { queue: [], speaking: false };
+/* ── speech out: local voices only, no server, no dependency ─────────────── */
+// speech-out:start
+const SPEECH_MAX_REPLY_CHARS = 2000;
+const SPEECH_MAX_UTTERANCE_CHARS = 240;
+const SPEECH_MAX_SCAN_CHARS = 20_000;
 
-function speakable(text) {
-  return text
-    .replace(/```[\s\S]*?```/g, " code block ")
-    .replace(/[*_`#>]/g, "")
+/** Remove tags without trusting model output to be well-formed HTML.
+ *  The lookahead is bounded, so a reply of 20,000 '<' cannot turn into a
+ *  quadratic scan of the event loop. */
+function stripSpeechTags(text) {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== "<") { out += text[i]; i++; continue; }
+    let j = i + 1;
+    const end = Math.min(text.length, i + 201);
+    while (j < end && text[j] !== ">") j++;
+    if (j < end) { out += " "; i = j + 1; } // a bounded tag; drop it
+    else { out += "<"; i++; }               // a literal '<', not a tag
+  }
+  return out;
+}
+
+/** Find a sentence or word boundary at or before limit; no backtracking regex. */
+function speechCut(text, limit) {
+  const floor = Math.floor(limit / 2);
+  for (let i = limit; i > floor; i--) {
+    if (".!?。！？".includes(text[i - 1]) && (i >= text.length || /\s/.test(text[i]))) return i;
+  }
+  for (let i = limit; i > floor; i--) if (/\s/.test(text[i])) return i;
+  return limit;
+}
+
+/** Plain, bounded, speakable text. No SSML, no HTML, no code dumps. */
+function speakableText(raw) {
+  let text = String(raw == null ? "" : raw).slice(0, SPEECH_MAX_SCAN_CHARS);
+  const guard = /🛡️\s*\*{0,2}Code check:\*{0,2}/i.exec(text);
+  if (guard) text = text.slice(0, guard.index);
+  // split, not a regex over untrusted input: every fenced block is dropped.
+  text = text.split("```").map((part, i) => (i % 2 ? " code omitted. " : part)).join("");
+  text = stripSpeechTags(text);
+  text = text
+    .replace(/\[([^\]\n]{0,200})\]\([^)\s]{0,500}\)/g, "$1")
+    .replace(/\[\d+(?:\s*[,–-]\s*\d+)*\]/g, "")
+    .replace(/⏰\s*\*{0,2}Reminder:\*{0,2}/gi, "Reminder:")
+    .replace(/[*_`#>]/g, " ")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
+    .replace(/\s+([.,!?;:])/g, "$1")
     .trim();
+  if (text.length <= SPEECH_MAX_REPLY_CHARS) return text;
+  const cut = speechCut(text, SPEECH_MAX_REPLY_CHARS);
+  return text.slice(0, cut).trim() + " Reply continues on screen.";
 }
 
-function enqueueSpeech(text) {
-  if (!store.speak || !window.speechSynthesis) return;
-  const clean = speakable(text);
-  if (!clean) return;
-  speech.queue.push(clean.slice(0, 600));
-  if (!speech.speaking) drainSpeech();
+/** One honest line for the composer hint; no hidden cloud fallback claim. */
+function speechHintText(s, { inputSupported, enabled }) {
+  const input = inputSupported ? "🎙️ mic" : "🎙️ no speech input here";
+  if (!s.supported) return `${input} · 🔈 spoken replies unsupported`;
+  if (!s.localVoices) return `${input} · 🔈 no installed local voice`;
+  if (!enabled) return `${input} · 🔈 tap 🔈 for spoken replies`;
+  return `${input} · 🔊 replies use a local voice`;
 }
 
-function drainSpeech() {
-  const next = speech.queue.shift();
-  if (!next) { speech.speaking = false; return; }
-  speech.speaking = true;
-  const utter = new SpeechSynthesisUtterance(next);
-  utter.lang = micLang.value || navigator.language || "en-IN";
-  utter.rate = 1.03;
-  utter.onend = drainSpeech;
-  utter.onerror = drainSpeech;
-  speechSynthesis.speak(utter);
+/** Every character up to the cap is spoken; chunks stay small enough for browsers. */
+function speechChunks(text, limit = SPEECH_MAX_UTTERANCE_CHARS) {
+  const out = [];
+  let rest = String(text || "").trim();
+  while (rest.length > limit) {
+    const cut = speechCut(rest, limit);
+    out.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) out.push(rest);
+  return out;
 }
 
-function stopSpeech() {
-  speech.queue = [];
-  speech.speaking = false;
-  if (window.speechSynthesis) speechSynthesis.cancel();
+/**
+ * The speech-out state machine. All browser APIs arrive as arguments, so the
+ * shipped code can be driven by a fake in Node. Only voices whose
+ * localService is exactly true are used: a network voice is never a silent
+ * fallback for an offline install.
+ */
+function createSpeechOut({ synthesis, Utterance, getVoices, lang, onStatus = () => {} }) {
+  const supported = Boolean(synthesis && Utterance);
+  let enabled = false;
+  let voices = [];
+  let queue = [];
+  let speaking = false;
+  let generation = 0;
+
+  function status() {
+    return {
+      supported,
+      enabled,
+      localVoices: voices.length,
+      pending: queue.length,
+      speaking,
+      reason: !supported ? "unsupported" : !voices.length ? "no-local-voice" : !enabled ? "off" : "ready",
+    };
+  }
+  function notify() { onStatus(status()); return status(); }
+
+  function refreshVoices(list) {
+    let found = list;
+    if (!found && supported) {
+      try { found = getVoices ? getVoices() : synthesis.getVoices(); } catch { found = []; }
+    }
+    voices = (Array.isArray(found) ? found : []).filter((v) => v && v.localService === true);
+    return notify();
+  }
+
+  function pickVoice() {
+    const wanted = String(lang ? lang() : "en-IN").toLowerCase().split("-")[0];
+    return voices.find((v) => String(v.lang || "").toLowerCase().split("-")[0] === wanted) || voices[0] || null;
+  }
+
+  function drain(gen) {
+    if (gen !== generation || !enabled || !supported) return;
+    const next = queue.shift();
+    if (!next) { speaking = false; return; }
+    const voice = pickVoice();
+    if (!voice) {
+      queue = [];
+      speaking = false;
+      notify();
+      return;
+    }
+    speaking = true;
+    const utter = new Utterance(next);
+    utter.voice = voice;
+    utter.lang = voice.lang || String(lang ? lang() : "en-IN");
+    utter.rate = 1;
+    utter.onend = () => drain(gen);
+    utter.onerror = () => drain(gen);
+    try { synthesis.speak(utter); }
+    catch { speaking = false; queue = []; }
+    return utter;
+  }
+
+  function stop() {
+    generation++;                    // late onend/onerror from cancel() is stale
+    queue = [];
+    speaking = false;
+    if (supported) { try { synthesis.cancel(); } catch {} }
+  }
+
+  function setEnabled(on) {
+    enabled = Boolean(on);
+    if (!enabled) { stop(); return notify(); }
+    refreshVoices();
+    return notify();
+  }
+
+  function speak(raw, { replace = false } = {}) {
+    if (!enabled || !supported) return false;
+    const parts = speechChunks(speakableText(raw));
+    if (!parts.length) return false;
+    if (replace) stop();
+    queue = replace ? parts : queue.concat(parts);
+    refreshVoices();
+    if (!voices.length) { queue = []; speaking = false; notify(); return false; }
+    if (!speaking) drain(generation);
+    return true;
+  }
+
+  refreshVoices();
+  return { status, refreshVoices, setEnabled, speak, stop };
 }
+// speech-out:end
+
+function showVoiceStatus(s) {
+  const button = $("speakToggle");
+  button.classList.toggle("on", s.enabled);
+  button.textContent = s.enabled ? "🔊" : "🔈";
+  button.setAttribute("aria-pressed", s.enabled ? "true" : "false");
+  button.title = s.enabled ? "Stop reading replies aloud" : "Read replies aloud with an installed local voice";
+  $("voiceHint").textContent = speechHintText(s, { inputSupported: Boolean(SR), enabled: s.enabled });
+}
+
+const speechOut = createSpeechOut({
+  synthesis: window.speechSynthesis,
+  Utterance: window.SpeechSynthesisUtterance,
+  getVoices: () => window.speechSynthesis?.getVoices?.() || [],
+  lang: () => $("micLang").value || globalThis.navigator?.language || "en-IN",
+  onStatus: showVoiceStatus,
+});
+speechOut.setEnabled(store.speak);
+window.speechSynthesis?.addEventListener?.("voiceschanged", () => speechOut.refreshVoices());
 
 $("speakToggle").onclick = () => {
   store.speak = !store.speak;
   localStorage.setItem("pinch.speak", store.speak ? "1" : "0");
-  $("speakToggle").classList.toggle("on", store.speak);
-  $("speakToggle").textContent = store.speak ? "🔊" : "🔈";
-  if (!store.speak) stopSpeech();
+  const s = speechOut.setEnabled(store.speak);
+  if (store.speak && s.reason === "no-local-voice") {
+    toast("No installed local voice. Pinch will not use a network voice; install an OS speech voice or use the Windows companion.", 7000);
+  }
 };
-$("speakToggle").classList.toggle("on", store.speak);
-$("speakToggle").textContent = store.speak ? "🔊" : "🔈";
 
 /* ── live reminders from the server ─────────────────────────────────────── */
 function connectEvents() {
@@ -527,7 +679,7 @@ function connectEvents() {
     const data = JSON.parse(event.data);
     toast(data.text, 9000);
     addMsg("assistant", data.text);
-    enqueueSpeech(String(data.text).replace(/⏰ \*\*Reminder:\*\*/i, "Reminder:"));
+    speechOut.speak(data.text);
   });
   src.onerror = () => { src.close(); setTimeout(connectEvents, 5000); };
 }
@@ -594,7 +746,7 @@ async function send() {
   addMsg("user", text);
   busy = true;
   $("send").textContent = "■";
-  stopSpeech();
+  speechOut.stop();
 
   const steps = addSteps();
   const thinking = document.createElement("div");
@@ -734,7 +886,7 @@ async function send() {
       live.after(box);
     }
 
-    if (answer) enqueueSpeech(stripGuardNote(answer));
+    if (answer) speechOut.speak(answer, { replace: true });
   } catch (err) {
     thinking.remove();
     addMsg("assistant", `⚠️ Could not reach Pinch's server: ${err.message}`);
@@ -743,12 +895,6 @@ async function send() {
     $("send").textContent = "➤";
     loadSessions();
   }
-}
-
-/** The guard footer is for the eyes; do not read it aloud. */
-function stripGuardNote(text) {
-  const cut = text.indexOf("🛡️ **Code check:**");
-  return cut === -1 ? text : text.slice(0, cut);
 }
 
 $("send").onclick = send;
