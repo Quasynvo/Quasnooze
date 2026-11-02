@@ -104,3 +104,20 @@ claims about event behavior. Windows CI also prints prerequisite inventory and a
 synthetic audio report; a report saying unavailable/failed is not proof of speech
 success. Node tests cover bounded audio events, expiration and disconnected state.
 Real microphone/audio-device validation remains required on the affected PC.
+
+## Actual Windows probe result
+
+On GitHub's Windows Server 2025 runner with the en-US classic recognizer, the
+same TTS-generated fixtures produced the following. Confidence is the engine's
+score, **not a measured real-world accuracy percentage**.
+
+| Fixture | Before capture-grammar change | After shared constrained-command grammar |
+|---|---|---|
+| `hey pinch` | `hey pinch`, 0.982, wake gate accepts | `hey pinch`, 0.982, accepts |
+| `what time is it` | `What I was it`, 0.378, command gate rejects | `what time is it`, 0.892, accepts |
+
+Before: [Windows job 125163987967](https://github.com/pinchfoundry/Pinch/actions/runs/41411062890/job/125163987967).
+After: [Windows job 125164938874](https://github.com/pinchfoundry/Pinch/actions/runs/41411368873/job/125164938874), production revision `fd942de`.
+Both reports explicitly say `microphoneOpened: false`. These controlled synthetic
+results verify the fixture regression and correction, **not the affected PC's
+microphone, accent, noise, wake-to-dictation transition or overall speech accuracy**.
