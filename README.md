@@ -140,6 +140,9 @@ npm run demo
 - **Send it a file.** Drop a PDF, a screenshot or a spreadsheet on the panel and ask
   about it — extracted in-process, never uploaded anywhere. No OCR for scans, and it
   says so instead of pretending.
+- **Search a workspace folder.** Offline BM25 retrieves citable text, Markdown, PDF and DOCX
+  passages. PDF/DOCX extraction is best effort, scans need OCR, and bounded scans may be partial;
+  see [document search](docs/GUIDE.md#search-your-documents).
 - **On your machine, with your model.** Default is Ollama on the same laptop. Your
   conversations are JSON files in `data/` — `rm -rf data` is a valid uninstall.
 - **Answers you can check.** When it reads a file or searches the web, the reply cites what it

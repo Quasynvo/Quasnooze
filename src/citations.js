@@ -28,7 +28,7 @@ export function citedIds(text) {
       const range = part.trim().split("-");
       if (range.length === 2) {
         const [a, b] = range.map((x) => Number(x.trim()));
-        if (Number.isFinite(a) && Number.isFinite(b) && b >= a && b - a <= 12) {
+        if (Number.isFinite(a) && Number.isFinite(b) && b >= a) {
           for (let i = a; i <= b; i++) out.add(i);
         }
       } else {

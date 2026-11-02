@@ -825,35 +825,46 @@ See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 Ask: **“Search my `notes` folder for the reimbursement ceiling, and cite the document.”**
 Pinch offers `search_documents` to the model. It takes an explicit workspace folder,
-query and optional result limit (1–8). It builds an in-memory passage index, ranks
-word matches, and returns excerpts with file paths and line ranges. Retrieved
-passages enter the existing per-turn source registry; answers can cite them as
-`[1]`. This is tool-assisted answering, not a guarantee that every model will use
-or correctly interpret the evidence. Ask it to search explicitly when needed.
+query and optional result limit (1–8). It ranks passages using BM25 and returns excerpts
+with file paths and line ranges. Retrieved passages enter the per-turn source registry;
+answers can cite them as `[1]`. The citation checker reports unknown numbers, and the
+guard flags invented citations. A valid number identifies retrieved evidence; it does
+not prove the evidence supports the claim. Ask the model to search explicitly when needed.
 
-Everything stays on your device with the default local model. No embedding server,
-network request, database or additional dependency is required. If you deliberately
-use a cloud model, retrieved passages become part of that model's prompt.
+**Supported:** `.txt`, `.md`, `.markdown`, `.rst`, `.csv`, `.pdf` and `.docx`. PDF
+and DOCX use the same built-in, best-effort extractors as attachments. References such
+as `#text-L1-L3` refer to lines of **extracted text**, not PDF pages or physical Word
+lines. Complex PDF fonts, layout and images may not extract accurately; scans need OCR,
+which is not provided. Unsupported, unreadable and limited files may be skipped; a
+no-match result is not proof of absence. This is lexical retrieval, not semantic
+embeddings: use words present in your documents.
 
-**Supported:** `.txt`, `.md`, `.markdown`, `.rst`, `.csv`. This is lexical retrieval,
-not semantic embeddings: use words present in your documents. PDF, DOCX, OCR and
-image extraction are not supported. A no-match result is not proof of absence.
+The in-memory, bounded LRU index reuses unchanged file passages. Every search walks the
+folder, rechecks workspace/credential rules, opens and hashes bounded file contents, and
+compares file identity, size, modification/change times and hash before reusing a cache
+entry. Edited, replaced and deleted files therefore do not leave ordinary stale hits,
+even when filesystem timestamps are coarse. The cache is process-local, not persisted.
+Everything stays on your device with the default local model. If you deliberately use a
+cloud model, retrieved passages become part of that model's prompt.
 
-The index is rebuilt per query, so edited and deleted files do not leave stale
-copies. Nothing is persisted. Hidden files/directories, dependency/build trees,
-symlinks and binary-looking content are excluded. Every read uses the same
-workspace and protected-credential policy as file tools. Output is labelled
-untrusted: document text must not be followed as instructions. These are safeguards,
-not an OS sandbox or a complete prompt-injection defense; concurrent replacement
-of parent directories by another local process remains outside this guarantee.
+Hidden files/directories, dependency/build trees, traversed symlinks and binary-looking
+text files are excluded. Every read uses the file tools' workspace and protected-credential
+policy. Final-component symlink protection uses `O_NOFOLLOW` where available. The tool
+marks excerpts as untrusted, escapes its wrapper delimiters, and registers only passages
+that fit the source and output budgets. These are safeguards, not an OS sandbox or a
+complete prompt-injection defense: concurrent replacement of parent directories by another
+local process remains outside this guarantee. PDF/ZIP decompression has an output cap to
+reduce the risk from compressed bombs; the extractors are not full document validators.
 
-Scan budgets: 2,000 entries, eight directory levels, 256 KiB per file and 4 MiB
-in total. Passages cover up to 24 lines with excerpts capped at 4,000 characters.
-Limit hits to eight. When scan/size budgets omit content, output says **PARTIAL**;
-narrow the folder instead of treating the result as exhaustive. Skipped files are
-counted, including unreadable files. Indexing is bounded but runs in-process, so
-large folders can briefly delay the event loop; this is intended for small personal
-text collections, not enterprise-scale search.
+Scan budgets: 2,000 entries, eight directory levels, 2 MiB per file, 12 MiB input per
+search, 256 Ki characters extracted per file, and 4 Mi characters per search. The cache
+has a 16 MiB approximate weight cap. Passages cover up to 24 extracted lines or 4,000
+characters; long lines are split. PDF streams and DOCX XML are limited to 2 MiB expanded,
+with further PDF stream/count limits. Output says **PARTIAL** when coverage or source
+budgets omit content; narrow the folder rather than treating it as exhaustive. Skipped
+files are counted. Indexing is bounded but runs in-process, so large folders can briefly
+delay the event loop; it is intended for small personal collections, not enterprise-scale
+search. No runtime dependency, embedding server, database, OCR or vector store is added.
 
 ### Optional Whisper transcription API
 

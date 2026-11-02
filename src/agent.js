@@ -398,6 +398,9 @@ export async function runAgent({
       onEvent({ type: "tool", name: tool.name, label });
       let result;
       try {
+        // Let evidence-producing tools avoid registering passages the model
+        // cannot see because the remaining tool-output budget is exhausted.
+        ctx.toolOutputLimit = Math.min(12_000, Math.max(0, toolBudget));
         result = await tool.run(call.arguments || {}, ctx);
       } catch (err) {
         result = {

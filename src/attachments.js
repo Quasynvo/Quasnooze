@@ -35,6 +35,8 @@ import { inflateRawSync, inflateSync } from "node:zlib";
 /** A single upload may not exceed this. Bigger than any document a person
  *  attaches by hand, small enough that memory stays bounded. */
 export const MAX_BYTES = 12 * 1024 * 1024;
+// Bound expansion before zlib allocates: small PDFs/DOCX can be zip bombs.
+export const MAX_EXTRACTED_BYTES = 2 * 1024 * 1024;
 /** Characters of one file that reach the model. num_ctx is 8192 tokens, so a
  *  whole manual would crowd out the conversation it was attached to. */
 export const PER_FILE_CHARS = 8_000;
@@ -152,8 +154,10 @@ export function pdfText(buffer) {
   const chunks = [];
   const streamRe = /stream\r?\n?/g;
   let match;
+  let scanned = 0, streams = 0, truncated = false;
 
   while ((match = streamRe.exec(raw)) !== null) {
+    if (++streams > 64 || scanned >= MAX_EXTRACTED_BYTES * 2) { truncated = true; break; }
     const start = match.index + match[0].length;
     const end = raw.indexOf("endstream", start);
     if (end < 0) break;
@@ -163,21 +167,23 @@ export function pdfText(buffer) {
     let data = null;
     if (/\/FlateDecode/.test(dict)) {
       try {
-        data = inflateSync(body);
+        data = inflateSync(body, { maxOutputLength: MAX_EXTRACTED_BYTES });
       } catch {
-        data = null; // a corrupt or nested stream is skipped, not fatal
+        data = null; truncated = true; // corrupt or oversized stream
       }
     } else if (!/\/(DCTDecode|JPXDecode|CCITTFaxDecode|LZWDecode|RunLengthDecode)/.test(dict)) {
-      data = body;
+      data = body.subarray(0, MAX_EXTRACTED_BYTES);
+      if (body.length > data.length) truncated = true;
     }
     if (!data) continue;
+    scanned += data.length;
 
     const text = textOperators(data.toString("latin1"));
     if (text.trim()) chunks.push(text);
-    if (chunks.join("\n").length > PER_FILE_CHARS * 4) break;
+    if (chunks.join("\n").length > PER_FILE_CHARS * 4) { truncated = true; break; }
   }
 
-  return { text: chunks.join("\n").replace(/\n{3,}/g, "\n\n").trim(), pages: chunks.length };
+  return { text: chunks.join("\n").replace(/\n{3,}/g, "\n\n").trim(), pages: chunks.length, truncated };
 }
 
 /** `(hello) Tj` and `[(a) -200 (b)] TJ`, with the escapes the spec allows. */
@@ -270,8 +276,11 @@ export function unzipEntry(buffer, wanted) {
       const localExtraLen = buffer.readUInt16LE(localOffset + 28);
       const dataStart = localOffset + 30 + localNameLen + localExtraLen;
       const data = buffer.subarray(dataStart, dataStart + compressedSize);
-      if (method === 0) return data;
-      if (method === 8) return inflateRawSync(data);
+      if (method === 0) {
+        if (data.length > MAX_EXTRACTED_BYTES) throw new Error("document exceeds extraction limit");
+        return data;
+      }
+      if (method === 8) return inflateRawSync(data, { maxOutputLength: MAX_EXTRACTED_BYTES });
       throw new Error(`unsupported zip compression method ${method}`);
     }
     offset += 46 + nameLen + extraLen + commentLen;
@@ -346,16 +355,16 @@ export function extract(buffer, name = "") {
   }
 
   if (kind === "pdf") {
-    const { text, pages } = safe(() => pdfText(buffer));
+    const { text, pages, truncated } = safe(() => pdfText(buffer));
     if (!text) {
       return {
         ...base,
         text: "",
         images: [],
-        note: "this PDF has no extractable text — it is probably a scan. Pinch does not do OCR; attach a screenshot instead and use a vision model.",
+        note: truncated ? "PDF extraction was incomplete or exceeded safety limits." : "this PDF has no extractable text — it is probably a scan. Pinch does not do OCR; attach a screenshot instead and use a vision model.",
       };
     }
-    return { ...base, text, images: [], note: pages ? null : "partial", };
+    return { ...base, text, images: [], note: truncated || !pages ? "partial" : null, truncated: Boolean(truncated) };
   }
 
   if (kind === "docx") {

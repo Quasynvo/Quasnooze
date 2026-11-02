@@ -26,11 +26,12 @@ export function createSources() {
 /**
  * Register something the turn actually retrieved. Returns the id the model
  * should cite. Re-registering the same ref returns the same id, so searching
- * twice for the same page does not produce two "sources".
+ * twice for the same page does not produce two "sources". Callers may provide
+ * a content version when the same reference can name different passages.
  */
-export function addSource(reg, { kind, title, ref, snippet = "" }) {
+export function addSource(reg, { kind, title, ref, snippet = "", version = "" }) {
   if (!reg || !ref) return null;
-  const key = `${kind}:${ref}`;
+  const key = JSON.stringify([kind, ref, version]);
   const existing = reg.index.get(key);
   if (existing) return existing;
   if (reg.items.length >= MAX_SOURCES) return null;
