@@ -73,6 +73,7 @@ ${C.coral("🦞 Pinch")} ${C.dim("— terminal mode. /help for commands, /exit t
       console.log(`
   /exit   leave
   /help   this
+  /persona list/save/use/show/delete local style presets
   /status show what is waiting for approval
   anything else is sent to Pinch.
 `);

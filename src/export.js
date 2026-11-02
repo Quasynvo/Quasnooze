@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { config, ROOT } from "./config.js";
-import { loadMemory, loadReminders, loadSchedules, listSessions, loadSession } from "./store.js";
+import { loadPersonas, loadMemory, loadReminders, loadSchedules, listSessions, loadSession } from "./store.js";
 
 export const EXPORT_VERSION = 1;
 
@@ -31,6 +31,7 @@ export const EXPORT_VERSION = 1;
  * @param {boolean} [opts.includeTelemetry] default false
  */
 export function buildExport({ includeTelemetry = false } = {}) {
+  const personas = loadPersonas();
   const memories = loadMemory();
   const reminders = loadReminders();
   const schedules = loadSchedules();
@@ -55,12 +56,14 @@ export function buildExport({ includeTelemetry = false } = {}) {
       sessions: sessions.length,
       messages: sessions.reduce((n, s) => n + (s.messages?.length || 0), 0),
       memories: memories.facts?.length || 0,
+      personas: personas.personas.length,
       reminders: reminders.length,
       schedules: schedules.length,
       profileChars: profile.length,
     },
     profile,
     memory: memories,
+    personas,
     reminders,
     schedules,
     sessions,
@@ -110,6 +113,7 @@ export function describeExport({ path, bytes, counts }) {
   return [
     `sessions   ${counts.sessions} (${counts.messages} messages)`,
     `memories   ${counts.memories}`,
+    `personas   ${counts.personas}`,
     `reminders  ${counts.reminders}`,
     `schedules  ${counts.schedules}`,
     counts.telemetryTurns !== undefined ? `telemetry  ${counts.telemetryTurns} turns` : `telemetry  not included`,

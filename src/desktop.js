@@ -1,4 +1,5 @@
 /** Resident-desktop orchestration. No microphone or process starts on import. */
+import { personaCommand } from "./personas.js";
 import { randomUUID } from "node:crypto";
 import { opendir } from "node:fs/promises";
 import { join, relative } from "node:path";
@@ -16,6 +17,7 @@ const SITES = new Map([["github", "https://github.com/"], ["youtube", "https://w
 
 export function desktopIntent(input) {
   const text = /^open https:\/\//i.test(input.trim()) ? input.trim() : input.trim().replace(/[.!?]+$/, "");
+  if (/^\/persona(?:\s|$)/i.test(text)) return {kind:"persona"};
   const lower = text.toLowerCase();
   if (/^(?:what(?:'s| is) the )?time$/.test(lower) || lower === "what time is it") return { kind: "time" };
   if (["system status", "computer status", "status"].includes(lower)) return { kind: "system" };
@@ -106,6 +108,7 @@ export class DesktopRuntime {
     let reply, failed = false, streamDraft = "", lastDraftAt = 0;
     try {
       switch (intent.kind) {
+        case "persona": reply = personaCommand(text, SESSION); break;
         case "time": reply = `It is ${new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: config.timezone })}.`; break;
         case "system": reply = `${(freemem() / 2 ** 30).toFixed(1)} GB free of ${(totalmem() / 2 ** 30).toFixed(1)} GB RAM. Computer uptime: ${Math.floor(uptime() / 3600)} hours.`; break;
         case "mute": this.control("mute"); reply = "Microphone muted."; break;

@@ -10,9 +10,10 @@
  *  • every tool failure is fed back to the model as text, never swallowed.
  */
 import { config } from "./config.js";
+import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
 import { assistantText } from "./assistant-text.js";
-import { buildSystemPrompt, buildConversationPrompt, isSocialTurn } from "./prompt.js";
+import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, describeTier, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
@@ -189,6 +190,11 @@ export async function runAgent({
   autonomy = "interactive",
   allowSchedule = true,
 }) {
+  if (autonomy === "unattended" && /^\/persona(?:\s|$)/i.test(String(text).trim())) {
+    return {text:"Persona commands require an interactive user; no persona settings were changed.",sessionId,trace:[],guard:[],sources:[],ms:0,firstTextMs:null,error:null};
+  }
+  const command = attachments.length ? null : personaCommand(text, sessionId);
+  if (command !== null) return {text:command,sessionId,trace:[],guard:[],sources:[],ms:0,firstTextMs:null,error:null};
   const social = isSocialTurn(text, attachments);
   const activeModel = brain.active; // Pin provider/model for the entire tool loop.
   const unattended = autonomy === "unattended";
@@ -241,9 +247,11 @@ export async function runAgent({
   const userTurn = { role: "user", content: attachmentBlock.text ? `${attachmentBlock.text}\n\n---\n\n${text}` : text };
   if (attachmentBlock.images.length) userTurn.images = attachmentBlock.images;
 
+  const persona = buildPersonaMessage(sessionId);
   let messages = [
     { role: "system", content: social ? buildConversationPrompt({ channel }) : buildSystemPrompt({ channel }) },
     ...history,
+    ...(persona ? [persona] : []),
     userTurn,
   ];
 

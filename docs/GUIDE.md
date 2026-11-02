@@ -950,3 +950,43 @@ fields are accepted. Successful selection returns `{ "active": { "provider":
 "ollama", "model": "coder:7b" } }`; invalid input returns 400, unavailable Ollama
 502, unauthorized requests 401, disallowed Host/Origin 403. Other methods return
 405. Listing is cached briefly; selecting a local model validates a fresh list.
+
+
+## Saved personas
+
+Save reusable local style preferences without changing Pinch's honesty or approval rules:
+
+```text
+/persona save concise-coder Be concise. Give a small working code example and mention important caveats.
+/persona save daily-planner Organize tasks into a practical numbered plan with priorities.
+/persona save strict-reviewer Review critically. Separate verified defects from suggestions and explain the evidence.
+/persona list
+/persona show concise-coder
+/persona use concise-coder
+/persona use default
+/persona delete strict-reviewer
+```
+
+These explicit commands run locally without a model call, including on the resident desktop.
+Saving does not select a preset. `use` changes only the current session, on subsequent turns;
+other sessions keep their own choice. The library is shared by local channels using the same
+Pinch data directory. Updating a preset affects its selected sessions on their next turn;
+deleting it returns those sessions to default. Selections survive restarts when the same
+session ID is reused. `default` is reserved and restores normal behavior.
+
+Names must start with a lowercase letter and contain only lowercase letters, digits, `_`
+and `-` (maximum 40 characters). Instructions contain 1–2000 characters; the library holds
+up to 50 presets and 1,000 selected sessions. Persona commands are not available to
+unattended tasks, and model output cannot dispatch them.
+
+The versioned registry and session selections are stored atomically in `data/personas.json`
+(or your `PINCH_DATA` directory) and included in `pinch export`. Exported instructions may
+contain private text: review exports before sharing them. Avoid simultaneous registry edits
+from multiple processes: atomic replacement prevents partial files, not lost concurrent edits.
+Malformed or unsupported files fall back to default on reads; commands refuse to overwrite
+them. Back up and repair the file before editing the library again.
+
+Presets are subordinate user-role preferences, not system prompts or permission grants.
+They never replace the core system prompt, merge into runtime configuration, or disable
+code-enforced approvals and honesty checks. A model can still ignore or misinterpret a
+style request; request-body and safety regression tests are not a live tone-quality benchmark.

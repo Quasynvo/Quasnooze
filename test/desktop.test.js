@@ -239,3 +239,13 @@ test("resident model drafts appear before final completion and clear after it",a
   finish();assert.equal((await pending).text,'Hello! How are you?');
   assert.equal(runtime.snapshot().draft,'');
 });
+
+
+test('desktop persona commands work locally without native host or model inference',async()=>{
+ let calls=0;
+ const runtime=new DesktopRuntime({agent:async()=>{calls++;throw Error('must not call model');}});
+ assert.match((await runtime.request('/persona save local-style Keep answers short.')).text,/Saved persona/);
+ const result=await runtime.request('/persona use local-style');
+ assert.equal(result.fastPath,true);assert.match(result.text,/now uses/);assert.equal(calls,0);
+ await runtime.request('/persona use default');await runtime.request('/persona delete local-style');
+});
