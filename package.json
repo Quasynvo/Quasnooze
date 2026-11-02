@@ -25,7 +25,8 @@
     "radar": "node scripts/tech-radar.js",
     "growth": "node scripts/growth.js",
     "verify": "node --test && node scripts/audit.js",
-    "desktop": "node scripts/desktop.js"
+    "desktop": "node scripts/desktop.js",
+    "desktop:doctor": "node scripts/desktop-doctor.js"
   },
   "optionalDependencies": {
     "@whiskeysockets/baileys": "^6.7.16",

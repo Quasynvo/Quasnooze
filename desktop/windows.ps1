@@ -1,4 +1,4 @@
-param([switch]$CheckOnly)
+param([switch]$CheckOnly, [switch]$Doctor, [switch]$MicTest, [switch]$AudioSelfTest)
 $ErrorActionPreference = 'Stop'
 # This process-only execution policy is supplied by the explicit desktop launcher.
 # No machine policy, administrator rights, Python, or cloud speech service is used.
@@ -13,6 +13,9 @@ $references = @(
     [System.Speech.Recognition.SpeechRecognitionEngine].Assembly.Location
     [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location
 )
-Add-Type -Path (Join-Path $PSScriptRoot 'Companion.cs') -ReferencedAssemblies $references
+Add-Type -Path @((Join-Path $PSScriptRoot 'Companion.cs'), (Join-Path $PSScriptRoot 'SpeechDoctor.cs')) -ReferencedAssemblies $references
+if ($AudioSelfTest) { [PinchSpeechDoctor]::AudioSelfTest(); exit 0 }
+if ($MicTest -and -not $Doctor) { throw '-MicTest requires -Doctor' }
+if ($Doctor) { [PinchSpeechDoctor]::Run([bool]$MicTest); exit 0 }
 if ($CheckOnly) { [PinchCompanion]::SelfTest(); exit 0 }
 [PinchCompanion]::Run()

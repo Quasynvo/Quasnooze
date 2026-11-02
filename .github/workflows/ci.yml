@@ -184,5 +184,9 @@ jobs:
       - name: Compile .NET Framework native host without opening a microphone
         shell: powershell
         run: ./desktop/windows.ps1 -CheckOnly
+      - name: Speech prerequisite inventory (no microphone)
+        run: node scripts/desktop-doctor.js
+      - name: Synthetic speech probe (no microphone; reports unavailable prerequisites explicitly)
+        run: node scripts/desktop-doctor.js --self-test
       - name: Desktop orchestration and model-choice regressions
         run: node --test test/desktop.test.js test/desktop-http.test.js
