@@ -48,6 +48,9 @@ public static class PinchCompanion {
         Tray.Text = ("Pinch - " + phase).Substring(0, Math.Min(63, ("Pinch - " + phase).Length));
     }
     static void Voice(bool mic, string detail) { Emit(new { type = "voice", mic = mic, detail = detail }); }
+    static void SpeechStatus(string status, string detail, string text = "", double? confidence = null) {
+        Emit(new { type = "recognition", status = status, detail = detail, text = text, confidence = confidence });
+    }
     static void StopRecognition() {
         var old = Recognizer; Recognizer = null;
         if (old != null) { try { old.RecognizeAsyncCancel(); } catch { } old.Dispose(); }
@@ -55,6 +58,7 @@ public static class PinchCompanion {
     }
     static void StopSpeech() { CurrentPrompt = null; if (Speaker != null) Speaker.SpeakAsyncCancelAll(); }
     static bool Consent() {
+        Window.Show(); Window.Activate();
         return MessageBox.Show(Window,
             "Enable local microphone listening? Windows System.Speech will listen for 'Hey Pinch', then capture one request. Audio is not saved or sent by this component. Recognition needs an installed English desktop speech pack. A wake phrase is NOT authentication: nearby people or speakers can activate it. Use Mute at any time. Restarting Pinch starts muted.",
             "Pinch - local microphone permission", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
@@ -72,30 +76,54 @@ public static class PinchCompanion {
                 var builder = new GrammarBuilder(); builder.Culture = info.Culture;
                 builder.Append(new Choices("hey pinch", "pinch")); rec.LoadGrammar(new Grammar(builder));
             }
-            rec.InitialSilenceTimeout = TimeSpan.FromSeconds(8);
+            rec.InitialSilenceTimeout = TimeSpan.FromSeconds(12);
             rec.BabbleTimeout = TimeSpan.FromSeconds(8);
             rec.EndSilenceTimeout = TimeSpan.FromMilliseconds(650);
+            bool reported = false;
+            rec.SpeechDetected += (s, e) => Post(() => {
+                if (Object.ReferenceEquals(Recognizer, rec) && !Working && capture)
+                    SpeechStatus("hearing", "Audio detected. Finish one instruction, then pause.");
+            });
+            rec.AudioSignalProblemOccurred += (s, e) => Post(() => {
+                if (Object.ReferenceEquals(Recognizer, rec) && !Working)
+                    SpeechStatus("audio-problem", "Windows reports " + e.AudioSignalProblem + ". Check Windows Settings > System > Sound > Input; Pinch uses the Windows default recording device, not the browser's selected device.");
+            });
+            rec.SpeechRecognitionRejected += (s, e) => Post(() => {
+                if (!Object.ReferenceEquals(Recognizer, rec) || Working || !capture) return;
+                reported = true;
+                SpeechStatus("rejected", "Windows could not recognize that speech confidently. No command was run. Use Talk again, check the default input device and English desktop speech pack.");
+            });
             rec.SpeechRecognized += (s, e) => Post(() => {
                 if (!Object.ReferenceEquals(Recognizer, rec) || !WantWake || Working) return;
-                if (e.Result.Confidence < (capture ? 0.45 : 0.78)) return;
+                if (e.Result.Confidence < (capture ? 0.45 : 0.78)) {
+                    if (capture) { reported = true; SpeechStatus("rejected", "Low-confidence speech was not executed. Try Talk again and speak clearly into the Windows default microphone.", e.Result.Text, e.Result.Confidence); }
+                    return;
+                }
                 if (capture) {
                     string text = e.Result.Text;
                     if (text.Length == 0 || text.Length > 2000) return;
+                    reported = true; SpeechStatus("heard", "Recognized locally; sending this instruction to Pinch.", text, e.Result.Confidence);
                     StopRecognition(); Working = true; Phase("working", text); Emit(new { type = "command", text = text });
                 } else { StartRecognition(true); }
             });
             rec.RecognizeCompleted += (s, e) => Post(() => {
                 if (!Object.ReferenceEquals(Recognizer, rec)) return;
                 StopRecognition();
-                if (e.Error != null) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", "Check microphone permissions and your English desktop speech pack."); return; }
-                if (capture && WantWake && !Working) StartRecognition(false);
+                if (e.Error != null) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Error.Message); SpeechStatus("error", e.Error.Message + " Check Windows microphone permissions for desktop apps and your English desktop speech pack."); return; }
+                if (e.InputStreamEnded) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", "The microphone input stream ended."); SpeechStatus("error", "The Windows microphone input stream ended. Check the default recording device and permissions, then use Talk to retry."); return; }
+                if (capture && !reported && !Working) {
+                    SpeechStatus(e.InitialSilenceTimeout ? "timeout" : "rejected", e.InitialSilenceTimeout ? "No speech detected within 12 seconds. Check Windows default Input and allow desktop apps to access the microphone, then press Talk again." : "No usable instruction recognized. Press Talk to retry; check the Windows default microphone and English desktop speech pack.");
+                }
+                // Multiple-mode recognition may also complete. Never leave an armed UI with a stopped engine.
+                if (WantWake && !Working && !e.Cancelled) StartRecognition(false);
             });
             rec.SetInputToDefaultAudioDevice();
+            if (capture) SpeechStatus("listening", "Listening for up to 12 seconds on the Windows default recording device (" + info.Culture.Name + "). Say one instruction, then pause.");
             rec.RecognizeAsync(capture ? RecognizeMode.Single : RecognizeMode.Multiple);
             Phase(capture ? "listening" : "armed", capture ? "I'm listening. Say one request; pause when finished." : Detail.Text);
             Voice(true, "Local System.Speech - " + info.Culture.Name);
             Emit(new { type = "state", phase = capture ? "listening" : "armed" });
-        } catch (Exception e) { StopRecognition(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); }
+        } catch (Exception e) { StopRecognition(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); SpeechStatus("error", e.Message); }
     }
     static void ToggleWake() {
         if (WantWake) { WantWake = false; StopRecognition(); Wake.Text = "Enable local wake"; Phase("muted", "Microphone released. Type a command or enable local wake."); Emit(new { type = "state", phase = "muted" }); }

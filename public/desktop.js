@@ -6,7 +6,9 @@ if (queryKey) { sessionStorage.setItem('pinch.desktop.key', queryKey); history.r
 let current = {}, approvalId = '', lastModel = '', refreshing = false;
 const headers = () => ({'content-type':'application/json', ...(key ? {'x-pinch-key':key} : {})});
 async function api(path, body) {
- const response = await fetch(path, {method:body === undefined ? 'GET':'POST', headers:headers(), ...(body === undefined ? {signal:AbortSignal.timeout(5000)} : {}), ...(body === undefined ? {} : {body:JSON.stringify(body)})});
+ let response;
+ try { response = await fetch(path, {method:body === undefined ? 'GET':'POST', headers:headers(), ...(body === undefined ? {signal:AbortSignal.timeout(5000)} : {}), ...(body === undefined ? {} : {body:JSON.stringify(body)})}); }
+ catch (err) { throw Error((err.name === 'TimeoutError' ? 'Pinch did not respond in time.' : 'Cannot reach the Pinch service at '+location.origin+'.')+' Keep npm run desktop running and reopen Deck from the native Windows widget.'); }
  if (response.status === 401) { if (!$('keyDialog').open) $('keyDialog').showModal(); throw Error('Enter this instance’s key to connect.'); }
  const data = await response.json(); if (!response.ok) throw Error(data.error || 'The request was refused.'); return data;
 }
@@ -17,8 +19,10 @@ function render(state) {
  $('presence').dataset.phase=phase; $('phase').textContent=phase.replaceAll('-',' ').toUpperCase(); $('presenceTitle').textContent=label[0]; $('presenceCopy').textContent=label[1];
  $('micState').textContent=state.mic ? 'ON':'OFF'; $('nativeStatus').textContent=state.available ? 'CONNECTED':'NOT RUNNING';
  $('nativeCopy').textContent=state.available ? (state.voice || 'Companion connected.') : 'Run npm run desktop on Windows. This webpage never turns on a browser speech recognizer.';
+ $('speechDetail').textContent=state.speech ? 'Last speech event — '+state.speech.status.toUpperCase()+': '+state.speech.detail : 'Press Talk locally, accept the native microphone dialog, then speak when LISTENING appears. Uses the Windows default recording device.';
+ $('heardText').textContent=state.speech?.text ? 'Windows heard: '+state.speech.text+(state.speech.confidence === null ? '' : ' ('+Math.round(state.speech.confidence*100)+'% confidence)') : '';
  $('listenButton').disabled=!state.available || state.busy; $('muteButton').disabled=!state.available; $('stopButton').disabled=!state.available;
- $('runButton').disabled=Boolean(state.busy);
+ $('runButton').disabled=Boolean(state.busy); $('allow').disabled=$('deny').disabled=false;
  $('latency').textContent=state.lastMs === null ? 'Not measured' : `${state.lastMs} ms`;
  if (state.text && (state.recent?.length || phase === 'reminder')) $('result').textContent=state.text;
  approvalId=state.approval?.id || ''; $('permission').hidden=!approvalId; $('approvalText').textContent=state.approval?.description || '';
@@ -31,13 +35,15 @@ function render(state) {
 async function refresh() {
  if(refreshing) return; refreshing=true;
  try {
-  const [state,health]=await Promise.all([api('/api/desktop'),api('/api/health')]); render(state);
+  const state=await api('/api/desktop'); render(state);
   $('connection').textContent='LOCAL SERVICE CONNECTED'; $('notice').hidden=Boolean(state.available);
   $('notice').textContent=state.available ? '' : 'The service is connected, but the native companion is not running. Time, system status and bounded file search work here; desktop voice and app actions require npm run desktop on Windows.';
+  try { const health=await api('/api/health');
   $('modelName').textContent=health.model; $('provider').textContent=health.provider;
   if (lastModel !== health.model) { $('modelStatus').textContent='Installed-model availability not yet checked. Configure to inspect.'; lastModel=health.model; }
+  } catch(err) { $('modelStatus').textContent='Model status unavailable: '+err.message; }
   const link=new URL('/index.html',location.origin); if(key) link.searchParams.set('key',key); $('historyLink').href=link.pathname+link.search;
- } catch (err) { $('connection').textContent='CONNECTION NEEDED'; $('notice').hidden=false; $('notice').textContent=err.message; $('micState').textContent='UNKNOWN'; $('footerState').textContent='CONNECTION LOST · VERIFY MICROPHONE IN THE NATIVE TRAY'; $('presenceTitle').textContent='Connection needs attention.'; $('presenceCopy').textContent='This page cannot verify microphone state. Use the native tray to mute or quit Pinch.'; } finally {refreshing=false;}
+ } catch (err) { $('connection').textContent='CONNECTION NEEDED'; $('notice').hidden=false; $('notice').textContent=err.message; $('nativeStatus').textContent='UNKNOWN'; $('nativeCopy').textContent='Service connection lost. The previous connected status is stale. Check the native tray; this page cannot verify or mute its microphone.'; for(const id of ['listenButton','muteButton','stopButton','runButton','allow','deny']) $(id).disabled=true; $('micState').textContent='UNKNOWN'; $('footerState').textContent='CONNECTION LOST · VERIFY MICROPHONE IN THE NATIVE TRAY'; $('presenceTitle').textContent='Connection needs attention.'; $('presenceCopy').textContent='This page cannot verify microphone state. Use the native tray to mute or quit Pinch.'; } finally {refreshing=false;}
 }
 async function run(text) {
  if (!text.trim()) return;
@@ -50,7 +56,7 @@ $('commandForm').onsubmit=e=>{e.preventDefault(); const text=$('command').value;
 for(const button of document.querySelectorAll('[data-command]')) button.onclick=()=>run(button.dataset.command);
 for(const button of document.querySelectorAll('[data-close]')) button.onclick=()=>$(button.dataset.close).close();
 $('nativeHelp').onclick=()=>$('nativeDialog').showModal();
-for(const [id,control] of [['listenButton','listen'],['muteButton','mute'],['stopButton','stop-voice']]) $(id).onclick=()=>api('/api/desktop',{control}).then(refresh).catch(e=>toast(e.message));
+for(const [id,control] of [['listenButton','listen'],['muteButton','mute'],['stopButton','stop-voice']]) $(id).onclick=()=>api('/api/desktop',{control}).then(refresh).catch(e=>{toast(e.message);$('notice').hidden=false;$('notice').textContent=e.message;refresh();});
 async function approve(allowed) { try { await api('/api/desktop',{approval:{id:approvalId,allowed}}); await refresh(); } catch(e) {toast(e.message);} }
 $('allow').onclick=()=>approve(true); $('deny').onclick=()=>approve(false);
 async function loadModels() {

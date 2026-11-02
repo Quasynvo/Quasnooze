@@ -64,6 +64,8 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         desktop.request(event.text).catch((err) => send({ op: "reply", text: err.message, speak: false }));
       } else if (event.type === "approval") {
         desktop.approve(event.id, event.allowed);
+      } else if (event.type === "recognition") {
+        desktop.recognition(event);
       } else if (event.type === "voice" && typeof event.mic === "boolean") {
         desktop.update({ mic: event.mic, voice: String(event.detail || "").slice(0, 200) });
       } else if (event.type === "state" && ["listening", "speaking", "muted", "armed"].includes(event.phase)) {
