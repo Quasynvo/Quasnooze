@@ -36,7 +36,7 @@ test("the self-check runs, probes everything, and passes on this tree", { timeou
   assert.ok(skipped <= 2, `${skipped} probes skipped — on Linux almost nothing should`);
 
   // The probes that must never be skipped on a normal machine.
-  const mustRun = ["sandbox-symlink", "screen-blocks", "secrets-env", "panel-xss", "http-origin", "http-host"];
+  const mustRun = ["sandbox-symlink", "screen-blocks", "secrets-env", "panel-xss", "http-origin", "http-host", "document-expansion"];
   for (const id of mustRun) {
     const found = report.checks.find((c) => c.id === id);
     assert.ok(found, `probe ${id} is missing from the self-check`);

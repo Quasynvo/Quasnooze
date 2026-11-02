@@ -20,6 +20,7 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { deflateSync } from "node:zlib";
 import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -123,6 +124,32 @@ await check("sandbox-interior-symlink", "symlinks inside the workspace still wor
   const got = await TOOL_MAP.get("read_file").run({ path: "inner/f.txt" });
   if (!got.ok) throw new Error("a legitimate internal symlink was blocked");
   return "read through the link";
+});
+
+await check("documents-symlink", "document search refuses cached symlink escapes", async () => {
+  const { createSources } = await import(join(root, "src", "sources.js"));
+  const folder = join(workspace, "document-audit");
+  mkdirSync(folder, { recursive: true });
+  const file = join(folder, "note.txt"), outside = join(scratch, "outside.txt");
+  writeFileSync(file, "safeauditneedle");
+  writeFileSync(outside, "externalauditneedle");
+  const tool = TOOL_MAP.get("search_documents");
+  const before = await tool.run({ path: folder, query: "safeauditneedle" }, { sources: createSources() });
+  if (!before.output.includes("safeauditneedle")) throw new Error("safe file did not index");
+  rmSync(file);
+  try { symlinkSync(outside, file); } catch { return { status: "skip", detail: "filesystem has no symlink support" }; }
+  const after = await tool.run({ path: folder, query: "externalauditneedle" }, { sources: createSources() });
+  if (after.output.includes("externalauditneedle")) throw new Error("external document was exposed");
+  return "cached file replacement and external target refused";
+});
+
+await check("document-expansion", "compressed document expansion is bounded", async () => {
+  const { extract, MAX_EXTRACTED_BYTES } = await import(join(root, "src", "attachments.js"));
+  const compressed = deflateSync(Buffer.alloc(MAX_EXTRACTED_BYTES + 1, 65));
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n<< /Filter /FlateDecode >>\nstream\n"), compressed, Buffer.from("\nendstream\n%%EOF")]);
+  const result = extract(pdf, "bomb.pdf");
+  if (result.text || !/limit|incomplete/i.test(result.note || "")) throw new Error("oversized PDF expansion was not refused");
+  return "oversized PDF stream refused before unbounded expansion";
 });
 
 // ── 2. what the agent is allowed to run and see ─────────────────────────────

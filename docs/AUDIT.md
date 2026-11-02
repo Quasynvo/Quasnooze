@@ -771,3 +771,17 @@ and the right response to finding it is this document — not a quiet patch, and
 deleted paragraph in the README.
 
 
+
+
+## Incremental document search: hostile files and cache invalidation
+
+A workspace document or its filename may be attacker-controlled. Reusing cached text
+without rechecking paths could disclose an external file after a symlink swap; compressed
+PDF/DOCX streams can also expand far beyond their input size. `search_documents` reapplies
+`resolveInWorkspace` on every walk, skips traversed symlinks, opens with `O_NOFOLLOW` where
+available, verifies file identity/metadata and a bounded content hash, and never returns
+passages that cannot be registered as turn sources. Compressed extractor output is capped
+before allocation. `test/audit.test.js` and `scripts/audit.js` probe a cached-file symlink
+replacement and PDF decompression bomb; attachment tests additionally cover DOCX bombs.
+This does not prevent a concurrent local process from replacing parent directories between
+checks and reads, or make the best-effort parsers a complete document sandbox.

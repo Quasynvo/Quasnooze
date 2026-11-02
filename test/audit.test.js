@@ -16,6 +16,7 @@ import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync } from
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sandbox = mkdtempSync(join(tmpdir(), "pinch-audit-"));
@@ -298,4 +299,32 @@ test("rendered links can never reach back into the opener", () => {
   const md = loadMarkdown();
   const html = md("[ok](https://example.com)");
   assert.match(html, /rel="noopener noreferrer"/);
+});
+
+
+test("document search never reuses a cached entry after replacement by an escaping symlink", async (t) => {
+  const { createSources } = await import("../src/sources.js");
+  const dir = join(sandbox, "index-security"), file = join(dir, "cached.txt"), outside = join(tmpdir(), `pinch-outside-${process.pid}.txt`);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, "insideauditword"); writeFileSync(outside, "outsideauditword");
+  const tool = TOOL_MAP.get("search_documents");
+  const first = await tool.run({ path: dir, query: "insideauditword" }, { sources: createSources() });
+  assert.match(first.output, /insideauditword/);
+  const { rmSync } = await import("node:fs");
+  try {
+    rmSync(file);
+    try { symlinkSync(outside, file); } catch { t.skip("symlinks unavailable"); return; }
+    const second = await tool.run({ path: dir, query: "outsideauditword" }, { sources: createSources() });
+    assert.doesNotMatch(second.output, /outsideauditword/);
+    await assert.rejects(tool.run({ path: file, query: "outsideauditword" }, { sources: createSources() }), SafePathError);
+  } finally { rmSync(outside, { force: true }); }
+});
+
+test("compressed PDF document bomb is rejected at the expansion limit", async () => {
+  const { extract, MAX_EXTRACTED_BYTES } = await import("../src/attachments.js");
+  const compressed = deflateSync(Buffer.alloc(MAX_EXTRACTED_BYTES + 1, 65));
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.4\n<< /Filter /FlateDecode >>\nstream\n"), compressed, Buffer.from("\nendstream\n%%EOF")]);
+  const result = extract(pdf, "bomb.pdf");
+  assert.equal(result.text, "");
+  assert.match(result.note, /limit|incomplete/i);
 });
