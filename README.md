@@ -41,6 +41,8 @@ After guided setup, run **`npm run desktop`** on Windows 10/11 with Node.js 22+.
 
 [Setup, implemented commands, architecture, privacy, latency boundaries and verification →](docs/DESKTOP.md)
 
+**Native microphone not recognizing?** See the [voice-pipeline review and measured Windows fixture fix](docs/VOICE-REVIEW.md). Run `npm run desktop:doctor` for inventory, `npm run desktop:doctor -- --self-test` for a local synthetic-audio check, or `npm run desktop:doctor -- --mic` for an explicitly consented microphone probe. No model or cloud audio is needed for these diagnostics.
+
 ## Try it before connecting your accounts
 
 Clone the repository, enter its directory, and run `npm run demo` with Node.js 22+. This uses a **canned brain**: it demonstrates the interaction flow, not a real model’s reasoning quality. You do not need a bot token or cloud API key for that demo. **Demo mode disables the panel key and is not a security sandbox; keep it on a trusted local machine and do not expose or forward its port.**

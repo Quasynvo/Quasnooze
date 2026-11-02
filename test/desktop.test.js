@@ -192,6 +192,36 @@ test("native recognizer reports rejection, default-input problems and completion
   for (const event of ["SpeechRecognitionRejected", "AudioSignalProblemOccurred", "SpeechDetected", "InitialSilenceTimeout"])
     assert.ok(source.includes(event));
   assert.ok(source.includes('SpeechStatus("error", e.Error.Message'));
-  assert.ok(source.includes('if (WantWake && !Working && !e.Cancelled) StartRecognition(false)'));
+  assert.ok(source.includes('else if (!e.Cancelled) StartRecognition(false)'));
+  assert.ok(source.includes('if (!e.Cancelled && e.InputStreamEnded)'));
+  assert.ok(source.includes('string next = SpeechGate.Complete()'));
+  const cancelCode = source.slice(source.indexOf('static void SpeechAction'),source.indexOf('static void StopSpeech'));
+  assert.doesNotMatch(cancelCode, /Recognizer\.Dispose\(/);
+  assert.ok(source.includes('SpeechSessionGate.SelfTest()'));
+  assert.ok(source.includes('rec.AudioLevelUpdated +='));
+  assert.ok(source.includes('if (capture) LoadCaptureGrammars(rec, info.Culture)'));
+  const doctor=readFileSync(new URL('../desktop/SpeechDoctor.cs', import.meta.url),'utf8');
+  assert.ok(doctor.includes('PinchCompanion.LoadCaptureGrammars(rec, info.Culture)'));
+  assert.ok(doctor.includes('PinchCompanion.LoadCaptureGrammars(engine, info.Culture)'));
+  assert.ok(source.includes('if (!WantWake || Working || Quitting || CurrentPrompt != null) return;'));
+  assert.ok(source.includes('if (WantWake && !Working && !Quitting && CurrentPrompt == null)'));
   assert.ok(source.includes('Window.Show(); Window.Activate();'));
+});
+
+
+test("audio level only represents fresh, attached active capture and rejects malformed native values", () => {
+  const runtime = new DesktopRuntime();
+  assert.equal(runtime.audio(30), false);
+  runtime.attach(bridge()); assert.equal(runtime.audio(30), false);
+  runtime.update({ mic: true });
+  for (const level of [-1, 101, NaN, Infinity, "50", null]) assert.equal(runtime.audio(level), false);
+  assert.equal(runtime.audio(30.2), true);
+  assert.equal(runtime.snapshot().audioLevel, 30);
+  assert.ok(runtime.snapshot().audioAgeMs >= 0);
+  runtime.detach(); assert.equal(runtime.audio(50), false);
+});
+
+
+test("speech doctor refuses unsupported platforms without opening a microphone", { skip: process.platform === "win32" }, () => {
+  assert.throws(() => execFileSync(process.execPath, [new URL("../scripts/desktop-doctor.js", import.meta.url).pathname], { encoding: "utf8", stdio: "pipe" }), /requires Windows/);
 });

@@ -9,6 +9,7 @@ using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
@@ -18,6 +19,39 @@ public sealed class PinchWindow : Form {
     protected override void WndProc(ref Message m) {
         if (m.Msg == 0x0312 && Hotkey != null) Hotkey();
         base.WndProc(ref m);
+    }
+}
+
+// Pure lifecycle gate: replacement engines cannot start until async cancellation completes.
+public sealed class SpeechSessionGate {
+    public bool Active { get; private set; }
+    public bool Stopping { get; private set; }
+    bool? Next;
+    public string Start(bool capture) {
+        Next = capture;
+        if (!Active) return Drain();
+        if (Stopping) return "none";
+        Stopping = true; return "cancel";
+    }
+    public string Stop() {
+        Next = null;
+        if (!Active || Stopping) return "none";
+        Stopping = true; return "cancel";
+    }
+    public string Complete() { Active = Stopping = false; return Drain(); }
+    public void FailedStart() { Active = Stopping = false; Next = null; }
+    string Drain() {
+        if (!Next.HasValue) return "none";
+        bool capture = Next.Value; Next = null; Active = true;
+        return capture ? "capture" : "wake";
+    }
+    public static void SelfTest() {
+        var gate = new SpeechSessionGate();
+        if (gate.Start(false) != "wake" || gate.Start(true) != "cancel" || !gate.Stopping || gate.Start(true) != "none") throw new Exception("Speech cancellation ordering regression");
+        if (gate.Complete() != "capture" || !gate.Active || gate.Stopping) throw new Exception("Speech restart ordering regression");
+        if (gate.Start(false) != "cancel" || gate.Stop() != "none" || gate.Complete() != "none" || gate.Active) throw new Exception("Mute must cancel a queued restart");
+        gate.Start(true); gate.FailedStart();
+        if (gate.Start(false) != "wake") throw new Exception("Speech failed-start recovery regression");
     }
 }
 
@@ -33,6 +67,8 @@ public static class PinchCompanion {
     static Button Wake, Allow, Deny;
     static NotifyIcon Tray;
     static SpeechRecognitionEngine Recognizer;
+    static readonly SpeechSessionGate SpeechGate = new SpeechSessionGate();
+    static System.Windows.Forms.Timer SpeechStopTimer;
     static SpeechSynthesizer Speaker;
     static Prompt CurrentPrompt;
     static Icon BrandIcon;
@@ -51,27 +87,57 @@ public static class PinchCompanion {
     static void SpeechStatus(string status, string detail, string text = "", double? confidence = null) {
         Emit(new { type = "recognition", status = status, detail = detail, text = text, confidence = confidence });
     }
-    static void StopRecognition() {
-        var old = Recognizer; Recognizer = null;
-        if (old != null) { try { old.RecognizeAsyncCancel(); } catch { } old.Dispose(); }
-        Voice(false, "Local microphone released");
+    static void SpeechAction(string action) {
+        if (action == "capture" || action == "wake") { StartRecognitionCore(action == "capture"); return; }
+        if (action == "cancel" && Recognizer != null) {
+            // Do NOT Dispose here: wait for RecognizeCompleted before releasing/replacing SAPI.
+            SpeechStatus("stopping", "Waiting for Windows recognition to stop and release its input.");
+            try {
+                if (SpeechStopTimer != null) SpeechStopTimer.Dispose();
+                SpeechStopTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+                SpeechStopTimer.Tick += (s, e) => {
+                    SpeechStopTimer.Stop();
+                    if (!SpeechGate.Stopping) return;
+                    WantWake = false; Wake.Text = "Enable local wake";
+                    SpeechStatus("error", "Windows did not acknowledge microphone cancellation within 5 seconds. No replacement recognizer was started. Quit and restart Pinch; microphone release is not confirmed.");
+                };
+                SpeechStopTimer.Start();
+                Recognizer.RecognizeAsyncCancel();
+            } catch (Exception e) { SpeechStatus("stopping", "Windows cancel returned: " + e.Message + ". Waiting for its completion event; the watchdog will report a timeout."); }
+        }
     }
+    static void StopRecognition() { SpeechAction(SpeechGate.Stop()); }
     static void StopSpeech() { CurrentPrompt = null; if (Speaker != null) Speaker.SpeakAsyncCancelAll(); }
     static bool Consent() {
         Window.Show(); Window.Activate();
-        return MessageBox.Show(Window,
+        SpeechStatus("permission", "Accept the native microphone consent dialog to begin; no browser microphone is used.");
+        bool allowed = MessageBox.Show(Window,
             "Enable local microphone listening? Windows System.Speech will listen for 'Hey Pinch', then capture one request. Audio is not saved or sent by this component. Recognition needs an installed English desktop speech pack. A wake phrase is NOT authentication: nearby people or speakers can activate it. Use Mute at any time. Restarting Pinch starts muted.",
             "Pinch - local microphone permission", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        if (!allowed) SpeechStatus("denied", "Microphone permission was declined. Press Talk and accept the native consent dialog to retry.");
+        return allowed;
+    }
+    // Shared by the resident and WAV probe: common commands must not rely only on free dictation.
+    public static void LoadCaptureGrammars(SpeechRecognitionEngine engine, System.Globalization.CultureInfo culture) {
+        var builder = new GrammarBuilder(); builder.Culture = culture;
+        builder.Append(new Choices("what time is it", "what is the time", "time", "system status", "computer status",
+            "open calculator", "open notepad", "open file explorer", "open github", "open youtube", "open google",
+            "read my clipboard", "read clipboard", "mute microphone", "stop listening"));
+        engine.LoadGrammar(new Grammar(builder) { Name = "PinchQuickCommands", Priority = 10 });
+        engine.LoadGrammar(new DictationGrammar() { Name = "PinchDictation" });
     }
     static void StartRecognition(bool capture) {
-        if (!WantWake || Working) return;
-        StopRecognition();
+        if (!WantWake || Working || Quitting || CurrentPrompt != null) return;
+        SpeechAction(SpeechGate.Start(capture));
+    }
+    static void StartRecognitionCore(bool capture) {
+        SpeechRecognitionEngine rec = null;
         try {
             var infos = SpeechRecognitionEngine.InstalledRecognizers();
             var info = infos.FirstOrDefault(x => x.Culture.Name == "en-IN") ?? infos.FirstOrDefault(x => x.Culture.Name == "en-US") ?? infos.FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName == "en");
             if (info == null) throw new InvalidOperationException("No English desktop speech recognizer. Install an English speech pack in Windows Settings, then restart Pinch. No cloud fallback is used.");
-            var rec = new SpeechRecognitionEngine(info); Recognizer = rec;
-            if (capture) rec.LoadGrammar(new DictationGrammar());
+            rec = new SpeechRecognitionEngine(info); Recognizer = rec;
+            if (capture) LoadCaptureGrammars(rec, info.Culture);
             else {
                 var builder = new GrammarBuilder(); builder.Culture = info.Culture;
                 builder.Append(new Choices("hey pinch", "pinch")); rec.LoadGrammar(new Grammar(builder));
@@ -80,21 +146,28 @@ public static class PinchCompanion {
             rec.BabbleTimeout = TimeSpan.FromSeconds(8);
             rec.EndSilenceTimeout = TimeSpan.FromMilliseconds(650);
             bool reported = false;
+            long lastAudioTicks = 0;
+            rec.AudioLevelUpdated += (s, e) => {
+                long now = DateTime.UtcNow.Ticks;
+                if (now - Interlocked.Read(ref lastAudioTicks) < TimeSpan.TicksPerMillisecond * 250) return;
+                Interlocked.Exchange(ref lastAudioTicks, now);
+                Post(() => { if (Object.ReferenceEquals(Recognizer, rec) && !SpeechGate.Stopping && !Working) Emit(new { type = "audio", level = e.AudioLevel }); });
+            };
             rec.SpeechDetected += (s, e) => Post(() => {
-                if (Object.ReferenceEquals(Recognizer, rec) && !Working && capture)
+                if (Object.ReferenceEquals(Recognizer, rec) && !SpeechGate.Stopping && !Working && capture)
                     SpeechStatus("hearing", "Audio detected. Finish one instruction, then pause.");
             });
             rec.AudioSignalProblemOccurred += (s, e) => Post(() => {
-                if (Object.ReferenceEquals(Recognizer, rec) && !Working)
+                if (Object.ReferenceEquals(Recognizer, rec) && !SpeechGate.Stopping && !Working)
                     SpeechStatus("audio-problem", "Windows reports " + e.AudioSignalProblem + ". Check Windows Settings > System > Sound > Input; Pinch uses the Windows default recording device, not the browser's selected device.");
             });
             rec.SpeechRecognitionRejected += (s, e) => Post(() => {
-                if (!Object.ReferenceEquals(Recognizer, rec) || Working || !capture) return;
+                if (!Object.ReferenceEquals(Recognizer, rec) || SpeechGate.Stopping || Working || !capture) return;
                 reported = true;
                 SpeechStatus("rejected", "Windows could not recognize that speech confidently. No command was run. Use Talk again, check the default input device and English desktop speech pack.");
             });
             rec.SpeechRecognized += (s, e) => Post(() => {
-                if (!Object.ReferenceEquals(Recognizer, rec) || !WantWake || Working) return;
+                if (!Object.ReferenceEquals(Recognizer, rec) || SpeechGate.Stopping || !WantWake || Working) return;
                 if (e.Result.Confidence < (capture ? 0.45 : 0.78)) {
                     if (capture) { reported = true; SpeechStatus("rejected", "Low-confidence speech was not executed. Try Talk again and speak clearly into the Windows default microphone.", e.Result.Text, e.Result.Confidence); }
                     return;
@@ -108,14 +181,23 @@ public static class PinchCompanion {
             });
             rec.RecognizeCompleted += (s, e) => Post(() => {
                 if (!Object.ReferenceEquals(Recognizer, rec)) return;
-                StopRecognition();
-                if (e.Error != null) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Error.Message); SpeechStatus("error", e.Error.Message + " Check Windows microphone permissions for desktop apps and your English desktop speech pack."); return; }
-                if (e.InputStreamEnded) { WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", "The microphone input stream ended."); SpeechStatus("error", "The Windows microphone input stream ended. Check the default recording device and permissions, then use Talk to retry."); return; }
-                if (capture && !reported && !Working) {
+                // This callback runs after RecognizeCompleted, not immediately after Cancel.
+                Recognizer = null;
+                if (SpeechStopTimer != null) { SpeechStopTimer.Dispose(); SpeechStopTimer = null; }
+                rec.Dispose();
+                string next = SpeechGate.Complete();
+                Voice(false, "Local microphone released");
+                if (!WantWake && !Working) { Phase("muted", "Microphone released."); Emit(new { type = "state", phase = "muted" }); }
+                if (e.Error != null) { WantWake = false; Wake.Text = "Enable local wake"; SpeechGate.FailedStart(); Phase("voice unavailable", e.Error.Message); SpeechStatus("error", e.Error.Message + " Check Windows microphone permissions for desktop apps and your English desktop speech pack."); return; }
+                if (!e.Cancelled && e.InputStreamEnded) { WantWake = false; Wake.Text = "Enable local wake"; SpeechGate.FailedStart(); Phase("voice unavailable", "The microphone input stream ended."); SpeechStatus("error", "The Windows microphone input stream ended. Check the default recording device and permissions, then use Talk to retry."); return; }
+                if (!e.Cancelled && capture && !reported && !Working) {
                     SpeechStatus(e.InitialSilenceTimeout ? "timeout" : "rejected", e.InitialSilenceTimeout ? "No speech detected within 12 seconds. Check Windows default Input and allow desktop apps to access the microphone, then press Talk again." : "No usable instruction recognized. Press Talk to retry; check the Windows default microphone and English desktop speech pack.");
                 }
                 // Multiple-mode recognition may also complete. Never leave an armed UI with a stopped engine.
-                if (WantWake && !Working && !e.Cancelled) StartRecognition(false);
+                if (WantWake && !Working && !Quitting && CurrentPrompt == null) {
+                    if (next != "none") SpeechAction(next);
+                    else if (!e.Cancelled) StartRecognition(false);
+                } else SpeechGate.FailedStart();
             });
             rec.SetInputToDefaultAudioDevice();
             if (capture) SpeechStatus("listening", "Listening for up to 12 seconds on the Windows default recording device (" + info.Culture.Name + "). Say one instruction, then pause.");
@@ -123,10 +205,10 @@ public static class PinchCompanion {
             Phase(capture ? "listening" : "armed", capture ? "I'm listening. Say one request; pause when finished." : Detail.Text);
             Voice(true, "Local System.Speech - " + info.Culture.Name);
             Emit(new { type = "state", phase = capture ? "listening" : "armed" });
-        } catch (Exception e) { StopRecognition(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); SpeechStatus("error", e.Message); }
+        } catch (Exception e) { Recognizer = null; SpeechGate.FailedStart(); if (rec != null) rec.Dispose(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); SpeechStatus("error", e.Message); }
     }
     static void ToggleWake() {
-        if (WantWake) { WantWake = false; StopRecognition(); Wake.Text = "Enable local wake"; Phase("muted", "Microphone released. Type a command or enable local wake."); Emit(new { type = "state", phase = "muted" }); }
+        if (WantWake) { WantWake = false; StopRecognition(); Wake.Text = "Enable local wake"; Phase(SpeechGate.Active ? "muting" : "muted", SpeechGate.Active ? "Microphone stop requested; waiting for Windows to release it." : "Microphone released. Type a command or enable local wake."); Emit(new { type = "state", phase = SpeechGate.Active ? "muting" : "muted" }); }
         else if (Consent()) { WantWake = true; Wake.Text = "Mute microphone"; StartRecognition(false); }
     }
     static void ListenOnce() {
@@ -244,8 +326,9 @@ public static class PinchCompanion {
         Input.Clear(); Working = true; StopRecognition(); StopSpeech(); Phase("working", text); Emit(new { type = "command", text = text });
     }
     public static string SelfTest() {
+        SpeechSessionGate.SelfTest();
         if (!ValidHttps("https://example.com/") || ValidHttps("javascript:alert(1)") || ValidHttps("https://user:pass@example.com/") || ValidHttps("file:///C:/Windows")) throw new Exception("URL policy regression");
-        return "Companion compiled; URL policy passed. No microphone or UI was opened.";
+        return "Companion compiled; URL and asynchronous speech lifecycle policies passed. No microphone or UI was opened.";
     }
     public static void Run() {
         Console.OutputEncoding = new UTF8Encoding(false); Console.InputEncoding = new UTF8Encoding(false);

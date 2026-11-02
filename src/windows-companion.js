@@ -64,11 +64,13 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         desktop.request(event.text).catch((err) => send({ op: "reply", text: err.message, speak: false }));
       } else if (event.type === "approval") {
         desktop.approve(event.id, event.allowed);
+      } else if (event.type === "audio") {
+        desktop.audio(event.level);
       } else if (event.type === "recognition") {
         desktop.recognition(event);
       } else if (event.type === "voice" && typeof event.mic === "boolean") {
-        desktop.update({ mic: event.mic, voice: String(event.detail || "").slice(0, 200) });
-      } else if (event.type === "state" && ["listening", "speaking", "muted", "armed"].includes(event.phase)) {
+        desktop.update({ ...(event.mic ? {} : { audioLevel: null, audioUpdatedAt: null }), mic: event.mic, voice: String(event.detail || "").slice(0, 200) });
+      } else if (event.type === "state" && ["listening", "speaking", "muting", "muted", "armed"].includes(event.phase)) {
         desktop.update({ phase: event.phase });
       } else if (event.type === "result" && pending.has(event.id)) {
         const item = pending.get(event.id); pending.delete(event.id); clearTimeout(item.timer);

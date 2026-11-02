@@ -149,3 +149,12 @@ The completion handler now rearms wake listening after a natural multiple-mode
 completion too, rather than assuming only dictation can complete. Device-specific
 failures and recognition quality still require a Windows microphone test; these
 changes do not establish the cause on an unseen user's computer.
+
+### Deeper voice review and diagnostic
+
+See [VOICE-REVIEW.md](VOICE-REVIEW.md) for the full pipeline review, cancellation /
+replacement fix, executable native lifecycle checks, and evidence limits.
+`npm run desktop:doctor` lists prerequisites without recording;
+`npm run desktop:doctor -- --self-test` probes recognition using synthetic WAV
+without microphone access; `npm run desktop:doctor -- --mic` separately asks
+permission for a short real input test and never executes the transcript.
