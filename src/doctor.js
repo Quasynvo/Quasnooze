@@ -304,7 +304,7 @@ const MARK = { ok: "✔", warn: "▲", fail: "✖", skip: "·" };
 /** Human output: one line per check, status first, hint underneath. */
 export function renderDoctor(report) {
   const lines = [];
-  lines.push(`\x1b[38;5;209m🦞 Quasnooze Doctor\x1b[0m  ${report.version ? `v${report.version} · ` : ""}${report.node}`);
+  lines.push(`\x1b[38;5;209m∿ Quasnooze Doctor\x1b[0m  ${report.version ? `v${report.version} · ` : ""}${report.node}`);
   lines.push(`   ${report.routing.plan.map((hop) => `${hop.provider}/${hop.model}`).join(" → ")}${report.routing.resilient ? "" : "  (single provider)"}`);
   lines.push("");
   for (const row of report.checks) {

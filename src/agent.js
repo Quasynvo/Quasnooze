@@ -193,7 +193,7 @@ export function explainBrainFailure(err, model) {
     : "";
   const where = `${model?.provider || failure.provider || "the model"} / ${model?.model || "unknown"}`;
   return (
-    `🦞 My brain is unreachable: ${failure.message}\n\n` +
+    `∿ Model unavailable: ${failure.message}\n\n` +
     `${failure.code} on ${where}.${trail}\n` +
     failure.hint
   );
@@ -227,7 +227,7 @@ export async function runAgent({
   // Do not prime a recovered model to keep claiming it is offline.
   const recent = session.messages.filter((m) =>
     (m.role === "user" || m.role === "assistant") &&
-    !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^🦞 My brain is unreachable/.test(m.content)))
+    !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^(?:∿ Model unavailable|\u{1F99E} My brain is unreachable)/u.test(m.content)))
   ).slice(social ? -6 : -24);
   // Only the last attachment-bearing message keeps its excerpt; older ones keep
   // the one-line "you attached X" note, which is enough to answer follow-ups
@@ -461,7 +461,7 @@ export async function runAgent({
 
   if (!finalText) {
     finalText =
-      "🦞 I hit my tool limit for one turn (8 rounds) without landing an answer. " +
+      "∿ I hit my tool limit for one turn (8 rounds) without landing an answer. " +
       "Ask me to continue and I'll pick up from here.";
   }
 

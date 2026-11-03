@@ -1,4 +1,6 @@
 /** Quasnooze conversation UI: no browser speech/recording, third-party scripts or auto approvals. */
+import { createVisualizer, nativeSignal } from "./visualizer.js";
+import { createDemoSignal } from "./demo-signal.js";
 export function consumeFrames(buffer) {
   const normalized = buffer.replace(/\r\n/g, "\n");
   const parts = normalized.split("\n\n"),
@@ -23,7 +25,8 @@ export function consumeFrames(buffer) {
 }
 export function phaseFor(event) {
   if (event === "approval") return "approval";
-  if (["armed", "listening"].includes(event)) return "listening";
+  if (event === "listening") return "listening";
+  if (event === "armed") return "idle";
   if (event === "speaking") return "speaking";
   if (["status", "tool", "tool_done", "delta", "working"].includes(event))
     return "thinking";
@@ -54,6 +57,10 @@ function init() {
     session = newSession(),
     nativeText = "",
     polling = false;
+  const demoSignal = createDemoSignal();
+  const motion = createVisualizer(document.getElementById("voiceCanvas"), {
+    signalProvider: () => (demo || previewing) ? demoSignal(document.body.dataset.state) : document.body.dataset.state === "listening" ? nativeSignal(native) : null,
+  });
   const timers = new Set();
   const details = {
     idle: [
@@ -66,11 +73,11 @@ function init() {
     ],
     listening: [
       "Listening, locally.",
-      "Reported by your native Windows companion.",
+      "Reported by the native Windows voice host.",
     ],
     speaking: [
       "A thought, out loud.",
-      "Speaking state reported by the native companion; illustrative mouth motion.",
+      "Native speech state; decorative spectrum, not output-frequency analysis.",
     ],
     approval: [
       "Your call. Always.",
@@ -86,6 +93,9 @@ function init() {
   }
   function state(phase, detail) {
     document.body.dataset.state = phase;
+    motion.setState(phase);
+    const liveInput = !demo && !previewing && phase === "listening" && native?.mic && Number.isFinite(native.audioLevel) && Number.isFinite(native.audioAgeMs) && native.audioAgeMs >= 0 && native.audioAgeMs < 2000;
+    $("signalSource").textContent = (demo || previewing) ? "SILENT SYNTHETIC PREVIEW · NO AUDIO SAMPLES" : liveInput ? "NATIVE INPUT LEVEL · SCALAR, NOT FFT" : phase === "speaking" ? "NATIVE SPEECH STATE · DECORATIVE SPECTRUM" : "STATE-DRIVEN MOTION · NO AUDIO SAMPLES";
     $("stateTitle").textContent = details[phase]?.[0] || details.idle[0];
     $("stateDetail").textContent =
       detail || details[phase]?.[1] || details.idle[1];
@@ -157,7 +167,7 @@ function init() {
         ? "QUASNOOZE SERVICE CONNECTED"
         : "SERVICE NOT CONNECTED";
     $("modeNotice").textContent = demo
-      ? "SCRIPTED PREVIEW · Not an AI response. No tools or audio capture. Previewing does not mute a separately running native companion."
+      ? "SCRIPTED PREVIEW · Not an AI response. No tools or audio capture. Previewing does not mute a separately running native voice host."
       : connected
         ? "REAL BACKEND · Existing Quasnooze permissions apply. Conversations may be stored by Quasnooze."
         : "Not connected. Connect to Quasnooze in settings, or explicitly try the scripted preview.";
@@ -224,7 +234,7 @@ function init() {
   function approval(id, description, kind = "web") {
     pending = { id, kind };
     $("approvalText").textContent = String(
-      description || "Review this action in the native companion.",
+      description || "Review this action in the native Windows host.",
     );
     $("approval").hidden = false;
     state("approval");
@@ -473,43 +483,15 @@ function init() {
     "(prefers-reduced-motion: reduce)",
   ).matches;
   document.body.classList.toggle("reduced", $("reduceMotion").checked);
-  for (let i = 0; i < 25; i++) {
-    const bar = document.createElement("span");
-    bar.style.setProperty("--height", 5 + Math.sin(i * 0.7) ** 2 * 17 + "px");
-    bar.style.setProperty("--delay", -i * 0.11 + "s");
-    $("wave").append(bar);
-  }
-  let frame = 0;
-  $("avatarStage").onpointermove = (e) => {
-    if (frame) return;
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      if (
-        matchMedia("(prefers-reduced-motion: reduce)").matches ||
-        document.body.classList.contains("reduced")
-      )
-        return;
-      const box = $("avatarStage").getBoundingClientRect();
-      $("avatar").style.setProperty(
-        "--px",
-        ((e.clientX - box.left) / box.width - 0.5) * 10 + "px",
-      );
-      $("avatar").style.setProperty(
-        "--py",
-        ((e.clientY - box.top) / box.height - 0.5) * 8 + "px",
-      );
-    });
-  };
-  $("avatarStage").onpointerleave = () => {
-    $("avatar").style.setProperty("--px", "0px");
-    $("avatar").style.setProperty("--py", "0px");
-  };
+  $("reduceMotion").addEventListener("change", () => motion.setReducedMotion($("reduceMotion").checked));
+  motion.setReducedMotion($("reduceMotion").checked);
   document.addEventListener("visibilitychange", () => {
     document.body.classList.toggle("paused", document.hidden);
     if (!document.hidden) refresh();
   });
-  window.addEventListener("pagehide", () => {
+  window.addEventListener("pagehide", event => {
     for (const timer of timers) clearTimeout(timer);
+    if (!event.persisted) motion.destroy();
   });
   mode();
   if (!demo) refresh();

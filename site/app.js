@@ -1,13 +1,20 @@
+import { createVisualizer } from "./assets/visualizer.js";
+import { createDemoSignal } from "./assets/demo-signal.js";
 "use strict";
 const $ = (id) => document.getElementById(id);
+const demoSignal = createDemoSignal();
+let activePhase = "idle";
+const motion = createVisualizer(document.getElementById("voiceCanvas"), { signalProvider: () => demoSignal(activePhase) });
 const states = {
+  listening: ["Listening, in motion.", "Silent synthetic input preview. This website never enables a microphone."],
+  error: ["Let’s check the signal.", "Interrupted-state preview. No real request, error or action occurred."],
   idle: [
     "Here, with you.",
     "A quiet presence. No microphone is active on this website.",
   ],
   thinking: [
     "Following the thread.",
-    "Illustrated thinking state—not a model running in this website.",
+    "Synthetic processing motion—not a model running in this website.",
   ],
   speaking: [
     "A thought, out loud.",
@@ -22,7 +29,7 @@ for (const button of document.querySelectorAll("[data-phase]")) {
   if (button.tagName !== "BUTTON") continue;
   button.onclick = () => {
     const phase = button.dataset.phase;
-    $("companion").dataset.phase = phase;
+    $("voiceEngine").dataset.phase = phase; activePhase = phase; motion.setState(phase);
     $("phaseTitle").textContent = states[phase][0];
     $("phaseCopy").textContent = states[phase][1];
     document
@@ -114,11 +121,13 @@ $("copy").onclick = async () => {
       "Clipboard is unavailable. Select and copy the commands above.";
   }
 };
-const motion = matchMedia("(prefers-reduced-motion: reduce)");
-document.body.classList.toggle("reduced", motion.matches);
-$("motion").setAttribute("aria-pressed", String(motion.matches));
+const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+document.body.classList.toggle("reduced", motionPreference.matches);
+$("motion").setAttribute("aria-pressed", String(motionPreference.matches));
 $("motion").onclick = () => {
-  const reduced = document.body.classList.toggle("reduced");
+  const reduced = document.body.classList.toggle("reduced"); motion.setReducedMotion(reduced);
   $("motion").setAttribute("aria-pressed", String(reduced));
   $("motion").textContent = reduced ? "Motion reduced" : "Reduce motion";
 };
+
+window.addEventListener("pagehide", event => { if (!event.persisted) motion.destroy(); });

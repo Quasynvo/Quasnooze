@@ -300,7 +300,7 @@ public static class QuasnoozeCompanion {
                 case "init":
                     Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "QUASNOOZE  /  " + Value(m, "owner");
                     try {
-                        using (var art = Image.FromFile(Path.Combine(Root, "public", "brand", "quasnooze-companion-native.png"))) {
+                        using (var art = Image.FromFile(Path.Combine(Root, "public", "brand", "voice-engine-native.png"))) {
                             var previousArt = CompanionArt.Image;
                             CompanionArt.Image = new Bitmap(art);
                             if (previousArt != null) previousArt.Dispose();
@@ -323,7 +323,7 @@ public static class QuasnoozeCompanion {
                 case "show": Window.Show(); break;
                 case "quit": Quitting = true; Window.Close(); break;
             }
-        } catch { Phase("attention", "An invalid companion message was refused."); }
+        } catch { Phase("attention", "An invalid voice-host message was refused."); }
     }
     static Button ButtonAt(string text, int x, int y, int width, Action click) {
         var b = new Button { Text = text, Left = x, Top = y, Width = width, Height = 30, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, BackColor = Color.FromArgb(20, 33, 54) };
@@ -343,12 +343,12 @@ public static class QuasnoozeCompanion {
         Application.EnableVisualStyles();
         Window = new QuasnoozeWindow { Text = "Quasnooze - resident assistant", Width = 470, Height = 345, FormBorderStyle = FormBorderStyle.FixedToolWindow, TopMost = true, BackColor = Color.FromArgb(9, 13, 27), ForeColor = Color.White, StartPosition = FormStartPosition.Manual, Font = new Font("Segoe UI", 10), ShowInTaskbar = false };
         var area = Screen.PrimaryScreen.WorkingArea; Window.Location = new Point(area.Right - Window.Width - 20, area.Bottom - Window.Height - 20);
-        Brand = new Label { Text = "QUASNOOZE  /  DESKTOP COMPANION", Left = 20, Top = 16, Width = 420, ForeColor = Cyan, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
+        Brand = new Label { Text = "QUASNOOZE  /  VOICE ENGINE", Left = 20, Top = 16, Width = 420, ForeColor = Cyan, Font = new Font("Segoe UI", 11, FontStyle.Bold) };
         State = new Label { Text = "MUTED", Left = 20, Top = 49, Width = 330, ForeColor = Color.FromArgb(220, 231, 247) };
         Detail = new Label { Text = "Always here while running. Enable local wake when you're ready; the microphone starts off.", Left = 20, Top = 78, Width = 330, Height = 83, AutoEllipsis = true };
         Input = new TextBox { Left = 20, Top = 171, Width = 330, MaxLength = 2000, BackColor = Color.FromArgb(18, 28, 46), ForeColor = Color.White, BorderStyle = BorderStyle.FixedSingle };
         Input.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; Submit(); } };
-        CompanionArt = new PictureBox { Left = 367, Top = 53, Width = 68, Height = 68, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Window.BackColor, AccessibleName = "Quasnooze companion illustration", TabStop = false };
+        CompanionArt = new PictureBox { Left = 367, Top = 53, Width = 68, Height = 68, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Window.BackColor, AccessibleName = "Quasnooze Fluid Motion voice mark", TabStop = false };
         Window.Controls.AddRange(new Control[] { Brand, State, Detail, Input, CompanionArt });
         ButtonAt("Run", 360, 169, 75, Submit);
         Wake = ButtonAt("Enable local wake", 20, 210, 160, ToggleWake);

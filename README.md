@@ -1,34 +1,72 @@
 <p align="center">
-  <img src="assets/quasnooze-showcase.gif" width="100%" alt="Quasnooze by Quasynvo — illustrated cosmic assistant states: idle, thinking, illustrative speaking and permission required" />
+  <img src="assets/quasnooze-showcase.gif" width="100%" alt="Quasnooze Fluid Motion Voice Engine: luminous interference ribbons transition through idle, listening, processing, speaking and interrupted states. Silent scripted preview." />
 </p>
+
 <h1 align="center">Quasnooze</h1>
-<p align="center"><b>Intelligence, in your orbit.</b><br>A local-first personal AI assistant by <a href="https://github.com/Quasynvo">Quasynvo</a>.<br>Your everyday tools. A cosmic sloth companion. Your permission, first.</p>
+<p align="center"><strong>Your voice. In fluid motion.</strong><br>A local-first personal AI assistant by <a href="https://github.com/Quasynvo">Quasynvo</a>.<br>Responsive audio visuals. Everyday tools. Your permission, first.</p>
+
 <p align="center">
   <a href="https://github.com/Quasynvo/Quasnooze/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/Quasynvo/Quasnooze/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-83f5ed" /></a>
-  <a href="docs/AUDIT.md"><img alt="Security review and limitations" src="https://img.shields.io/badge/security-review%20%26%20limits-ba9dff" /></a>
-  <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-83f5ed" />
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&amp;labelColor=080d19" /></a>
+  <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&amp;labelColor=080d19" />
+  <a href="docs/VISUALIZER.md"><img alt="Fluid Motion voice visualizer" src="https://img.shields.io/badge/%E2%88%BF-Fluid_Motion-6ee7f9?style=flat-square&amp;labelColor=080d19" /></a>
+  <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&amp;labelColor=080d19" /></a>
 </p>
-<p align="center"><a href="#start-in-three-steps">Start here</a> · <a href="#what-can-it-do">Capabilities</a> · <a href="#three-ways-to-meet-your-assistant">See the experience</a> · <a href="docs/GUIDE.md">Full guide</a> · <a href="https://github.com/Quasynvo/Quasnooze/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22">Contribute</a></p>
 
-> **New name, same project.** Quasnooze was previously called Pinch. Existing configuration, data, approval policies and the legacy `pinch` CLI alias remain supported. [Migration and compatibility →](docs/REBRANDING.md)
+<p align="center"><a href="#start-in-three-steps">Start here</a> · <a href="#the-fluid-motion-voice-engine">See the motion</a> · <a href="#voice-and-microphone-setup">Voice setup</a> · <a href="docs/VISUALIZER.md">Integration guide</a> · <a href="docs/GUIDE.md">Full guide</a></p>
+
+> **Preview provenance:** the header is a silent, scripted walkthrough—not live AI, recorded microphone input or a performance benchmark. Prefer less motion? Use the [static SVG](assets/banner.svg) or open the interface with your OS reduced-motion preference enabled.
 >
-> The animated header is an **illustrated state walkthrough**, not a recorded model benchmark or live microphone. Use the reduced-motion [static header](assets/banner.png) if preferred.
+> **Existing installations:** the product name, saved data, configuration aliases and `pinch` CLI remain supported. This identity refresh does not move data or enable a microphone. [Compatibility details →](docs/REBRANDING.md)
 
-## What is Quasnooze?
+## Local intelligence. A visible signal.
 
-An assistant you run on **your own computer**. Ask a question, plan your day, look up a file, set a reminder, or use supported tools. A luminous space sloth makes the conversation feel present—not artificially slow.
+Quasnooze runs on **your own computer**. Ask a question, plan your day, find a document, set a reminder or use supported tools. Its **Fluid Motion Voice Engine** gives the interface a clear, responsive presence without turning the assistant into a character.
 
-- **Local by default:** Ollama handles local reasoning. Optional cloud providers and messaging channels have separate network/data boundaries.
-- **Present on Windows:** native tray/widget, opt-in “Hey Quasnooze,” local speech, a talk hotkey and explicit action confirmations.
-- **Visible, not mysterious:** see real progress, tool activity, microphone state and requests for permission.
-- **Still your machine:** sensitive actions remain gated. The companion is not an OS sandbox or unrestricted computer-control agent.
+- **Local by default.** Ollama provides local reasoning. Optional cloud providers, browser speech, network tools and messaging channels have separate, explicit data boundaries.
+- **Audio-reactive when connected.** The standalone visualizer can analyze opt-in microphone input through the Web Audio API. The conversation view follows existing backend/native states; it does not secretly open a second audio stream.
+- **Permission-aware.** See microphone status, real tool activity and requests for approval. Animation never approves an action.
+- **Motion with restraint.** A dark glass interface, cyan–violet–magenta ribbons, bounded glows and reduced-motion alternatives.
 
-**Status:** the Windows resident and illustrated conversation experiences are previews. Physical Windows microphone, wake-word, startup and accessibility acceptance still require testing. The avatar is 2.5D illustration—not headset VR, a 3D model or phoneme-accurate lip sync.
+**Status:** the Windows voice host and browser conversation experience are previews. Physical Windows microphone, wake-word, startup and accessibility acceptance still need testing. The new visualizer is a **2D canvas signal**, not a 3D avatar, lip-sync system or measurement of model progress.
+
+## The Fluid Motion Voice Engine
+
+**Signature:** three phase-offset interference ribbons surrounding a dark glass core, with a compact dual-wave mark. Each state changes geometry, rhythm and color—not just a status label.
+
+| State | Signature motion | Color | What the signal means |
+|---|---|---|---|
+| **Idle** | Slow-breathing core; gentle, drifting ribbons | Ion cyan / violet | Ready or inactive. No claim that a microphone is on. |
+| **Listening** | Expanding plasma ring; frequency-shaped ripples when an analyser is connected | Cyan / magenta | Live microphone analysis in the playground, or listening reported by the native host. |
+| **Processing / thinking** | Accelerating orbital trails; a fourth interference ribbon | Violet / amber | Text generation, tool work or native computation. Not a percentage-complete indicator. |
+| **Speaking / output** | High-contrast radial spectrum with luminous trails | Bright cyan / magenta | Native speech state, or a clearly labelled silent preview. Output-frequency reactivity requires an output analyser. |
+| **Error / interrupted** | One brief, damped shake; warm glow that settles | Crimson / amber | A failed request, denied permission or interrupted stream. Read the accompanying explanation. |
+
+**Approval is separate from these five audio states:** it uses a calm amber presentation plus explicit **Allow once / Deny** controls. A spoken “yes” or an animation cannot approve a sensitive action.
+
+### Signal honesty
+
+The interface distinguishes **live FFT bands**, a **native scalar input level**, **synthetic demo data**, and **state-only motion**.
+
+- The native Windows API currently exposes amplitude, not FFT bands or TTS output samples. Listening can follow that amplitude; native speaking uses decorative spectrum motion.
+- Text deltas map to **thinking**, never speaking.
+- Missing or stale audio falls back to state-driven motion. It is not presented as a live spectrum.
+- The static website and `?demo=1` conversation mode make no AI, tool or audio-capture requests. A preview does not mute a separately running native host.
+
+### Try the visualizer
+
+After starting Quasnooze, open **`/visualizer.html`** from the launcher’s panel URL.
+
+1. Explore the five state buttons. They start as **silent synthetic previews**.
+2. Select **Enable microphone** to use real, local frequency analysis. Permission is requested only after that click.
+3. Select **Turn microphone off** when finished. Hiding or leaving the page releases the microphone.
+4. Enable **Reduce motion** for a static core and state colors. The OS preference is respected by default.
+
+The playground analyzes audio; it **does not transcribe speech or call a model**. For actual voice commands, use the existing surfaces below.
 
 ## Start in three steps
 
-**Requirements:** Node.js **22+**; Windows 10/11 for the native resident companion. The web/channel assistant also runs on Linux and macOS. No browser bundle, CDN or required runtime dependency is needed for basic local/web use; WhatsApp/QR support has optional packages.
+**Requirements:** Node.js **22+**. Windows 10/11 is required for the native voice host; the web/channel assistant also runs on Linux and macOS. Basic local/web use needs no browser bundle, CDN or mandatory runtime package. WhatsApp/QR support uses optional packages.
 
 ### 1 · Get the code
 
@@ -37,7 +75,7 @@ git clone https://github.com/Quasynvo/Quasnooze.git
 cd Quasnooze
 ```
 
-### 2 · Choose your setup
+### 2 · Configure and check
 
 ```sh
 npm run setup
@@ -45,101 +83,151 @@ npm run doctor
 npm run brain
 ```
 
-The guide walks through the model, workspace, access key and optional channels. Install/start **Ollama** and choose an installed model for real local reasoning. Setup does not make a model or microphone available by magic.
+Install/start **Ollama** and select an installed model for real local reasoning. Setup guides model, workspace, access-key and optional-channel configuration. It does not download a model, install a speech pack or grant microphone permission automatically.
 
-### 3 · Start your assistant
+### 3 · Start your interface
 
 ```sh
-# Windows resident mode: native tray/widget, starts with microphone muted
-npm run desktop
-
-# Or the cross-platform web and configured-channel assistant
+# Cross-platform web and configured-channel assistant
 npm start
+
+# OR: Windows native tray/widget and local voice host
+npm run desktop
 ```
 
-Open the panel URL printed by the launcher. The default port is `7777`; a keyless default server stays on loopback. **Do not expose an unauthenticated assistant or forward its port.**
+Open the panel URL printed by the launcher. The default port is `7777`; a keyless default server stays on loopback. **Do not expose an unauthenticated assistant or forward its port.** Native launch starts with the microphone muted.
 
 <details>
-<summary><b>Just looking? Try the canned demo first.</b></summary>
+<summary><strong>Try a canned assistant demo</strong></summary>
 
 ```sh
 npm run demo
 ```
 
-No model or account tokens are required. This is a **canned brain**, not a demonstration of real AI reasoning. It disables the panel key and is **not a security sandbox**: keep it local, do not expose its port, and treat any tool permissions seriously.
+This uses a **canned brain**, not real model reasoning. It disables the panel key and is **not a security sandbox**. Keep it local and treat tool permissions seriously.
 
-For an animation-only preview, visit `/cosmic.html?demo=1`. That explicit scripted mode makes no AI/tool/audio request. It does not mute a separately running native companion.
+For a motion-only conversation preview, open `/cosmic.html?demo=1`. For the five-state motion playground and optional microphone analysis, open `/visualizer.html`.
+
 </details>
 
-## Three ways to meet your assistant
+## Voice and microphone setup
 
-| View | Where | What it is for |
+### Native Windows speech
+
+Use `npm run desktop` with Windows PowerShell 5.1, .NET Framework 4.8, WinForms/System.Speech, a microphone and a compatible **English desktop speech recognizer**. Modern Windows voice-access support alone does not establish that the classic recognizer is installed.
+
+- Select **Talk locally**, or explicitly enable **Hey Quasnooze** in the native widget.
+- Wait for **LISTENING** before giving one instruction.
+- **Mute** releases recognition. **Stop voice** stops speech/listening behavior as documented; it is **not task cancellation**.
+- The native host uses local recognition and synthesis. There is no silent cloud speech fallback.
+
+[Windows setup and limitations →](docs/DESKTOP.md)
+
+### Browser microphone analysis
+
+The visualizer playground uses `navigator.mediaDevices.getUserMedia()` and an `AnalyserNode`.
+
+- Use **HTTPS** or a trustworthy **loopback HTTP** origin such as `http://localhost:7777`. An arbitrary HTTP LAN address generally cannot access the microphone.
+- Allow microphone access in the browser and OS. Permission is never inferred from an `.env` setting.
+- If embedded in an iframe, the parent must permit microphone access and the server must allow it with Permissions Policy.
+- Audio analysis stays in the page: no recording, audio upload or analyser-to-speaker connection.
+- Denial, a missing device and a busy device produce actionable messages. Text controls remain usable.
+
+**Important:** browser `SpeechRecognition`, used by the advanced history panel, is a separate path and **may send audio to the browser vendor**. Local FFT analysis does not make browser recognition local. [Exact voice boundaries →](docs/VOICE.md)
+
+No new environment variable is required for the visualizer. `WHISPER_URL` remains optional and applies to recorded voice-note transcription—not canvas animation.
+
+## Three connected surfaces
+
+| Surface | Route | Purpose |
 |---|---|---|
-| **Command deck** | `/` or `/desktop.html` | Everyday actions, actual native/mic/model state, results and approvals. |
-| **Cosmic conversation** | `/cosmic.html` | Animated face-to-face sloth, real text streaming, existing approvals and optional native voice. |
-| **Conversation history** | `/index.html` | Existing history, attachments, memory and advanced chat controls. |
+| **Command deck** | `/` or `/desktop.html` | Everyday actions, native/microphone status, results and approvals. |
+| **Voice conversation** | `/cosmic.html` | Fluid Motion visuals, real text streaming, existing approvals and optional native voice. Existing route retained. |
+| **Conversation history** | `/index.html` | History, attachments, memory and advanced chat controls. |
+| **Motion playground** | `/visualizer.html` | Five-state previews and explicitly opt-in local microphone analysis. |
 
-![Quasnooze cosmic conversation — scripted UI preview, no active AI or microphone](docs/images/cosmic-conversation.png)
+![Quasnooze voice conversation with the Fluid Motion engine; scripted preview, no active AI or microphone](docs/images/cosmic-conversation.png)
 
-The avatar’s calm motion is decorative. Thinking means backend work; it does **not** mean spoken audio. Speaking animation follows reported Windows voice state, or an explicitly labelled silent preview. **Stop voice is not task cancellation.** Reduced-motion controls are available in the conversation settings and respect the OS preference.
+## Architecture and module map
 
-## What can it do?
+![Request and visualizer architecture: text or opt-in audio enters existing speech/model paths; policy gates actions; state and separately sourced audio signals drive the visualizer](assets/architecture.svg)
 
-| You want to… | What is available | Important boundary |
+| Module | Implementation | Responsibility |
 |---|---|---|
-| Ask, draft or plan | Conversation, local model selection, personas and remembered facts | Model answers can be wrong; memory/personas cannot grant permissions. |
-| Get everyday help | Time/system status, bounded filename search and allowlisted app launches in resident mode | Native actions require the Windows companion; not arbitrary desktop automation. |
-| Work with documents | Workspace document search, supported attachments and source/citation handling | Bounded access; citation provenance is not proof of answer correctness. |
-| Use engineering tools | File reads/writes, command tools, calculations and optional MCP/custom tools | Workspace policy and approvals apply. Plugins are not OS-sandboxed. |
-| Remember something | Reminders, schedules, local history and personal-data export | Sleeping/offline hosts and delivery failures have limitations; restore is separate planned work. |
-| Meet in your chat app | Telegram, Discord, Slack, WhatsApp and web | Account setup is optional; external services receive the messages you send through them. |
+| **Audio Stream Handler** | [`public/audio-input.js`](public/audio-input.js) | Explicit capture, permission errors, cancellation and track/context cleanup. |
+| **Frequency Analyzer** | `startAudioAnalysis()` in the same module | FFT bands, RMS-derived level and local-only analyser graph. |
+| **Reactive Motion Engine** | [`public/visualizer.js`](public/visualizer.js) | Canvas ribbons, spring smoothing, state transitions, fallback and reduced motion. |
+| **Native Voice Bridge** | [`src/windows-companion.js`](src/windows-companion.js), [`desktop/Companion.cs`](desktop/Companion.cs) | Existing Windows recognition, synthesis, mute controls and scalar input telemetry. |
+| **Speech-to-text paths** | Browser recognition, Windows System.Speech, [`src/voice.js`](src/voice.js) | Existing browser/native dictation and optional Whisper-compatible voice-note transcription. |
+| **Conversation / tool pipeline** | [`src/server.js`](src/server.js), [`src/agent.js`](src/agent.js) | Streaming text, typed failures, tools and approval boundaries. |
+| **Provider routing** | [`src/router.js`](src/router.js), [`src/brain.js`](src/brain.js) | Configured model calls and explicitly enabled fallback. |
 
-See the [capability inventory](docs/CAPABILITIES.json) for implementation evidence and limitations—not marketing parity claims.
+The visualizer is a **presentation layer**, not a replacement speech recognizer. Native source filenames remain stable for compatibility. The module names above describe responsibilities; they do not imply a new backend service.
 
-## How a request moves
+### Integrate the renderer
 
-![Quasnooze request flow: request, local intent or model, policy and approval, execution, visible result](assets/architecture.svg)
+Serve the files from `public/`; there is no build step or runtime package to install.
 
-1. **Ask** from the resident companion, web or a configured channel.
-2. **Route** a supported simple resident action directly; use the configured model when reasoning is needed.
-3. **Check policy** and request approval for sensitive actions.
-4. **Show the result** honestly—including failures, sources and uncertain effects.
+```html
+<link rel="stylesheet" href="/visualizer.css">
+<div class="visualizer is-static" style="width:320px">
+  <canvas id="voiceCanvas" aria-hidden="true"></canvas>
+  <img class="visualizer-fallback" src="/brand/voice-engine.svg" alt="">
+</div>
+<p id="voiceState" role="status" aria-live="polite">Idle</p>
+```
+
+```js
+import { createVisualizer } from "/visualizer.js";
+
+const canvas = document.getElementById("voiceCanvas");
+const motion = createVisualizer(canvas);
+
+// Call from your actual application state, not from a decorative timer.
+motion.setState("thinking");
+document.getElementById("voiceState").textContent = "Processing your request";
+
+// On permanent unmount:
+// motion.destroy();
+```
+
+For real input, call `startAudioAnalysis()` **inside a click handler**, pass its `sample()` function as the engine’s `signalProvider`, and call `stop()` on mute/unmount. Keep permission handling and capture ownership outside the renderer.
+
+The [integration guide](docs/VISUALIZER.md) includes the complete capture example, API reference, state mappings, design tokens, output-audio limitations and accessibility checklist.
+
+## What Quasnooze can do
+
+| Need | Available capability | Boundary |
+|---|---|---|
+| Ask, draft or plan | Conversation, local model selection, personas and remembered facts | Answers can be wrong; style/memory cannot grant permissions. |
+| Everyday Windows actions | Time/system status, bounded filename search and allowlisted app launches | Requires the native host for native actions; not arbitrary desktop automation. |
+| Work with documents | Workspace search, supported attachments and source/citation handling | Bounded access; citations do not guarantee correctness. |
+| Use engineering tools | File operations, command tools, calculations and optional MCP/custom tools | Workspace policy and approvals apply; plugins are not OS-sandboxed. |
+| Remember and schedule | Reminders, schedules, local history and personal-data export | Delivery needs a running, awake host; validated restore is separate work. |
+| Use your chat apps | Telegram, Discord, Slack, WhatsApp and web | Optional setup; external services receive messages sent through them. |
 
 Read-only shell commands such as `ls`, `cat`, `grep`, `git status` and friends
 run straight through when they satisfy the risk classifier. Other commands ask; blocked commands remain blocked. [Exact policy and examples →](docs/GUIDE.md#commands-it-runs-without-asking)
 
-## When the model does not answer
+See the [capability inventory](docs/CAPABILITIES.json) for implementation evidence and limitations.
 
-A failed turn is typed rather than guessed at: `RATE_LIMITED`, `NEED_AUTH`, `UNREACHABLE`,
-`TIMEOUT`, `UPSTREAM_BROKEN`, `PAYLOAD_MISMATCH`, `BAD_INPUT`, `CONTEXT_LIMIT`, `STREAM_CUT`. Each
-carries the one sentence that tells you what to do about it, and the reply says which provider
-failed — not advice to restart a service that was running fine.
+## Privacy, permissions and failure handling
 
-`quasnooze health` is the command to reach for when something breaks. It calls each provider for
-real, prints status codes and latencies, shows whether a turn would survive losing its provider,
-and exits non-zero so a script can act on it:
-
-```
-▲ routing   single provider (ollama) — a 429, 5xx or refused connection has nowhere to go
-    Set LLM_FALLBACK=openai to survive an Ollama outage. That sends the turn's history to the
-    cloud endpoint, so it stays off by default.
-```
-
-Falling back to a second provider is opt-in for that reason: Quasnooze is local-first, and quietly
-sending a conversation to a cloud endpoint to keep a turn alive is your decision, not a default.
-A reply that has already started on screen is never re-asked elsewhere — that would print the
-answer's beginning twice. [The whole story →](docs/ROUTING.md)
-
-## Privacy, permissions and honest limits
-
-- Conversations and personal state live on the machine running Quasnooze. Local does **not** automatically mean encrypted or sandboxed.
+- Personal state lives on the machine running Quasnooze. Local does **not** automatically mean encrypted or sandboxed.
 - Native microphone use is opt-in and starts muted. A wake phrase is **not authentication**.
-- Optional browser recognition may use the browser vendor; prefer the native companion for local Windows speech. Read [voice boundaries](docs/VOICE.md).
-- Network tools, configured cloud providers and external messaging services have their own data flows. There is no mandatory cloud audio or hidden remote-model fallback in resident requests.
+- Microphone analysis is local to the playground. Browser recognition, cloud models, network tools and messaging services have different data flows.
 - JavaScript plugins run with the process’s privileges. Install only code you trust.
-- An animation cannot approve an action. Disconnecting a page does not guarantee a backend task stopped.
+- Disconnecting a page does not establish that a backend task stopped. The playground releases its own capture on hide/unmount; it cannot control the native microphone.
 
-Read [the audit and known limitations](docs/AUDIT.md), [security policy](SECURITY.md), [voice review](docs/VOICE-REVIEW.md) and [desktop guide](docs/DESKTOP.md) before enabling powerful integrations or exposing the service.
+Failed turns use typed results such as `RATE_LIMITED`, `NEED_AUTH`, `UNREACHABLE`, `TIMEOUT`, `CONTEXT_LIMIT` and `STREAM_CUT`. The interface shows an actionable explanation rather than inventing a successful response.
+
+```sh
+quasnooze health
+```
+
+Provider fallback is **opt-in**. Enabling a cloud fallback can send conversation history to that endpoint. A reply already streaming to the user is not silently restarted elsewhere. [Routing and diagnostics →](docs/ROUTING.md)
+
+Read the [audit](docs/AUDIT.md), [security policy](SECURITY.md), [voice review](docs/VOICE-REVIEW.md) and [desktop guide](docs/DESKTOP.md) before enabling powerful integrations.
 
 ## Commands and configuration
 
@@ -148,33 +236,44 @@ From a checkout, use `node bin/quasnooze.js help`. The `pinch` entry remains a c
 | Command | Purpose |
 |---|---|
 | `quasnooze setup` / `quasnooze doctor` | Guided configuration / readiness checks |
-| `quasnooze health` | Provider matrix, routing plan and verdict; `--json` for scripts, exits 1 on failure |
-| `quasnooze desktop` | Windows resident companion |
+| `quasnooze health` | Provider matrix and routing verdict; `--json` for scripts |
+| `quasnooze desktop` | Windows native voice host |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
-| `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model/tool probe |
+| `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model and tool probe |
 | `quasnooze export` / `quasnooze cost` | Personal-data export / recorded token-cost estimate |
-| `quasnooze audit` / `quasnooze radar` | Local guard rails / runtime and repository drift |
+| `quasnooze audit` / `quasnooze radar` | Local guardrails / runtime and repository drift |
 
-Use `.env` or process environment. New `QUASNOOZE_*` names are preferred; corresponding `PINCH_*` names remain accepted. Real environment overrides `.env`; within one layer the new spelling wins. Data paths are **not moved** by this rebrand. [Full migration rules →](docs/REBRANDING.md)
+Use `.env` or process environment. Prefer `QUASNOOZE_*`; corresponding `PINCH_*` names remain accepted. Real environment overrides `.env`. Data paths are not moved by this refresh. [Migration rules →](docs/REBRANDING.md)
 
-**npm release preparation:** metadata now uses `@quasynvo/quasnooze` with the `quasnooze` command and legacy `pinch` alias. **This is not proof that the npm scope/package is registered or published.** Use the Git checkout instructions until maintainers publish and verify a release. Never install an unrelated similarly named package expecting this project.
+**npm status:** metadata uses `@quasynvo/quasnooze`; publication and scope ownership are not established by this repository change. Use the Git checkout until maintainers publish and verify a release.
 
-## Help build the next orbit
-
-1. Choose an [open contributor task](https://github.com/Quasynvo/Quasnooze/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-2. Comment before starting to coordinate ownership.
-3. Add focused regressions, run the checks, and open a small PR.
+## Build and verify
 
 ```sh
+# Runtime regression suite and local audit
 node --test --test-concurrency=4
 node scripts/audit.js
 node scripts/validate-roadmap.js
 ```
 
-The bots maintain a bounded, evidence-backed queue—**up to ten open contributor tasks**, not ten invented issues per day. Independent review and human merges remain required. See [contributing](CONTRIBUTING.md), [queue operation](docs/CONTRIBUTOR-QUEUE.md) and the [product roadmap](docs/ROADMAP-PROPOSED.md).
+The visualizer has focused tests for state mapping, signal freshness, microphone cleanup and reduced motion. Browser checks use disposable fixtures; they are not native-hardware or audio-quality evidence.
 
-## Learn more
+To rebuild README/brand assets, install **Python 3 + Pillow** as developer tools, then run:
 
-[User guide](docs/GUIDE.md) · [Routing and diagnostics](docs/ROUTING.md) · [Desktop and local voice](docs/DESKTOP.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md) · [Brand and migration](docs/REBRANDING.md)
+```sh
+python3 scripts/build-brand-assets.py
+```
 
-Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous author/contributor attribution is preserved. [MIT license](LICENSE).
+This also synchronizes the shared renderer into the static website. The [validation record](docs/brand/VALIDATION.md) separates checks actually run from pending platform acceptance.
+
+## Contribute
+
+1. Choose an [open contributor task](https://github.com/Quasynvo/Quasnooze/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
+2. Comment before starting to coordinate ownership.
+3. Add focused regressions, run the checks and open a small PR.
+
+Motion changes must preserve signal honesty, keyboard access and reduced-motion behavior. See [CONTRIBUTING.md](CONTRIBUTING.md), the [visualizer contract](docs/VISUALIZER.md) and the [product roadmap](docs/ROADMAP-PROPOSED.md).
+
+[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
+
+Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous attribution is preserved. [MIT license](LICENSE).

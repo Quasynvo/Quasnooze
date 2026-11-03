@@ -93,7 +93,7 @@ that would be an amusing way to hand your access key to someone else.
 The 👂 toggle in the panel header enables "Hey Quasnooze". It uses the browser's own recogniser in
 continuous mode to match the phrase while the tab is open. Browser speech recognition may send
 microphone audio to the browser vendor even before a command follows the wake word, so the toggle
-asks for explicit consent and points at the Windows companion for recognition that stays on the
+asks for explicit consent and points at the Windows voice host for recognition that stays on the
 device. It stops when the tab or app closes, and the toggle is off by default on every device —
 always-on microphones should be a choice, not a default.
 
