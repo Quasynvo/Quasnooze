@@ -38,3 +38,8 @@ test('current branding has no animal mascot language or image aliases', () => {
   const paths = ['README.md', 'CONTRIBUTING.md', 'docs/REBRANDING.md', 'docs/VISUALIZER.md', 'docs/VOICE.md', 'docs/DESKTOP.md', 'package.json', 'src/prompt.js', 'public/cosmic.html', 'public/cosmic.js', 'public/cosmic.css', 'public/desktop.html', 'public/index.html', 'site/index.html', 'site/app.js', 'site/style.css'];
   for (const path of paths) assert.doesNotMatch(read(path).toString(), /sloth|🦥|🦞|lobster theme|cosmic companion/i, path);
 });
+test('site entry is an ES module without an ineffective post-import strict expression', () => {
+  // ES modules are strict by definition; a string literal after imports is not a directive.
+  assert.match(read('site/index.html').toString(), /<script\s+type="module"\s+src="app\.js"/);
+  assert.doesNotMatch(read('site/app.js').toString(), /^\s*["']use strict["'];?\s*$/m);
+});

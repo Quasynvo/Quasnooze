@@ -1,6 +1,5 @@
 import { createVisualizer } from "./assets/visualizer.js";
 import { createDemoSignal } from "./assets/demo-signal.js";
-"use strict";
 const $ = (id) => document.getElementById(id);
 const demoSignal = createDemoSignal();
 let activePhase = "idle";
