@@ -17,6 +17,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync, accessSync, constants } from "node:fs";
 import { join } from "node:path";
 import { classify } from "./failure.js";
+import { deriveReadiness } from "./readiness.js";
 
 export const SCHEMA_VERSION = 1;
 
@@ -44,12 +45,23 @@ export function defaultProbes() {
       const result = await probe(`${cfg.llm.ollamaUrl}/api/tags`);
       if (!result.ok) return result;
       let models = [];
+      let modelDetails = [];
       try {
-        models = (JSON.parse(result.body).models || []).map((m) => m.name);
+        const listed = JSON.parse(result.body).models || [];
+        models = listed.map((m) => m.name);
+        // Digest/quantisation for the latency baseline artifact (src/baseline.js):
+        // two runs on "the same model name" are not comparable if the digests differ.
+        modelDetails = listed.map((m) => ({
+          name: m.name,
+          digest: typeof m.digest === "string" ? m.digest : null,
+          quantization: m.details?.quantization_level || null,
+          parameter_size: m.details?.parameter_size || null,
+          family: m.details?.family || null,
+        }));
       } catch {
         return { ...result, ok: false, parseError: true };
       }
-      return { ...result, models };
+      return { ...result, models, modelDetails };
     },
 
     async openai(cfg) {
@@ -119,6 +131,9 @@ function writeState(path, report) {
  * @param probes   the request layer (injected in tests)
  * @param network  false makes the provider checks SKIP, for an offline machine
  * @param statePath where the previous run is remembered; null disables regression tracking
+ * @param companion a DesktopRuntime snapshot from an in-process caller, when one can see
+ *                  it. Left null, voice readiness is reported as not-verified — the
+ *                  companion's state is never guessed from outside its process.
  */
 export async function runDoctor({
   cfg,
@@ -126,6 +141,7 @@ export async function runDoctor({
   probes = defaultProbes(),
   plan = null,
   network = true,
+  companion = null,
   statePath = cfg?.dataDir ? join(cfg.dataDir, "doctor-state.json") : null,
   now = Date.now(),
   nodeVersion = process.version,
@@ -181,6 +197,8 @@ export async function runDoctor({
   const provider = cfg.llm.provider;
   const model = provider === "openai" ? cfg.llm.openaiModel : provider === "mock" ? "mock" : cfg.llm.ollamaModel;
   checks.push(check("brain", "Selected brain", STATUS.OK, `${provider} / ${model}`));
+  // Selected model's digest/quantisation when the probe reported it, for the baseline.
+  let modelInfo = null;
 
   if (!network) {
     checks.push(check("provider.ollama", "Ollama endpoint", STATUS.SKIP, "network checks disabled (--no-network)"));
@@ -188,6 +206,9 @@ export async function runDoctor({
   } else {
     const local = await probes.ollama(cfg);
     if (local.ok) {
+      modelInfo = (local.modelDetails || []).find(
+        (m) => m.name === cfg.llm.ollamaModel || m.name === `${cfg.llm.ollamaModel}:latest`,
+      ) || null;
       const has = (local.models || []).includes(cfg.llm.ollamaModel) || (local.models || []).includes(`${cfg.llm.ollamaModel}:latest`);
       checks.push(
         has
@@ -285,7 +306,12 @@ export async function runDoctor({
     routing: { plan: hops, resilient: Boolean(second), provider },
     summary,
     checks,
+    // Additive in schema 1: structured readiness derived from the checks above
+    // (src/readiness.js owns no probes of its own), and the selected local model's
+    // digest details when the provider probe reported them.
+    model_info: modelInfo,
   };
+  report.readiness = deriveReadiness(report, { companion });
 
   if (statePath) report.state_written = writeState(statePath, report);
   return report;
@@ -311,6 +337,13 @@ export function renderDoctor(report) {
     const mark = PAINT[row.status](MARK[row.status]);
     lines.push(`  ${mark} ${row.id.padEnd(17)} ${row.detail}${row.regressed ? "  ← regressed" : ""}`);
     if (row.hint && row.status !== STATUS.OK) lines.push(`      ${"\x1b[2m"}${row.hint}\x1b[0m`);
+  }
+  if (report.readiness) {
+    const { text, voice } = report.readiness.surfaces;
+    lines.push("");
+    lines.push(`  readiness  text: ${text.state} · voice: ${voice.state}`);
+    if (!text.ready) lines.push(`      ${"\x1b[2m"}next: ${text.next_action}\x1b[0m`);
+    if (!voice.ready && voice.next_action !== text.next_action) lines.push(`      ${"\x1b[2m"}voice next: ${voice.next_action}\x1b[0m`);
   }
   const s = report.summary;
   lines.push("");

@@ -539,7 +539,8 @@
         "src/telemetry.js: one NDJSON line per turn, rotated at 5 MB",
         "GET /api/health: p50/p95, error rate, guard-flag rate",
         "test/batch2.test.js: 'a completed turn is recorded, and health reports the numbers'",
-        "src/cost.js + GET /api/health: cost of the last 30 days as a range"
+        "src/cost.js + GET /api/health: cost of the last 30 days as a range",
+        "src/readiness.js + src/baseline.js: structured readiness states derived from the doctor, and a synthetic content-free latency baseline via npm run health -- --baseline (docs/DIAGNOSTICS.md)"
       ],
       "note": "Local only, never transmitted, and it records timings and counts — not message text. No dashboards and no distributed tracing: this is a file you can `tail`, not an observability platform."
     }
