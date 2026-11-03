@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatIncomingTelegramText } from "../src/channels/telegram-reply.js";
+import { isApprovalReply } from "../src/channels/router.js";
 
 test("includes quoted reply context before the new message", () => {
   assert.equal(
@@ -38,12 +39,21 @@ test("bounds the complete quoted header and preserves the new message", () => {
   assert.ok(result.endsWith("Keep this"));
 });
 
-test("preserves yes/no approval replies without adding quoted text", () => {
-  for (const answer of ["yes", "Yes!", "no", "NO?"]) {
+
+
+
+
+
+test("preserves every supported approval reply without adding quoted text", () => {
+  for (const answer of [
+    "y", "yes", "yeah", "yep", "ok", "okay", "allow", "approve", "go", "do it", "sure",
+    "n", "no", "nope", "deny", "stop", "cancel", "abort", "nah",
+  ]) {
+    assert.equal(isApprovalReply(answer), true);
     assert.equal(
       formatIncomingTelegramText(
         { text: answer, reply_to_message: { text: "untrusted quoted content" } },
-        { preserveApprovalReply: true }
+        { preserveApprovalReply: isApprovalReply(answer) }
       ),
       answer
     );
