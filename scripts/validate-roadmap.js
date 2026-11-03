@@ -66,6 +66,16 @@ for (const [i, item] of doc.items.entries()) {
   if (seen.has(item.id)) fail(`${at}: duplicate id`);
   seen.add(item.id);
 
+  if (item.not_before !== undefined) {
+    const date = item.not_before;
+    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
+      fail(`${at}: not_before must be a valid UTC date (YYYY-MM-DD)`);
+    }
+  }
+  if (item.depends_on !== undefined && (!Array.isArray(item.depends_on) || item.depends_on.some(id => typeof id !== "string" || !id))) {
+    fail(`${at}: depends_on must be an array of nonempty item IDs`);
+  }
+
   if (item.status && !ALLOWED_STATUS.has(item.status)) {
     fail(`${at}: status '${item.status}' is not one of ${[...ALLOWED_STATUS].join(", ")}`);
   }
@@ -99,6 +109,25 @@ for (const [i, item] of doc.items.entries()) {
     }
   }
 }
+
+// Check references and cycles after all IDs are known, including forward references.
+const byId = new Map(doc.items.filter(item => item?.id).map(item => [item.id, item]));
+const visiting = new Set();
+const visited = new Set();
+function visit(id) {
+  if (visiting.has(id)) { fail(`dependency cycle at '${id}'`); return; }
+  if (visited.has(id)) return;
+  visiting.add(id);
+  const deps = byId.get(id)?.depends_on;
+  if (Array.isArray(deps)) for (const dep of deps) {
+    if (typeof dep !== 'string') continue;
+    if (!byId.has(dep)) fail(`${id}: unknown dependency '${dep}'`);
+    else visit(dep);
+  }
+  visiting.delete(id);
+  visited.add(id);
+}
+for (const id of byId.keys()) visit(id);
 
 // The cap is the anti-pattern guard: a tracker full of bot issues with no human replies reads
 // as an abandoned project and repels exactly the people we want.

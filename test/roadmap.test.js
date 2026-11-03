@@ -207,3 +207,18 @@ test('both automated issue publishers share a serialization group',async()=>{
  const {readFileSync}=await import('node:fs');
  for (const name of ['growth','contributor-queue']) assert.match(readFileSync(`.github/workflows/${name}.yml`,'utf8'),/group: contributor-issue-publishing/);
 });
+
+test('rollout dates and dependency references are validated before publishing', () => {
+  for (const [items, pattern] of [
+    [[item({not_before:'2026-02-30'})], /not_before/],
+    [[item({depends_on:['missing']})], /unknown dependency/],
+    [[item({depends_on:'other'})], /depends_on/],
+    [[item({id:'a',depends_on:['b']}),item({id:'b',depends_on:['a']})], /dependency cycle/],
+  ]) {
+    const {path, cleanup}=fixture({meta:{open_easy_cap:3},items});
+    try { const result=run(path); assert.equal(result.code,1); assert.match(result.out,pattern); }
+    finally { cleanup(); }
+  }
+  const {path,cleanup}=fixture({meta:{open_easy_cap:3},items:[item({id:'a',depends_on:['b'],not_before:'2026-11-03'}),item({id:'b',status:'shipped'})]});
+  try { const result=run(path); assert.equal(result.code,0,result.out); } finally { cleanup(); }
+});
