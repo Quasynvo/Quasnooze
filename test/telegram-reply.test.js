@@ -39,11 +39,6 @@ test("bounds the complete quoted header and preserves the new message", () => {
   assert.ok(result.endsWith("Keep this"));
 });
 
-
-
-
-
-
 test("preserves every supported approval reply without adding quoted text", () => {
   for (const answer of [
     "y", "yes", "yeah", "yep", "ok", "okay", "allow", "approve", "go", "do it", "sure",
@@ -69,7 +64,6 @@ test("quotes and backslashes cannot exceed the header limit", () => {
   assert.ok(header.length <= 400);
   assert.ok(result.endsWith("body"));
 });
-
 
 test("only truncates a reply header when its serialized form exceeds the limit", () => {
   const overhead = '[Replying to: ""]\n'.length;
