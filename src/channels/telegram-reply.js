@@ -6,7 +6,7 @@ const MAX_REPLY_HEADER_CHARS = 400;
  */
 export function formatIncomingTelegramText(msg, { preserveApprovalReply = false } = {}) {
   const text = String(msg?.text || msg?.caption || "");
-  if (preserveApprovalReply && /^(?:yes|no)[.!?]?$/i.test(text.trim())) return text;
+  if (preserveApprovalReply) return text;
 
   const reply = msg?.reply_to_message?.text || msg?.reply_to_message?.caption;
   if (typeof reply !== "string" || !reply.trim()) return text;

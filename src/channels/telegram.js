@@ -3,7 +3,7 @@
  * works from behind your router. Approvals get real inline buttons.
  */
 import { config } from "../config.js";
-import { routeMessage } from "./router.js";
+import { isApprovalReply, routeMessage } from "./router.js";
 import { answerApproval, pendingApprovalsFor } from "../agent.js";
 import { registerSender } from "../outbound.js";
 import { formatIncomingTelegramText } from "./telegram-reply.js";
@@ -97,7 +97,7 @@ export function startTelegram(log = console) {
 
     const sessionId = `telegram-${chatId}`;
     const approvalReply = pendingApprovalsFor(sessionId).length > 0 &&
-      /^(?:yes|no)[.!?]?$/i.test(incomingText.trim());
+      isApprovalReply(incomingText);
     const text = formatIncomingTelegramText(msg, { preserveApprovalReply: approvalReply });
 
     await call("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
