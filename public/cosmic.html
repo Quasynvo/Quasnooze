@@ -4,8 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>Quasnooze · Cosmic conversation</title>
-    <link rel="icon" href="/brand/cosmic-mark.svg" />
+    <title>Quasnooze · Voice conversation</title>
+    <link rel="icon" href="/brand/voice-engine.svg" />
+    <link rel="stylesheet" href="/visualizer.css" />
     <link rel="stylesheet" href="/cosmic.css" />
   </head>
   <body data-state="idle">
@@ -17,15 +18,9 @@
       <div class="orbital o2"></div>
     </div>
     <header class="topbar">
-      <a class="brand" href="/cosmic.html" aria-label="Quasnooze conversation home"
-        ><svg viewBox="0 0 48 40" aria-hidden="true">
-          <path
-            d="M5 19C5 6 21 4 24 17C27 4 43 6 43 19M5 19C5 34 21 33 22 20H26C27 33 43 34 43 19M1 16L6 18M42 18L47 16"
-          /></svg
-        ><span>quasnooze<small>BY QUASYNVO</small></span></a
-      >
+      <a class="brand" href="/cosmic.html" aria-label="Quasnooze conversation home"><img src="/brand/voice-engine.svg" width="42" height="42" alt=""><span>quasnooze<small>BY QUASYNVO</small></span></a>
       <div class="toplinks">
-        <span class="concept">COSMIC COMPANION / 01</span
+        <span class="concept">FLUID MOTION / 01</span
         ><span id="connection" class="connection">Checking service…</span
         ><span id="micLabel" class="mic-status">MIC: NOT CHECKED</span
         ><button
@@ -40,27 +35,21 @@
     <main>
       <section class="presence" aria-labelledby="heroTitle">
         <div class="hero">
-          <div class="eyebrow"><i></i> COSMIC CALM. LOCAL INTELLIGENCE.</div>
+          <div class="eyebrow"><i></i> LOCAL INTELLIGENCE. VISIBLE SIGNAL.</div>
           <h1 id="heroTitle">
-            A little cosmic.<br />A lot more <em>present.</em>
+            Your voice.<br />In <em>fluid motion.</em>
           </h1>
-          <p>Your ideas. A quieter orbit. An assistant that meets you here.</p>
+          <p>A luminous signal for listening, thinking and speaking.</p>
         </div>
-        <div class="avatar-stage" id="avatarStage">
-          <div class="halo" aria-hidden="true"></div>
-          <div class="avatar" id="avatar">
-            <img
-              src="/brand/quasnooze-companion.webp"
-              class="sloth-art"
-              alt="A luminous cyan space sloth with glasses, holding a translucent coding tablet"
-            /><span class="mouth" aria-hidden="true"></span>
+        <div class="voice-stage" id="voiceStage">
+          <div class="visualizer is-static">
+            <canvas id="voiceCanvas" width="640" height="640" aria-hidden="true"></canvas>
+            <img class="visualizer-fallback" src="/brand/voice-engine.svg" alt="">
           </div>
-          <div class="orbit-label" aria-hidden="true">
-            <span>✧</span> MADE OF STARLIGHT &amp; GOOD INTENTIONS
-          </div>
+          <div class="orbit-label" aria-hidden="true"><span>∿</span> FLUID MOTION VOICE ENGINE</div>
         </div>
         <div class="presence-footer">
-          <div class="wave" id="wave" aria-hidden="true"></div>
+          <div class="signal-source" id="signalSource">STATE-DRIVEN MOTION · NO AUDIO SAMPLES</div>
           <div
             class="state-title"
             id="stateTitle"
@@ -74,7 +63,7 @@
           </p>
           <div class="stage-actions">
             <button id="talk" class="talk-button">
-              <span aria-hidden="true">♩</span> Talk locally</button
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:-2px"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg> Talk locally</button
             ><button id="stopVoice" class="quiet-button">Stop voice</button
             ><button id="animate" class="quiet-button">
               Preview animation ↗
@@ -85,7 +74,7 @@
       <section class="conversation" aria-labelledby="conversationTitle">
         <div class="panel-head">
           <div>
-            <div class="eyebrow">YOUR LITTLE CORNER OF THE COSMOS</div>
+            <div class="eyebrow">YOUR CONVERSATION, IN FOCUS</div>
             <h2 id="conversationTitle">Let’s untangle it.</h2>
           </div>
           <button
@@ -113,13 +102,11 @@
               <span class="mini-star">✧</span> QUASNOOZE
             </div>
             <h3>
-              Big thought?<br />Small question?<br /><span
-                >I’m all ears. Slowly moving ones.</span
-              >
+              Big thought?<br />Small question?<br /><span>Let’s find the signal.</span>
             </h3>
             <p>
-              Bring the tangled idea. We’ll find the thread—without rushing your
-              next decision.
+              Bring the question. We’ll find the thread—with visible progress and
+              your permission at every sensitive step.
             </p>
             <div class="suggestions">
               <button data-prompt="Help me plan my next focused work session.">
@@ -167,8 +154,8 @@
       </section>
     </main>
     <footer class="bottom">
-      <span>NEVER RUSHED. NEVER HIDDEN.</span
-      ><span>2.5D illustrated companion · not headset VR</span
+      <span>CLEAR SIGNAL. VISIBLE CONTROL.</span
+      ><span>Fluid Motion · state-driven, not lip sync</span
       ><a href="/desktop.html">Current Quasnooze deck ↗</a>
     </footer>
     <dialog id="settingsDialog">
@@ -178,8 +165,8 @@
       <div class="eyebrow">A CLEARER CONNECTION</div>
       <h2>Your assistant.<br />Your control.</h2>
       <p>
-        This is a Quasnooze illustrated conversation layer—not a 3D model
-        or phoneme-accurate lip sync. Real text uses Quasnooze’s existing API and
+        The Fluid Motion Voice Engine visualizes conversation state. It is
+        not phoneme-accurate lip sync. Real text uses Quasnooze’s existing API and
         permissions.
       </p>
       <label for="accessKey">Instance key (kept in memory for this tab)</label
@@ -200,8 +187,8 @@
       <p>
         “Stop voice” stops native speech/listening; it is
         <strong>not task cancellation</strong>. Speaking animation follows
-        reported native state; without a companion, use the clearly labelled
-        animation preview.
+        reported native state; its spectrum is decorative because native
+        speech has no output-frequency feed. Use the labelled silent preview without a native host.
       </p>
       <label class="check"
         ><input id="reduceMotion" type="checkbox" /> Reduce motion</label

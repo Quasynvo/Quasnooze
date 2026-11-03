@@ -2,8 +2,8 @@
   --bg: #090d1b;
   --ink: #f1f4fb;
   --muted: #a7adc4;
-  --cyan: #83f5ed;
-  --violet: #ba9dff;
+  --cyan: #6ee7f9;
+  --violet: #a78bfa;
   --line: #ffffff17;
   --sans: Inter, "Segoe UI", Arial, sans-serif;
 }
@@ -238,73 +238,14 @@ main {
   color: var(--muted);
   margin: 0;
 }
-.avatar-stage {
+.voice-stage {
   position: absolute;
-  inset: 18% -7% 8%;
+  inset: 19% 0 13%;
   display: grid;
   place-items: center;
   isolation: isolate;
 }
-.halo {
-  width: 75%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(ellipse, #55d7f51a, transparent 65%);
-  border: 1px solid #83f5ed10;
-  position: absolute;
-  box-shadow: 0 0 100px #62cce509;
-}
-.halo:after {
-  content: "";
-  position: absolute;
-  inset: -25px;
-  border: 1px dashed #aaaaff17;
-  border-radius: 50%;
-  animation: orbit 90s linear infinite;
-}
-.avatar {
-  width: min(100%, 670px);
-  position: relative;
-  animation: breathe 7s ease-in-out infinite;
-  transform: translate3d(var(--px, 0), var(--py, 0), 0);
-}
-.sloth-art {
-  width: 100%;
-  display: block;
-  mask-image: radial-gradient(
-    ellipse 49% 50% at 50% 49%,
-    #000 65%,
-    transparent 99%
-  );
-  filter: drop-shadow(0 0 20px #29bfe02b);
-}
-.mouth {
-  display: none;
-  position: absolute;
-  left: 43%;
-  top: 46%;
-  width: 15%;
-  height: 1.4%;
-  background: #092438;
-  border-radius: 50%;
-  border: 1px solid #5feaff;
-  box-shadow: 0 0 8px #8cecff77;
-}
-body[data-state="speaking"] .mouth {
-  display: block;
-  animation: speak 0.27s ease-in-out infinite alternate;
-}
-body[data-state="thinking"] .halo {
-  animation: pulse 2s ease-in-out infinite;
-}
-body[data-state="listening"] .halo {
-  box-shadow: 0 0 80px #83f5ed26;
-  border-color: #83f5ed66;
-}
-body[data-state="approval"] .halo {
-  border-color: #f6c99466;
-  background: radial-gradient(ellipse, #f6c9941a, transparent 65%);
-}
+.voice-stage .visualizer { width: min(100%, 600px); }
 .orbit-label {
   position: absolute;
   bottom: 14%;
@@ -329,26 +270,7 @@ body[data-state="approval"] .halo {
   text-align: center;
   z-index: 5;
 }
-.wave {
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-.wave span {
-  width: 2px;
-  height: var(--height);
-  background: linear-gradient(var(--cyan), #a9a7ff);
-  border-radius: 10px;
-  opacity: 0.55;
-}
-body[data-state="speaking"] .wave span,
-body[data-state="listening"] .wave span {
-  animation: wave 0.7s ease-in-out infinite alternate;
-  animation-delay: var(--delay);
-}
+.signal-source { margin-bottom: 14px; font-size: 8px; }
 .state-title {
   font-size: 17px;
   font-weight: 500;
@@ -702,40 +624,7 @@ body.reduced *:after {
   transition: none !important;
   scroll-behavior: auto !important;
 }
-body.reduced .avatar {
-  transform: none !important;
-}
-@keyframes breathe {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -9px;
-  }
-}
-@keyframes speak {
-  from {
-    height: 1.1%;
-    scale: 0.9 1;
-  }
-  to {
-    height: 3%;
-    scale: 1 1;
-  }
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.45;
-    scale: 0.98;
-  }
-}
-@keyframes wave {
-  to {
-    height: 4px;
-    opacity: 0.9;
-  }
-}
+
 @keyframes orbit {
   to {
     rotate: 360deg;
@@ -754,15 +643,12 @@ body.reduced .avatar {
     animation: none !important;
     scroll-behavior: auto !important;
   }
-  .avatar {
-    transform: none !important;
-  }
 }
 @media (min-width: 1550px) {
   main {
     gap: 6%;
   }
-  .avatar-stage {
+  .voice-stage {
     inset: 15% -7% 8%;
   }
 }
@@ -794,7 +680,7 @@ body.reduced .avatar {
     max-width: 250px;
     line-height: 1.8;
   }
-  .avatar-stage {
+  .voice-stage {
     inset: 25% -20% 15%;
   }
   .conversation {
@@ -866,11 +752,8 @@ body.reduced .avatar {
   .hero .eyebrow {
     font-size: 7px;
   }
-  .avatar-stage {
+  .voice-stage {
     inset: 19% 0 15%;
-  }
-  .avatar {
-    max-width: 460px;
   }
   .presence-footer {
     bottom: 20px;
@@ -882,10 +765,7 @@ body.reduced .avatar {
     font-size: 9px;
     margin-bottom: 14px;
   }
-  .wave {
-    margin-bottom: 8px;
-    height: 20px;
-  }
+
   .conversation {
     min-height: 620px;
     max-height: 85vh;
@@ -937,3 +817,7 @@ body.paused *:after {
     display: none;
   }
 }
+
+.voice-stage .visualizer { max-height: 100%; aspect-ratio: 1; }
+.brand img { flex: 0 0 42px; }
+@media(max-width:720px){.voice-stage{inset:22% 0 20%}.voice-stage .visualizer{max-width:420px}.signal-source{font-size:7px;letter-spacing:.04em}}

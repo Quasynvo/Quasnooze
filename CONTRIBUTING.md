@@ -96,7 +96,7 @@ test is the one that matters.
 - Comments explain *why*, not *what*. If a line needs a "what" comment, rename something.
 - Errors are values the model can read and act on: `{ ok: false, output: "…" }`, never a throw
   from a tool body unless it is genuinely exceptional.
-- Keep the lobster theme to a garnish. Never at the cost of a correct answer.
+- Keep motion meaningful and unobtrusive. Follow docs/VISUALIZER.md; never imply audio activity, progress or permissions that the runtime has not reported.
 
 ## Pull requests
 

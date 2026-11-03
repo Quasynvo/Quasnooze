@@ -38,7 +38,7 @@ What does transfer is how it handles **failure**, and there it was ahead of us.
 Before this change, any model failure in Quasnooze produced one sentence:
 
 ```
-🦞 My brain is unreachable: HTTP 429: rate limit exceeded
+∿ Model unavailable: HTTP 429: rate limit exceeded
 
 Check ollama / qwen2.5-coder:7b; for Ollama use `ollama serve` and pull the selected model.
 ```
