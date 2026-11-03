@@ -12,6 +12,11 @@ import { config } from "../config.js";
 const YES = /^(y|yes|yeah|yep|ok|okay|allow|approve|go|do it|sure)\.?!?$/i;
 const NO = /^(n|no|nope|deny|stop|cancel|abort|nah)\.?!?$/i;
 
+export function isApprovalReply(text) {
+  const trimmed = String(text || "").trim();
+  return YES.test(trimmed) || NO.test(trimmed);
+}
+
 export function splitForLimit(text, limit = 4000) {
   const out = [];
   let rest = String(text);
