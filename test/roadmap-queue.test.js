@@ -30,3 +30,20 @@ test('ten total tasks is a ceiling, not a per-day quota, and preserves manual ga
  assert.equal(selectQueue(roadmap,first.map(t=>issue(t.id))).length,0);
  assert.equal(selectQueue(roadmap,first.map((t,i)=>issue(t.id,i===0?'closed':'open'))).length,1);
 });
+test('UTC rollout dates and shipped dependencies gate only opted-in tasks',()=>{
+ const base=task('base',{status:'ready'});
+ const next=task('next',{not_before:'2026-11-10',depends_on:['base']});
+ const later=task('later',{not_before:'2026-11-17',depends_on:['next']});
+ const roadmap={items:[base,next,later,task('legacy')]};
+ assert.deepEqual(selectQueue(roadmap,[],'2026-11-03').map(t=>t.id),['base','legacy']);
+ assert.deepEqual(selectQueue(roadmap,[],'2026-11-10').map(t=>t.id),['base','legacy']);
+ base.status='shipped';
+ assert.deepEqual(selectQueue(roadmap,[],'2026-11-10').map(t=>t.id),['next','legacy']);
+ assert.deepEqual(selectQueue(roadmap,[issue('next','closed')],'2026-11-17').map(t=>t.id),['legacy']);
+ next.status='shipped';
+ assert.deepEqual(selectQueue(roadmap,[],'2026-11-17').map(t=>t.id),['later','legacy']);
+});
+test('invalid rollout gates fail closed even without manifest validation',()=>{
+ const items=[task('bad-date',{not_before:'2026-02-30'}),task('bad-dep',{depends_on:['missing']}),task('bad-type',{depends_on:'missing'}),task('ok')];
+ assert.deepEqual(selectQueue({items},[],'2026-12-01').map(t=>t.id),['ok']);
+});
