@@ -162,9 +162,14 @@
         "src/voice.js: optional OpenAI-compatible Whisper adapter for recorded audio",
         "src/server.js: /api/transcribe keeps audio uploads behind the existing host, origin, key and MIME guards",
         "test/voice-reply.test.js: the whole panel module boots with a fake DOM and speech synthesis; replies are spoken, remote voices are refused, long replies are chunked and off cancels",
-        "docs/VOICE.md: reproduction commands, the offline boundary and what is not claimed"
+        "docs/VOICE.md: reproduction commands, the offline boundary and what is not claimed",
+        "public/visualizer.js: five-state Canvas 2D engine with signal provenance, bounded motion and reduced-motion support",
+        "public/audio-input.js: opt-in local microphone FFT/RMS analysis with abort, mute and device-ended cleanup; not speech recognition",
+        "test/visualizer.test.js: canonical states, signal freshness, native scalar semantics and renderer lifecycle",
+        "test/audio-input.test.js: permission denial, abort/races, device loss and capture cleanup",
+        "scripts/test-visualizer-browser.py: synthetic-device Web Audio, reduced motion, keyboard controls and static fallback"
       ],
-      "note": "Web dictation uses browser SpeechRecognition, which may send microphone audio to the browser vendor; the Windows companion keeps recognition and TTS on the device with System.Speech. Web spoken replies are opt-in per device, use only voices with localService=true, and need no WHISPER_URL, server TTS endpoint or cloud account. Telegram voice notes still need WHISPER_URL; chat channels get text, not audio replies. Long replies are capped and chunked; devices with no installed local voice stay silent rather than using a network voice. See docs/VOICE.md."
+      "note": "Web dictation uses browser SpeechRecognition, which may send microphone audio to the browser vendor; the Windows companion keeps recognition and TTS on the device with System.Speech. Web spoken replies are opt-in per device, use only voices with localService=true, and need no WHISPER_URL, server TTS endpoint or cloud account. Telegram voice notes still need WHISPER_URL; chat channels get text, not audio replies. Long replies are capped and chunked; devices with no installed local voice stay silent rather than using a network voice. See docs/VOICE.md. Fluid Motion at /visualizer.html analyzes opt-in microphone input locally but does not transcribe it. Conversation/deck visuals consume existing state; native speaking has no output FFT and is labelled decorative. See docs/VISUALIZER.md."
     },
     {
       "id": "memory",
@@ -472,9 +477,12 @@
       "status": "partial",
       "policy": "in-scope",
       "evidence": [
-        "public/index.html: a single hard-coded lobster palette"
+        "public/index.html: a single hard-coded dark Fluid Motion palette",
+        "docs/VISUALIZER.md: design tokens, five motion states, keyboard semantics and reduced-motion contract",
+        "public/visualizer.css: shared dark glass styling and static fallback",
+        "public/brand/voice-engine.svg: local static vector mark"
       ],
-      "note": "The lobster theme is a product requirement, not a limitation. Light/dark is a separate question."
+      "note": "Dark Fluid Motion is the current product identity. A light theme is a separate question."
     },
     {
       "id": "mobile-app",

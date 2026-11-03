@@ -21,6 +21,6 @@ with sync_playwright() as p:
  page.goto(base+'/desktop.html');expect(page.locator('#connection')).to_have_text('LOCAL SERVICE CONNECTED');expect(page.locator('#micState')).to_have_text('OFF');assert not page.evaluate('document.documentElement.scrollWidth>innerWidth');assert page.locator('a[href="/cosmic.html"]').count()>0;page.screenshot(path=str(out/'command-deck.png'),full_page=True)
  page.goto(base+'/index.html');expect(page.locator('#liveText')).to_have_text('online');page.locator('#newChat').click();expect(page.locator('#thread')).to_contain_text('same orbit');assert page.locator('#thread .who img').count()==1;assert page.locator('a[href="/cosmic.html"]').count()>0;page.screenshot(path=str(out/'Quasnooze-Advanced-Chat.png'),full_page=True)
  assert not errors,errors;b.close()
-s.shutdown();print('PASS 2 panel scenarios: updated command deck and advanced chat, canonical mark renders, session reset works, companion links present, no browser JavaScript exceptions. Mocked API fixture only; no AI/audio/tools/native host.')
+s.shutdown();print('PASS 2 panel scenarios: updated command deck and advanced chat, canonical mark renders, session reset works, voice conversation links present, no browser JavaScript exceptions. Mocked API fixture only; no AI/audio/tools/native host.')
 
 print("Browser artifacts:",out)

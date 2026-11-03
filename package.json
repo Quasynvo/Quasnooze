@@ -1,7 +1,7 @@
 {
   "name": "@quasynvo/quasnooze",
   "version": "1.0.0",
-  "description": "Quasnooze by Quasynvo \u2014 a local-first personal AI assistant with a cosmic sloth companion, everyday tools and visible permissions.",
+  "description": "Quasnooze by Quasynvo \u2014 a local-first personal AI assistant with a Fluid Motion Voice Engine, everyday tools and visible permissions.",
   "type": "module",
   "engines": {
     "node": ">=22"

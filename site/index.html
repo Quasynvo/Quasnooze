@@ -6,7 +6,7 @@
     <title>Quasnooze by Quasynvo — Intelligence, in your orbit.</title>
     <meta
       name="description"
-      content="Meet Quasnooze, a local-first personal AI assistant with a cosmic sloth companion. Everyday help, visible permissions and opt-in Windows voice."
+      content="Meet Quasnooze, a local-first personal AI assistant with the Fluid Motion Voice Engine. Everyday help, visible permissions and opt-in Windows voice."
     />
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -20,7 +20,7 @@
     />
     <meta
       property="og:description"
-      content="Your everyday tools. A cosmic companion. Your permission, first."
+      content="Your everyday tools. A responsive voice signal. Your permission, first."
     />
     <meta property="og:url" content="https://quasynvo.github.io/Quasnooze/" />
     <meta
@@ -31,10 +31,11 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Quasnooze cosmic sloth and Quasynvo orbital Q logo"
+      content="Quasnooze Fluid Motion: three luminous interference ribbons around a glass core"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="assets/visualizer.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -96,45 +97,20 @@
           </div>
           <p class="hero-note">A calm personality. Not an artificial delay.</p>
         </div>
-        <div class="companion" data-phase="idle" id="companion">
-          <div class="orbit orbit-a"></div>
-          <div class="orbit orbit-b"></div>
-          <div class="art">
-            <img
-              src="assets/quasnooze-companion.webp"
-              width="770"
-              height="770"
-              alt="The luminous cyan Quasnooze sloth, wearing glasses and holding a translucent tablet"
-            /><span class="mouth" aria-hidden="true"></span>
+        <div class="voice-engine" data-phase="idle" id="voiceEngine">
+          <div class="visualizer is-static">
+            <canvas id="voiceCanvas" width="600" height="600" aria-hidden="true"></canvas>
+            <img class="visualizer-fallback" src="assets/voice-engine.svg" alt="">
           </div>
-          <div class="floating-label label-a">
-            ✧ &nbsp;YOUR COSMIC COMPANION
-          </div>
-          <div class="floating-label label-b">
-            LOCAL-FIRST / HUMAN-IN-CONTROL
-          </div>
+          <div class="floating-label label-a">FLUID MOTION / VOICE ENGINE</div>
+          <div class="floating-label label-b">LOCAL-FIRST / HUMAN-IN-CONTROL</div>
           <div class="state-card">
-            <div>
-              <span class="status-dot"></span
-              ><strong id="phaseTitle">Here, with you.</strong>
+            <div><span class="status-dot"></span><strong id="phaseTitle">Here, with you.</strong></div>
+            <p id="phaseCopy" role="status">A quiet presence. No microphone is active on this website.</p>
+            <div class="state-buttons" role="group" aria-label="Silent visualizer motion states">
+              <button data-phase="idle" aria-pressed="true">Idle</button><button data-phase="listening" aria-pressed="false">Listening</button><button data-phase="thinking" aria-pressed="false">Processing</button><button data-phase="speaking" aria-pressed="false">Speaking</button><button data-phase="error" aria-pressed="false">Interrupted</button>
             </div>
-            <p id="phaseCopy">
-              A quiet presence. No microphone is active on this website.
-            </p>
-            <div
-              class="state-buttons"
-              aria-label="Illustrated animation states"
-            >
-              <button data-phase="idle" aria-pressed="true">Idle</button
-              ><button data-phase="thinking" aria-pressed="false">
-                Thinking</button
-              ><button data-phase="speaking" aria-pressed="false">
-                Speaking</button
-              ><button data-phase="approval" aria-pressed="false">
-                Approval
-              </button>
-            </div>
-            <small>ILLUSTRATED PREVIEW · NO LIVE AI, AUDIO OR TOOLS</small>
+            <small>SILENT SYNTHETIC PREVIEW · NO LIVE AI, AUDIO OR TOOLS</small>
           </div>
         </div>
       </section>
@@ -142,8 +118,8 @@
         <p>Not another assistant<br />that hides what it’s doing.</p>
         <div>
           Quasnooze brings everyday assistance, local reasoning and visible
-          action boundaries into one place. Its sloth moves gently. Its answers
-          should arrive promptly.
+          action boundaries into one place. Its motion reflects state. Its permissions
+          stay visible.
         </div>
       </section>
       <section id="capabilities" class="section">
@@ -215,7 +191,7 @@
             <div>
               <h3>You ask.</h3>
               <p>
-                Use the resident companion, web or a configured messaging
+                Use the Windows voice host, web or a configured messaging
                 channel.
               </p>
             </div>
@@ -258,7 +234,7 @@
         <div class="privacy-grid">
           <p>
             <strong>Microphone off until you opt in.</strong> Native Windows
-            voice stays with the companion. Optional browser speech can involve
+            voice stays with the Windows host. Optional browser speech can involve
             its vendor; this static website never captures audio.
           </p>
           <p>
@@ -284,7 +260,7 @@
           <h2>Your machine.<br />Your assistant.</h2>
           <p class="muted">
             Node.js 22+. Ollama for real local reasoning. Windows 10/11 for the
-            native companion. Use the Git checkout until an npm release is
+            native Windows host. Use the Git checkout until an npm release is
             published and verified.
           </p>
           <a
@@ -308,7 +284,7 @@ npm run doctor
 npm run brain
 npm run desktop</code></pre>
           <p>
-            On Linux/macOS, or for web/channels without a native companion, use
+            On Linux/macOS, or for web/channels without a native Windows host, use
             <code>npm start</code> instead of <code>npm run desktop</code>.
           </p>
           <p id="copyStatus" role="status"></p>
@@ -324,16 +300,16 @@ npm run desktop</code></pre>
             <summary>Is this a hosted AI service?</summary>
             <p>
               No. This is the static project website. You run Quasnooze on your
-              machine. Neither the avatar controls nor the preview states call a
+              machine. Neither the motion controls nor the preview states call a
               model, microphone or tool here.
             </p>
           </details>
           <details>
-            <summary>Is the character real 3D or VR?</summary>
+            <summary>Is the visualizer analyzing my microphone?</summary>
             <p>
-              It is an animated 2.5D illustration. Mouth motion is illustrative,
-              not phoneme-accurate lip sync. No VR headset is needed. Actual
-              native speech needs the Windows companion.
+              Not on this website. These are silent, synthetic Canvas 2D previews.
+              The self-hosted engine can analyze opt-in microphone input locally;
+              native speech needs the Windows host. No preview grants permission.
             </p>
           </details>
           <details>
@@ -391,6 +367,6 @@ npm run desktop</code></pre>
       </div>
       <button id="motion" aria-pressed="false">Reduce motion</button>
     </footer>
-    <script src="app.js" defer></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

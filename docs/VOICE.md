@@ -11,10 +11,12 @@ the claim true and checks it.
 
 ## The capability, one path at a time
 
+> **Fluid Motion update:** the new `/visualizer.html` playground adds explicitly opt-in, local Web Audio frequency analysis. It does not transcribe speech or change the recognition paths below. `/cosmic.html` and `/desktop.html` visualize existing state without opening browser capture. Native speaking currently has no output FFT feed, so its spectrum is decorative. See [VISUALIZER.md](VISUALIZER.md) for the signal contract.
+
 | Path | Talk to it | Reads replies back | Needs configuration? |
 |---|---|---|---|
 | [Web panel](../public/index.html) (`/index.html`) | browser `SpeechRecognition` dictation and opt-in wake word | **yes** — `createSpeechOut()` + installed local `SpeechSynthesisVoice` | no. No `WHISPER_URL`, account, server endpoint or package |
-| [Windows companion](../desktop/Companion.cs) | local `System.Speech` wake/dictation | **yes** — `SpeechSynthesizer` | `npm run desktop` on Windows; see [DESKTOP.md](DESKTOP.md) |
+| [Windows voice host](../desktop/Companion.cs) | local `System.Speech` wake/dictation | **yes** — `SpeechSynthesizer` | `npm run desktop` on Windows; see [DESKTOP.md](DESKTOP.md) |
 | Recorded voice notes | optional OpenAI-compatible Whisper endpoint (`/api/transcribe`) | text reply only | `WHISPER_URL`, see [GUIDE.md](GUIDE.md#optional-whisper-transcription-api) |
 | Telegram / Discord / Slack / WhatsApp | voice notes where the channel supports them | **no** — text only | channel setup |
 
@@ -30,8 +32,7 @@ are real, openable and tested. It does **not** claim that every channel gets aud
   and show `no installed local voice` in the hint. It never falls back to a network voice.
 - The block contains no `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, external script or
   URL. It hands plain text to `SpeechSynthesisUtterance`; the browser/OS voice does the audio.
-- Nothing was added to `src/server.js`, `src/config.js`, `.env.example` or `package.json`. There
-  is no new endpoint, secret, cookie, dependency or config key to explain.
+- The original speech-out change added no endpoint, secret, cookie, dependency or config key. The later Fluid Motion update adds public static modules only; it still adds no speech endpoint or audio configuration key.
 - Spoken replies are **opt-in per device** (`pinch.speak` in `localStorage`), off by default. The
   first `speak()` follows a click — the toggle or Send — which also satisfies browser autoplay
   rules. Turning the toggle off calls `cancel()` and clears the queue.
@@ -39,7 +40,7 @@ are real, openable and tested. It does **not** claim that every channel gets aud
 The honest limit: we can refuse a voice the browser labels as remote, but we cannot audit a
 closed-source browser's speech engine internals. **Browser dictation may send microphone audio to
 the browser vendor** (Chrome in particular), even before a command follows a wake word. For a
-path where recognition *and* synthesis stay on the machine, use the Windows companion. The old
+path where recognition *and* synthesis stay on the machine, use the Windows voice host. The old
 claim that browser audio never leaves the device was wrong and has been corrected in
 [GUIDE.md](GUIDE.md#voice-on-your-phone) and [CHANNELS.md](CHANNELS.md#wake-word).
 
@@ -139,7 +140,7 @@ flattering direction, and a reader who can open the code, run the test and hear 
 
 - Not full-duplex conversation or barge-in. Speech starts from a completed answer, not streamed
   tokens; see [CONVERSATION.md](CONVERSATION.md#spoken-back-and-forth).
-- Not local browser recognition. Only the Windows companion guarantees on-device recognition.
+- Not local browser recognition. Only the Windows voice host guarantees on-device recognition.
 - Not speech in every browser. A browser without `speechSynthesis`, or one with no installed
   local voice, gets a visible explanation and silence — not a hidden cloud call.
 - Not a hardware voice-quality or latency benchmark. The test proves *that* the shipped code

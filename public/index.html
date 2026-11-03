@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#160a0c" />
+<meta name="theme-color" content="#080d19" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>Quasnooze — a local-first personal AI assistant</title>
@@ -11,14 +11,14 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <style>
   :root{
-    --bg:#160a0c; --bg2:#1e0f12; --panel:#241316; --line:#3a2024;
-    --ink:#ffe9e0; --dim:#c9a196; --faint:#8d6a62;
+    --bg:#080d19; --bg2:#11192a; --panel:#131d30; --line:#29364d;
+    --ink:#edf4ff; --dim:#b4c5db; --faint:#8b9db7;
     --coral:#83f5ed; --coral2:#c2aaff; --teal:#4dd6c1; --gold:#ffc061;
-    --user:#3a1d1f; --ok:#4dd6c1; --bad:#83f5ed;
+    --user:#1a2943; --ok:#4dd6c1; --bad:#83f5ed;
     --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
-  .lob svg{width:1.35em;height:1.35em;display:block}
+  .voice-mark svg{width:1.35em;height:1.35em;display:block}
   .q svg{width:1.1em;height:1.1em;vertical-align:-0.18em;margin-right:.35em}
   .who svg{width:1.5em;height:1.5em;display:block}
   .pinch-mark-slot svg{width:1.05em;height:1.05em;display:inline-block;vertical-align:-0.18em;margin-right:.3em}
@@ -26,8 +26,8 @@
   html,body{height:100%}
   body{
     margin:0;background:
-      radial-gradient(1200px 600px at 80% -10%, #3a151a 0%, transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, #1b2b2a 0%, transparent 55%),
+      radial-gradient(1200px 600px at 80% -10%, #18283e 0%, transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, #252348 0%, transparent 55%),
       var(--bg);
     color:var(--ink);font-family:var(--font);
     -webkit-tap-highlight-color:transparent;
@@ -39,28 +39,28 @@
   /* ── sidebar ── */
   .sidebar{
     display:flex;flex-direction:column;gap:10px;padding:14px;
-    background:linear-gradient(180deg,#1c0d10,#150a0c);border-right:1px solid var(--line);min-height:0;
+    background:linear-gradient(180deg,#10182a,#080d19);border-right:1px solid var(--line);min-height:0;
   }
   .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:1.15rem;letter-spacing:.2px}
-  .brand .lob{font-size:1.5rem;filter:drop-shadow(0 0 10px #83f5ed55)}
+  .brand .voice-mark{font-size:1.5rem;filter:drop-shadow(0 0 10px #83f5ed55)}
   .brand small{display:block;font-weight:500;font-size:.68rem;color:var(--faint);letter-spacing:.8px;text-transform:uppercase}
   .newbtn{
     display:flex;align-items:center;gap:8px;justify-content:center;
-    background:linear-gradient(180deg,var(--coral),#e0502f);color:#26100c;border:0;border-radius:12px;
+    background:linear-gradient(180deg,#a5eff4,#6ee7f9);color:#26100c;border:0;border-radius:12px;
     padding:11px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px -10px var(--coral);
   }
   .newbtn:active{transform:translateY(1px)}
   .sessions{overflow:auto;display:flex;flex-direction:column;gap:6px;flex:1;min-height:0}
   .sess{
-    text-align:left;background:#200f12;border:1px solid transparent;color:var(--dim);
+    text-align:left;background:#131d30;border:1px solid transparent;color:var(--dim);
     border-radius:10px;padding:9px 10px;cursor:pointer;font-size:.82rem;line-height:1.35;width:100%;
   }
   .sess:hover{border-color:var(--line);color:var(--ink)}
-  .sess.active{background:#2b1518;border-color:var(--coral);color:var(--ink)}
+  .sess.active{background:#1b2b44;border-color:var(--coral);color:var(--ink)}
   .sess .meta{display:block;color:var(--faint);font-size:.68rem;margin-top:3px}
   .sidefoot{display:flex;gap:6px;flex-wrap:wrap}
   .chip{
-    background:#200f12;border:1px solid var(--line);color:var(--dim);border-radius:999px;
+    background:#131d30;border:1px solid var(--line);color:var(--dim);border-radius:999px;
     padding:6px 10px;font-size:.72rem;cursor:pointer;
   }
   .chip:hover{color:var(--ink);border-color:var(--coral)}
@@ -78,7 +78,7 @@
   header.top .sub{font-size:.7rem;color:var(--faint)}
   .spacer{flex:1}
   .hbtn{
-    background:#200f12;border:1px solid var(--line);color:var(--dim);border-radius:10px;
+    background:#131d30;border:1px solid var(--line);color:var(--dim);border-radius:10px;
     min-width:40px;height:40px;padding:0 12px;cursor:pointer;font-size:.8rem;display:grid;place-items:center;
   }
   .hbtn.on{color:var(--coral);border-color:var(--coral)}
@@ -122,28 +122,28 @@
   /* Chips show what Quasnooze understood, not just what was attached — a scan read
      as an empty PDF must look different from a PDF with text in it. */
   .attachbar{max-width:760px;margin:0 auto 8px;display:flex;flex-wrap:wrap;gap:6px}
-  .chip{display:flex;align-items:center;gap:7px;max-width:100%;background:#200f12;border:1px solid var(--line);
+  .chip{display:flex;align-items:center;gap:7px;max-width:100%;background:#131d30;border:1px solid var(--line);
         border-radius:9px;padding:5px 8px;font-size:.72rem;color:var(--muted);line-height:1.3}
   .chip b{color:var(--ink);font-weight:600;max-width:15ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .chip .warn{color:#ffb86b}
   .chip button{background:none;border:none;color:var(--faint);cursor:pointer;font-size:.85rem;padding:0 2px}
   .chip button:hover{color:var(--coral)}
   textarea{
-    flex:1;resize:none;background:#200f12;border:1px solid var(--line);color:var(--ink);
+    flex:1;resize:none;background:#131d30;border:1px solid var(--line);color:var(--ink);
     border-radius:14px;padding:12px 13px;font-family:inherit;font-size:.95rem;line-height:1.4;max-height:160px;min-height:46px;
   }
   textarea:focus{outline:none;border-color:var(--coral)}
   textarea::placeholder{color:var(--faint)}
   .iconbtn{
-    width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:#200f12;color:var(--dim);
+    width:46px;height:46px;border-radius:14px;border:1px solid var(--line);background:#131d30;color:var(--dim);
     display:grid;place-items:center;cursor:pointer;font-size:1.15rem;flex:0 0 auto;
   }
-  .iconbtn.send{background:linear-gradient(180deg,var(--coral),#dd4a2a);border-color:transparent;color:#2a100a}
+  .iconbtn.send{background:linear-gradient(180deg,#a5eff4,#6ee7f9);border-color:transparent;color:#2a100a}
   .iconbtn:active{transform:scale(.95)}
   .iconbtn.listening{background:#3a1518;border-color:var(--coral);color:var(--coral);animation:pulse 1.2s infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #83f5ed55}50%{box-shadow:0 0 0 10px #83f5ed00}}
   .hint{max-width:760px;margin:7px auto 0;font-size:.68rem;color:var(--faint);display:flex;gap:10px;flex-wrap:wrap}
-  .hint kbd{background:#200f12;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:.65rem}
+  .hint kbd{background:#131d30;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:.65rem}
 
   /* ── drawer ── */
   .drawer{position:fixed;inset:0;z-index:50;display:none}
@@ -155,12 +155,12 @@
   }
   .drawer h3{margin:0;font-size:.95rem;display:flex;align-items:center;gap:8px}
   .drawer h4{margin:14px 0 0;font-size:.75rem;text-transform:uppercase;letter-spacing:.9px;color:var(--faint)}
-  .fact{background:#200f12;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:.8rem;color:var(--dim);display:flex;gap:8px;justify-content:space-between;align-items:flex-start}
+  .fact{background:#131d30;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:.8rem;color:var(--dim);display:flex;gap:8px;justify-content:space-between;align-items:flex-start}
   .fact button{background:none;border:0;color:var(--faint);cursor:pointer;font-size:.9rem}
   .kvs{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:.78rem;color:var(--dim)}
   .kvs b{color:var(--faint);font-weight:600}
   .memform{display:flex;gap:6px;margin-top:6px}
-  .memform input{flex:1;background:#200f12;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px;font-family:inherit;font-size:.82rem}
+  .memform input{flex:1;background:#131d30;border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px;font-family:inherit;font-size:.82rem}
   .warnbox{background:#2a1710;border:1px solid #6b3a20;color:#ffcda6;border-radius:10px;padding:10px;font-size:.76rem;line-height:1.5}
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .bubble.streaming::after{content:"▋";color:var(--coral);animation:blink 1s steps(2) infinite;margin-left:2px}
@@ -182,7 +182,7 @@
   .sources .src.uncited{opacity:.45}
   .wake-pill{
     position:fixed;left:50%;transform:translateX(-50%);bottom:92px;z-index:30;
-    background:#2b1518;border:1px solid var(--coral);color:var(--coral);border-radius:999px;
+    background:#1b2b44;border:1px solid var(--coral);color:var(--coral);border-radius:999px;
     padding:7px 14px;font-size:.76rem;display:none;align-items:center;gap:8px;
     box-shadow:0 10px 30px -12px var(--coral);
   }
@@ -201,12 +201,12 @@
 </style>
 </head>
 <body>
-<a class="quasnooze-link" href="/cosmic.html">✧ Meet your cosmic companion →</a>
+<a class="quasnooze-link" href="/cosmic.html">✧ Explore the Voice Motion Visualizer →</a>
 <a href="/desktop.html" style="position:fixed;bottom:12px;right:18px;z-index:30;color:#ffb18c;font:12px system-ui">Open command deck ↗</a>
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <span class="lob"><img class="quasnooze-mark" src="/mark.svg" width="28" height="28" alt=""></span>
+      <span class="lob"><img class="quasnooze-mark" src="/brand/voice-engine.svg" width="28" height="28" alt=""></span>
       <span>Quasnooze<small id="ownerLine">local assistant</small></span>
     </div>
     <button class="newbtn" id="newChat">＋ New chat</button>
@@ -285,7 +285,7 @@
 
 <script>
 // The brand mark, inlined once so every use costs no extra request.
-const QUASNOOZE_MARK = '<img src="/mark.svg" width="28" height="28" alt="">';
+const QUASNOOZE_MARK = '<img src="/brand/voice-engine.svg" width="28" height="28" alt="">';
 </script>
 <script type="module">
 const $ = (id) => document.getElementById(id);
@@ -344,7 +344,7 @@ function addSteps() {
 function addApproval(id, description, onAnswer) {
   const el = document.createElement("div");
   el.className = "approval";
-  el.innerHTML = `<div class="q"><img class="quasnooze-mark" src="/mark.svg" width="28" height="28" alt=""> Quasnooze want to <code>${description.replace(/</g,"&lt;")}</code>. Allow?</div>
+  el.innerHTML = `<div class="q"><img class="quasnooze-mark" src="/brand/voice-engine.svg" width="28" height="28" alt=""> Quasnooze want to <code>${description.replace(/</g,"&lt;")}</code>. Allow?</div>
     <div class="row"><button class="allow">Allow</button><button class="deny">Deny</button></div>`;
   el.querySelector(".allow").onclick = () => { onAnswer(true); el.remove(); };
   el.querySelector(".deny").onclick = () => { onAnswer(false); el.remove(); };

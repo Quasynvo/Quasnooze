@@ -8,6 +8,12 @@ Quasnooze's desktop mode is a **resident Windows host**, not a browser speech AP
 
 This screenshot uses a **mock brain**, with **no native host or installed model**. Its clock result is real; its 1 ms value measures that clock handler, **not model inference, wake recognition or end-to-end voice latency**.
 
+## Fluid Motion in the command deck
+
+The browser command deck uses the shared [Fluid Motion Voice Engine](VISUALIZER.md). It consumes the existing native phase and fresh scalar microphone level; it does not request browser microphone access. Native speaking motion is a labelled decorative spectrum, not output-frequency analysis or lip sync. The WinForms widget uses the new static voice mark and its existing text state labels; the five-state canvas animation is a browser feature.
+
+The separate `/visualizer.html` microphone playground is optional and does not replace System.Speech recognition. Its browser permission is independent of the native host permission.
+
 ## Start on Windows
 
 Requirements:

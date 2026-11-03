@@ -11,7 +11,7 @@ Reviewed against [agent-reach `7a38047`](https://github.com/Panniantong/agent-re
 Every provider failure used to reach the user as the same sentence:
 
 ```
-🦞 My brain is unreachable: HTTP 429: rate limit exceeded
+∿ Model unavailable: HTTP 429: rate limit exceeded
 
 Check ollama / qwen2.5-coder:7b; for Ollama use `ollama serve` and pull the selected model.
 ```
