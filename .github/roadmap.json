@@ -21,7 +21,8 @@
       "Ready tasks are preferred; complete ungated backlog tasks replenish available slots. Historical markers prevent re-filing closed work.",
       "Maintainer authorized up to 10 open contributor tasks total, not 10 new issues daily; roadmap and growth publishers share the ceiling.",
       "Optional not_before uses a UTC date; depends_on IDs must have manifest status shipped before selection. Both gates fail closed.",
-      "Agentic roadmap kickoff is 2026-11-03 UTC; actual filing also depends on caps, existing queue priority, historical dedupe, shipped prerequisites, and PR merge."
+      "Agentic roadmap kickoff is 2026-11-03 UTC; actual filing also depends on caps, existing queue priority, historical dedupe, shipped prerequisites, and PR merge.",
+      "Four-repository extension starts 2026-11-03 UTC; harness-* tasks reuse agentic-* prerequisites and the same hourly caps and shipped gates."
     ],
     "open_curated_cap": 10
   },
@@ -841,6 +842,649 @@
       "planned_files": [
         "test/agent-workflow-e2e.test.js"
       ]
+    },
+    {
+      "id": "harness-01-policy-events",
+      "title": "feat(harness): deterministic action lifecycle policy events",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "harness",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "src/agent.js",
+        "src/risk.js"
+      ],
+      "planned_files": [
+        "src/harness/events.js",
+        "test/harness-events.test.js"
+      ],
+      "verify": "node --test test/harness-events.test.js test/agent.test.js test/risk.test.js",
+      "not_before": "2026-11-03",
+      "depends_on": [],
+      "problem_statement": "The agent validates and gates tools inline, but has no shared typed lifecycle contract for pre-action checks and post-action evidence.",
+      "upgraded_design_spec": "Add a small in-process, built-in-only event pipeline: beforeTool, afterTool, beforeCommit and beforeContextTrim. Events carry bounded, redacted metadata; beforeTool may deny or ask but never grant or suppress the existing validator, risk gate or session approval. A commit proposal is recognized structurally and always gated. Timeouts/errors on policy checks fail closed; observational callbacks cannot change actions. No arbitrary plugin code, network or shell hooks. Keep ordinary turns unchanged while disabled.",
+      "affected_files": [
+        "src/harness/events.js",
+        "src/agent.js",
+        "src/risk.js",
+        "test/harness-events.test.js"
+      ],
+      "acceptance_criteria": [
+        "Order is validate → deterministic policy → existing user approval → execute → bounded after event; a handler cannot convert denial into authorization.",
+        "Fake tool and commit attempts show cancellation, handler failure and unattended actions do not execute; unconfigured mode preserves old behavior.",
+        "No credentials, raw prompts or tool output are written by default; no arbitrary callback or runtime dependency is installed."
+      ],
+      "body": "## Context\n\nThe agent validates and gates tools inline, but has no shared typed lifecycle contract for pre-action checks and post-action evidence.\n\n## Upgraded design specification\n\nAdd a small in-process, built-in-only event pipeline: beforeTool, afterTool, beforeCommit and beforeContextTrim. Events carry bounded, redacted metadata; beforeTool may deny or ask but never grant or suppress the existing validator, risk gate or session approval. A commit proposal is recognized structurally and always gated. Timeouts/errors on policy checks fail closed; observational callbacks cannot change actions. No arbitrary plugin code, network or shell hooks. Keep ordinary turns unchanged while disabled.\n\n## Affected files / modules\n\n- `src/harness/events.js` (new)\n- `src/agent.js`\n- `src/risk.js`\n- `test/harness-events.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Order is validate → deterministic policy → existing user approval → execute → bounded after event; a handler cannot convert denial into authorization.\n- [ ] Fake tool and commit attempts show cancellation, handler failure and unattended actions do not execute; unconfigured mode preserves old behavior.\n- [ ] No credentials, raw prompts or tool output are written by default; no arbitrary callback or runtime dependency is installed.\n\n## How to verify\n\n```bash\nnode --test test/harness-events.test.js test/agent.test.js test/risk.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 1; not before 2026-11-03 UTC. Prerequisites: none."
+    },
+    {
+      "id": "harness-02-config-scan",
+      "title": "feat(security): local agent configuration preflight scanner",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "security",
+        "harness",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "src/scan.js"
+      ],
+      "planned_files": [
+        "src/security/config-scan.js",
+        "src/harness/events.js",
+        "test/config-scan.test.js"
+      ],
+      "verify": "node --test test/config-scan.test.js test/hardening.test.js",
+      "not_before": "2026-11-03",
+      "depends_on": [
+        "harness-01-policy-events"
+      ],
+      "problem_statement": "Quasnooze has command and path guardrails but no targeted, inspectable scanner for risky agent configuration changes.",
+      "upgraded_design_spec": "Implement native read-only bounded scanning of explicitly selected local agent, MCP and hook manifests using src/scan.js and canonical workspace rules. Flag a documented, testable set of obvious secret literals, shell interpolation, broad trust and remote installers, with path/line/severity but no secret values. Show scan incompleteness and false positives; scanner failure cannot make a dangerous action safe. No auto-fix, external binary, npx download, telemetry, raw secret copies, or claim that static scanning proves safety. Integrate with beforeTool as advisory review and deterministic high-confidence blocks, never as permission.",
+      "affected_files": [
+        "src/security/config-scan.js",
+        "src/scan.js",
+        "src/harness/events.js",
+        "test/config-scan.test.js"
+      ],
+      "acceptance_criteria": [
+        "Known fixtures for each rule yield stable redacted locations; benign fixtures and unreadable/truncated scans report accurately.",
+        "Traversal, symlink escape, oversized files and malicious input stay bounded and never contact a network.",
+        "A clean result does not bypass approvals; scan failure blocks configured high-risk preflight and reports why."
+      ],
+      "body": "## Context\n\nQuasnooze has command and path guardrails but no targeted, inspectable scanner for risky agent configuration changes.\n\n## Upgraded design specification\n\nImplement native read-only bounded scanning of explicitly selected local agent, MCP and hook manifests using src/scan.js and canonical workspace rules. Flag a documented, testable set of obvious secret literals, shell interpolation, broad trust and remote installers, with path/line/severity but no secret values. Show scan incompleteness and false positives; scanner failure cannot make a dangerous action safe. No auto-fix, external binary, npx download, telemetry, raw secret copies, or claim that static scanning proves safety. Integrate with beforeTool as advisory review and deterministic high-confidence blocks, never as permission.\n\n## Affected files / modules\n\n- `src/security/config-scan.js` (new)\n- `src/scan.js`\n- `src/harness/events.js` (new)\n- `test/config-scan.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Known fixtures for each rule yield stable redacted locations; benign fixtures and unreadable/truncated scans report accurately.\n- [ ] Traversal, symlink escape, oversized files and malicious input stay bounded and never contact a network.\n- [ ] A clean result does not bypass approvals; scan failure blocks configured high-risk preflight and reports why.\n\n## How to verify\n\n```bash\nnode --test test/config-scan.test.js test/hardening.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 1; not before 2026-11-03 UTC. Prerequisites: `harness-01-policy-events` (shipped)."
+    },
+    {
+      "id": "harness-03-skill-evals",
+      "title": "test(skills): local skill schema and trigger regression fixtures",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "harness",
+        "agentic-flow",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/budget.js"
+      ],
+      "planned_files": [
+        "src/skills/loader.js",
+        "src/skills/evaluate.js",
+        "test/skills-evaluate.test.js"
+      ],
+      "verify": "node --test test/skills-evaluate.test.js test/skills-loader.test.js",
+      "not_before": "2026-11-03",
+      "depends_on": [
+        "agentic-05-skills"
+      ],
+      "problem_statement": "The prior roadmap proposes an instruction-only skill registry, but does not specify a repeatable evaluation of activation, exclusions and behavioral contracts.",
+      "upgraded_design_spec": "Extend the proposed local-only agentic-05 skill loader with a versioned manifest schema and deterministic fixture runner. Each skill declares scoped trigger/exclusion examples and observable expected behavior; validate malformed, duplicate and oversized inputs. Test routing with deterministic fakes and separately offer a manual local Ollama evaluation without recording transcripts. Guidance remains untrusted data; deterministic permission rules live in code, not Markdown. Do not import or execute external skill scripts.",
+      "affected_files": [
+        "src/skills/loader.js",
+        "src/skills/evaluate.js",
+        "test/skills-evaluate.test.js",
+        "src/budget.js"
+      ],
+      "acceptance_criteria": [
+        "At least three positive and two negative fixture cases per bundled skill distinguish false routing from no match.",
+        "Invalid schema, duplicate identifiers, oversized content and external references fail closed; instructions cannot grant tools.",
+        "A mock-model behavioral fixture and a trimmed-context case pass offline; reports state model quality is not proven by static lint."
+      ],
+      "body": "## Context\n\nThe prior roadmap proposes an instruction-only skill registry, but does not specify a repeatable evaluation of activation, exclusions and behavioral contracts.\n\n## Upgraded design specification\n\nExtend the proposed local-only agentic-05 skill loader with a versioned manifest schema and deterministic fixture runner. Each skill declares scoped trigger/exclusion examples and observable expected behavior; validate malformed, duplicate and oversized inputs. Test routing with deterministic fakes and separately offer a manual local Ollama evaluation without recording transcripts. Guidance remains untrusted data; deterministic permission rules live in code, not Markdown. Do not import or execute external skill scripts.\n\n## Affected files / modules\n\n- `src/skills/loader.js` (new)\n- `src/skills/evaluate.js` (new)\n- `test/skills-evaluate.test.js` (new)\n- `src/budget.js`\n\n## Acceptance criteria\n\n- [ ] At least three positive and two negative fixture cases per bundled skill distinguish false routing from no match.\n- [ ] Invalid schema, duplicate identifiers, oversized content and external references fail closed; instructions cannot grant tools.\n- [ ] A mock-model behavioral fixture and a trimmed-context case pass offline; reports state model quality is not proven by static lint.\n\n## How to verify\n\n```bash\nnode --test test/skills-evaluate.test.js test/skills-loader.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 1; not before 2026-11-03 UTC. Prerequisites: `agentic-05-skills` (shipped)."
+    },
+    {
+      "id": "harness-04-instinct-review",
+      "title": "feat(harness): reviewed project-scoped preference suggestions",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "harness",
+        "memory",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/store.js",
+        "src/prompt.js",
+        "src/export.js"
+      ],
+      "planned_files": [
+        "src/harness/instincts.js",
+        "test/instincts.test.js"
+      ],
+      "verify": "node --test test/instincts.test.js test/personas.test.js",
+      "not_before": "2026-11-10",
+      "depends_on": [
+        "harness-01-policy-events",
+        "agentic-05-skills"
+      ],
+      "problem_statement": "Personas and explicitly saved memory exist, but repeated corrections cannot become scoped, reviewable workflow preferences.",
+      "upgraded_design_spec": "Add an opt-in local-only suggestion store using explicit user corrections or annotated events, not automatic raw transcript collection. Record a bounded trigger, proposed preference, project scope, provenance, timestamps and evidence count; confidence is a heuristic, not calibrated probability. Suggestions remain inert until owner previews and approves; imports, cross-project promotion, deletion and expiration require explicit consent. Inject approved preferences as low-priority data, never security policy, tools or permissions.",
+      "affected_files": [
+        "src/harness/instincts.js",
+        "src/store.js",
+        "src/prompt.js",
+        "src/export.js",
+        "test/instincts.test.js"
+      ],
+      "acceptance_criteria": [
+        "Disabled mode writes nothing; two projects cannot read each other’s suggestions; imported or model-generated instructions remain inert until approved.",
+        "A malicious preference cannot alter system rules, model endpoint, risk policy or approvals; revoke/delete works after restart.",
+        "Export includes these entries only under an explicitly documented owner-controlled policy and never includes raw secret material."
+      ],
+      "body": "## Context\n\nPersonas and explicitly saved memory exist, but repeated corrections cannot become scoped, reviewable workflow preferences.\n\n## Upgraded design specification\n\nAdd an opt-in local-only suggestion store using explicit user corrections or annotated events, not automatic raw transcript collection. Record a bounded trigger, proposed preference, project scope, provenance, timestamps and evidence count; confidence is a heuristic, not calibrated probability. Suggestions remain inert until owner previews and approves; imports, cross-project promotion, deletion and expiration require explicit consent. Inject approved preferences as low-priority data, never security policy, tools or permissions.\n\n## Affected files / modules\n\n- `src/harness/instincts.js` (new)\n- `src/store.js`\n- `src/prompt.js`\n- `src/export.js`\n- `test/instincts.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Disabled mode writes nothing; two projects cannot read each other’s suggestions; imported or model-generated instructions remain inert until approved.\n- [ ] A malicious preference cannot alter system rules, model endpoint, risk policy or approvals; revoke/delete works after restart.\n- [ ] Export includes these entries only under an explicitly documented owner-controlled policy and never includes raw secret material.\n\n## How to verify\n\n```bash\nnode --test test/instincts.test.js test/personas.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 2; not before 2026-11-10 UTC. Prerequisites: `harness-01-policy-events` (shipped), `agentic-05-skills` (shipped)."
+    },
+    {
+      "id": "harness-05-memory-provenance",
+      "title": "feat(memory): scoped facts with source and correction history",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "memory",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/store.js",
+        "src/tools.js",
+        "src/export.js"
+      ],
+      "planned_files": [
+        "src/memory/provenance.js",
+        "test/memory-provenance.test.js"
+      ],
+      "verify": "node --test test/memory-provenance.test.js test/export-cost.test.js",
+      "not_before": "2026-11-10",
+      "depends_on": [],
+      "problem_statement": "Local facts and session history already persist across model selection, but facts lack explicit project scope, provenance and conflict/correction semantics.",
+      "upgraded_design_spec": "Extend existing store in a backward-compatible versioned shape with opt-in provenance, scope, timestamps and supersession markers; retain existing remember/recall/forget and export semantics. A local-only migration preserves old facts in user scope; edits/deletion remain owner-controlled. Recall must filter by authorized scope and treat facts as data, not instructions. No cross-user sharing, automatic remote synchronization or embedding service.",
+      "affected_files": [
+        "src/memory/provenance.js",
+        "src/store.js",
+        "src/tools.js",
+        "src/export.js",
+        "test/memory-provenance.test.js"
+      ],
+      "acceptance_criteria": [
+        "A legacy memory.json migrates losslessly; rollback from backup is documented and deletion removes all active copies.",
+        "Correction supersedes stale fact and citations show source/time without claiming truth; malformed records do not corrupt other entries.",
+        "Scope filtering survives restart and model switch; neither remote fallback nor new network traffic is triggered."
+      ],
+      "body": "## Context\n\nLocal facts and session history already persist across model selection, but facts lack explicit project scope, provenance and conflict/correction semantics.\n\n## Upgraded design specification\n\nExtend existing store in a backward-compatible versioned shape with opt-in provenance, scope, timestamps and supersession markers; retain existing remember/recall/forget and export semantics. A local-only migration preserves old facts in user scope; edits/deletion remain owner-controlled. Recall must filter by authorized scope and treat facts as data, not instructions. No cross-user sharing, automatic remote synchronization or embedding service.\n\n## Affected files / modules\n\n- `src/memory/provenance.js` (new)\n- `src/store.js`\n- `src/tools.js`\n- `src/export.js`\n- `test/memory-provenance.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] A legacy memory.json migrates losslessly; rollback from backup is documented and deletion removes all active copies.\n- [ ] Correction supersedes stale fact and citations show source/time without claiming truth; malformed records do not corrupt other entries.\n- [ ] Scope filtering survives restart and model switch; neither remote fallback nor new network traffic is triggered.\n\n## How to verify\n\n```bash\nnode --test test/memory-provenance.test.js test/export-cost.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 2; not before 2026-11-10 UTC. Prerequisites: none."
+    },
+    {
+      "id": "harness-06-compression-eval",
+      "title": "test(context): measure safe structured-data compression before adoption",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "harness",
+        "memory",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/budget.js"
+      ],
+      "planned_files": [
+        "src/eval/context-compression.js",
+        "test/context-compression.test.js"
+      ],
+      "verify": "node --test test/context-compression.test.js test/agent.test.js",
+      "not_before": "2026-11-10",
+      "depends_on": [
+        "agentic-11-resume"
+      ],
+      "problem_statement": "budget.fit trims history using approximate token counts, but no local benchmark establishes whether structured-output compression helps the installed model without dropping evidence.",
+      "upgraded_design_spec": "Add a zero-dependency benchmark comparing existing JSON baseline and a reversible compact representation on bounded synthetic fixtures, with local tokenizer/model measurement optional and offline-only. Record measured bytes, estimated/actual tokens, latency and exact field/identifier round trips; never compress system policy, authorization, citations, denied actions or the active tool-call protocol. Keep compression disabled pending demonstrated quality and an explicit follow-up; do not add TOON or Headroom as runtime dependencies.",
+      "affected_files": [
+        "src/eval/context-compression.js",
+        "src/budget.js",
+        "test/context-compression.test.js"
+      ],
+      "acceptance_criteria": [
+        "Round-trip fixtures retain ordering, Unicode, nested objects, IDs, errors and citation numbers; malformed data falls back to original JSON.",
+        "Results show measured versus estimated values and regressions without asserting vendor marketing savings or model understanding.",
+        "No model call or network is needed in CI; opted-in local evaluation identifies model/version and has no private data."
+      ],
+      "body": "## Context\n\nbudget.fit trims history using approximate token counts, but no local benchmark establishes whether structured-output compression helps the installed model without dropping evidence.\n\n## Upgraded design specification\n\nAdd a zero-dependency benchmark comparing existing JSON baseline and a reversible compact representation on bounded synthetic fixtures, with local tokenizer/model measurement optional and offline-only. Record measured bytes, estimated/actual tokens, latency and exact field/identifier round trips; never compress system policy, authorization, citations, denied actions or the active tool-call protocol. Keep compression disabled pending demonstrated quality and an explicit follow-up; do not add TOON or Headroom as runtime dependencies.\n\n## Affected files / modules\n\n- `src/eval/context-compression.js` (new)\n- `src/budget.js`\n- `test/context-compression.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Round-trip fixtures retain ordering, Unicode, nested objects, IDs, errors and citation numbers; malformed data falls back to original JSON.\n- [ ] Results show measured versus estimated values and regressions without asserting vendor marketing savings or model understanding.\n- [ ] No model call or network is needed in CI; opted-in local evaluation identifies model/version and has no private data.\n\n## How to verify\n\n```bash\nnode --test test/context-compression.test.js test/agent.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 2; not before 2026-11-10 UTC. Prerequisites: `agentic-11-resume` (shipped)."
+    },
+    {
+      "id": "harness-07-mcp-scope",
+      "title": "feat(mcp): per-task tool visibility without weakening trust policy",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "mcp-router",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/mcp.js",
+        "src/agent.js"
+      ],
+      "planned_files": [
+        "src/mcp/router.js",
+        "test/mcp-router.test.js"
+      ],
+      "verify": "node --test test/mcp-router.test.js test/mcp.test.js",
+      "not_before": "2026-11-10",
+      "depends_on": [
+        "harness-01-policy-events"
+      ],
+      "problem_statement": "MCP tools are currently registered globally and namespaced; an explicitly trusted server can skip the danger gate, so an orchestration router must not assume all servers are always gated.",
+      "upgraded_design_spec": "Add an optional task-scoped view over existing stdio MCP registry, matching owner-approved server and tool names. Filter offered schemas and enforce the same allowlist at dispatch, rejecting unknown names, collisions and any worker attempt to expand its scope. For the new scoped mode mark all MCP calls dangerous regardless of legacy trusted opt-outs, require originating-session approval and refuse unattended calls; leave legacy mode compatible. No remote transport, auto-install, shared credentials or new model-selected process.",
+      "affected_files": [
+        "src/mcp/router.js",
+        "src/mcp.js",
+        "src/agent.js",
+        "test/mcp-router.test.js"
+      ],
+      "acceptance_criteria": [
+        "A filtered or spoofed server/tool cannot be invoked even by fabricated model output; names remain collision-safe.",
+        "A legacy trusted server still needs approval in the new scoped mode and is refused unattended; denial causes zero calls.",
+        "MCP crash, oversized result and malformed schema produce bounded errors; no server is spawned solely by model instruction."
+      ],
+      "body": "## Context\n\nMCP tools are currently registered globally and namespaced; an explicitly trusted server can skip the danger gate, so an orchestration router must not assume all servers are always gated.\n\n## Upgraded design specification\n\nAdd an optional task-scoped view over existing stdio MCP registry, matching owner-approved server and tool names. Filter offered schemas and enforce the same allowlist at dispatch, rejecting unknown names, collisions and any worker attempt to expand its scope. For the new scoped mode mark all MCP calls dangerous regardless of legacy trusted opt-outs, require originating-session approval and refuse unattended calls; leave legacy mode compatible. No remote transport, auto-install, shared credentials or new model-selected process.\n\n## Affected files / modules\n\n- `src/mcp/router.js` (new)\n- `src/mcp.js`\n- `src/agent.js`\n- `test/mcp-router.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] A filtered or spoofed server/tool cannot be invoked even by fabricated model output; names remain collision-safe.\n- [ ] A legacy trusted server still needs approval in the new scoped mode and is refused unattended; denial causes zero calls.\n- [ ] MCP crash, oversized result and malformed schema produce bounded errors; no server is spawned solely by model instruction.\n\n## How to verify\n\n```bash\nnode --test test/mcp-router.test.js test/mcp.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 2; not before 2026-11-10 UTC. Prerequisites: `harness-01-policy-events` (shipped)."
+    },
+    {
+      "id": "harness-08-panel",
+      "title": "feat(agent): optional bounded local multi-perspective panel",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "agentic-flow",
+        "harness",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/brain.js"
+      ],
+      "planned_files": [
+        "src/agent/panel.js",
+        "src/agent/worker.js",
+        "test/agent-panel.test.js"
+      ],
+      "verify": "node --test test/agent-panel.test.js test/router.test.js",
+      "not_before": "2026-11-17",
+      "depends_on": [
+        "agentic-06-worker"
+      ],
+      "problem_statement": "Moa and specialist examples provide multiple perspectives, while Quasnooze currently runs one selected model per agent turn and has no bounded aggregation step.",
+      "upgraded_design_spec": "Build on prior agentic-06 sequential worker with opt-in read-only analyst roles and a local-only aggregator; default one worker at a time and at most three perspectives within a shared token/time/cancellation budget. Pin Ollama endpoint/model, reject automatic remote fallback, exclude private unrelated context, expose disagreements and sources. No child tools by default, writes or financial advice automation. Failure yields partial results labelled as such, not confident consensus.",
+      "affected_files": [
+        "src/agent/panel.js",
+        "src/agent/worker.js",
+        "src/brain.js",
+        "test/agent-panel.test.js"
+      ],
+      "acceptance_criteria": [
+        "Fake roles receive only approved bounded context and no tools; maximum calls/concurrency and cancellation are enforced.",
+        "An unavailable local model, malicious analyst output or partial failure cannot trigger remote fallback, tool execution or fabricated consensus.",
+        "Aggregated result retains evidence IDs and visibly records disagreement; social turns incur no extra calls."
+      ],
+      "body": "## Context\n\nMoa and specialist examples provide multiple perspectives, while Quasnooze currently runs one selected model per agent turn and has no bounded aggregation step.\n\n## Upgraded design specification\n\nBuild on prior agentic-06 sequential worker with opt-in read-only analyst roles and a local-only aggregator; default one worker at a time and at most three perspectives within a shared token/time/cancellation budget. Pin Ollama endpoint/model, reject automatic remote fallback, exclude private unrelated context, expose disagreements and sources. No child tools by default, writes or financial advice automation. Failure yields partial results labelled as such, not confident consensus.\n\n## Affected files / modules\n\n- `src/agent/panel.js` (new)\n- `src/agent/worker.js` (new)\n- `src/brain.js`\n- `test/agent-panel.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake roles receive only approved bounded context and no tools; maximum calls/concurrency and cancellation are enforced.\n- [ ] An unavailable local model, malicious analyst output or partial failure cannot trigger remote fallback, tool execution or fabricated consensus.\n- [ ] Aggregated result retains evidence IDs and visibly records disagreement; social turns incur no extra calls.\n\n## How to verify\n\n```bash\nnode --test test/agent-panel.test.js test/router.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: `agentic-06-worker` (shipped)."
+    },
+    {
+      "id": "harness-09-scout",
+      "title": "feat(scout): consented local schedule-backed source briefing",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "agentic-flow",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "src/schedules.js",
+        "src/scheduler.js",
+        "src/outbound.js"
+      ],
+      "planned_files": [
+        "src/agent/scout.js",
+        "test/scout.test.js"
+      ],
+      "verify": "node --test test/scout.test.js test/schedules.test.js",
+      "not_before": "2026-11-17",
+      "depends_on": [],
+      "problem_statement": "Scheduled agent turns already exist but lack a structured, deduplicated source-backed digest with user-visible egress controls.",
+      "upgraded_design_spec": "Add an opt-in scout configuration using existing scheduler and outbound routing: owner selects exact allowed feed/source endpoints, cadence and delivery. Default local-only with no network; optional explicitly permitted remote fetches must reuse hardened SSRF-safe network code, enforce redirects, byte/time/rate limits and label egress. Scheduled runs stay unattended and read-only, cannot schedule children or execute dangerous MCP tools, and store bounded fingerprints for dedupe. Treat all fetched text as untrusted; include citations and last-run/failure state.",
+      "affected_files": [
+        "src/agent/scout.js",
+        "src/schedules.js",
+        "src/scheduler.js",
+        "src/outbound.js",
+        "test/scout.test.js"
+      ],
+      "acceptance_criteria": [
+        "A fake clock and local transport demonstrate one digest, deduplication, no catch-up storm and cancellation with no real network.",
+        "No allowlist or disabled setting means zero fetches; DNS rebinding, redirect to private address and oversized content fail closed.",
+        "No unattended action can write externally or bypass approval; receipts distinguish fetch failure from no updates."
+      ],
+      "body": "## Context\n\nScheduled agent turns already exist but lack a structured, deduplicated source-backed digest with user-visible egress controls.\n\n## Upgraded design specification\n\nAdd an opt-in scout configuration using existing scheduler and outbound routing: owner selects exact allowed feed/source endpoints, cadence and delivery. Default local-only with no network; optional explicitly permitted remote fetches must reuse hardened SSRF-safe network code, enforce redirects, byte/time/rate limits and label egress. Scheduled runs stay unattended and read-only, cannot schedule children or execute dangerous MCP tools, and store bounded fingerprints for dedupe. Treat all fetched text as untrusted; include citations and last-run/failure state.\n\n## Affected files / modules\n\n- `src/agent/scout.js` (new)\n- `src/schedules.js`\n- `src/scheduler.js`\n- `src/outbound.js`\n- `test/scout.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] A fake clock and local transport demonstrate one digest, deduplication, no catch-up storm and cancellation with no real network.\n- [ ] No allowlist or disabled setting means zero fetches; DNS rebinding, redirect to private address and oversized content fail closed.\n- [ ] No unattended action can write externally or bypass approval; receipts distinguish fetch failure from no updates.\n\n## How to verify\n\n```bash\nnode --test test/scout.test.js test/schedules.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: none."
+    },
+    {
+      "id": "harness-10-tracker-local",
+      "title": "feat(tracker): owner-approved per-repository local issue adapter",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "tracker-integration",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/agent.js"
+      ],
+      "planned_files": [
+        "src/tracker/adapter.js",
+        "src/tracker/local.js",
+        "src/tracker/setup.js",
+        "test/tracker-local.test.js"
+      ],
+      "verify": "node --test test/tracker-local.test.js test/hardening.test.js",
+      "not_before": "2026-11-10",
+      "depends_on": [],
+      "problem_statement": "The repository has GitHub contributor automation, but the desktop assistant has no user-selectable per-project tracker abstraction or local Markdown ticket workflow.",
+      "upgraded_design_spec": "Add a narrow adapter interface for list/read and draft/write plus an interactive repo discovery flow. The first implementation is local Markdown in an owner-selected canonical workspace directory; parse and bound metadata, refuse symlink escapes, and preview every write through existing approval. Store per-repo configuration locally, never mutate git remotes or repo policy files during discovery, and do not alter the existing GitHub contributor bot.",
+      "affected_files": [
+        "src/tracker/adapter.js",
+        "src/tracker/local.js",
+        "src/tracker/setup.js",
+        "src/agent.js",
+        "test/tracker-local.test.js"
+      ],
+      "acceptance_criteria": [
+        "A temporary workspace lists and drafts tickets offline; two repositories remain isolated and reconfiguration needs owner consent.",
+        "Traversal, malicious filenames and symlink escape fail closed; denial or unattended mode writes no ticket.",
+        "Default disabled mode and existing contributor queue remain unchanged; setup never changes remote configuration."
+      ],
+      "body": "## Context\n\nThe repository has GitHub contributor automation, but the desktop assistant has no user-selectable per-project tracker abstraction or local Markdown ticket workflow.\n\n## Upgraded design specification\n\nAdd a narrow adapter interface for list/read and draft/write plus an interactive repo discovery flow. The first implementation is local Markdown in an owner-selected canonical workspace directory; parse and bound metadata, refuse symlink escapes, and preview every write through existing approval. Store per-repo configuration locally, never mutate git remotes or repo policy files during discovery, and do not alter the existing GitHub contributor bot.\n\n## Affected files / modules\n\n- `src/tracker/adapter.js` (new)\n- `src/tracker/local.js` (new)\n- `src/tracker/setup.js` (new)\n- `src/agent.js`\n- `test/tracker-local.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] A temporary workspace lists and drafts tickets offline; two repositories remain isolated and reconfiguration needs owner consent.\n- [ ] Traversal, malicious filenames and symlink escape fail closed; denial or unattended mode writes no ticket.\n- [ ] Default disabled mode and existing contributor queue remain unchanged; setup never changes remote configuration.\n\n## How to verify\n\n```bash\nnode --test test/tracker-local.test.js test/hardening.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 2; not before 2026-11-10 UTC. Prerequisites: none."
+    },
+    {
+      "id": "harness-11-tracker-remote",
+      "title": "feat(tracker): explicitly authorized GitHub and GitLab adapters",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "tracker-integration",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "src/agent.js"
+      ],
+      "planned_files": [
+        "src/tracker/github.js",
+        "src/tracker/gitlab.js",
+        "src/tracker/adapter.js",
+        "src/tracker/setup.js",
+        "test/tracker-remote.test.js"
+      ],
+      "verify": "node --test test/tracker-remote.test.js test/tracker-local.test.js",
+      "not_before": "2026-11-17",
+      "depends_on": [
+        "harness-10-tracker-local"
+      ],
+      "problem_statement": "Local-first issue drafts alone cannot publish or read a user-selected remote tracker when the owner explicitly asks.",
+      "upgraded_design_spec": "Implement optional GitHub and GitLab adapters over a common narrow interface after local adapter ships. Discovery only suggests hosts; remote access needs explicit opt-in and exact owner-approved repo/host. Minimize scopes, use owner-supplied credentials held outside repo and logs, TLS with allowlisted origin/redirect policy and bounded responses. Preview each create, comment or label change and require session approval; no bulk mutation, automatic PR creation, token forwarding to model or silent remote fallback. Fake HTTP for tests.",
+      "affected_files": [
+        "src/tracker/github.js",
+        "src/tracker/gitlab.js",
+        "src/tracker/adapter.js",
+        "src/tracker/setup.js",
+        "test/tracker-remote.test.js"
+      ],
+      "acceptance_criteria": [
+        "Fake GitHub and GitLab API fixtures verify pagination bounds, error handling, canonical repo mapping and equivalent local draft behavior.",
+        "No egress occurs before explicit setup; redirect/host mismatch and token leakage to logs, model or another host are rejected.",
+        "Each write requires fresh origin-session approval, and denial/unattended runs make zero write requests."
+      ],
+      "body": "## Context\n\nLocal-first issue drafts alone cannot publish or read a user-selected remote tracker when the owner explicitly asks.\n\n## Upgraded design specification\n\nImplement optional GitHub and GitLab adapters over a common narrow interface after local adapter ships. Discovery only suggests hosts; remote access needs explicit opt-in and exact owner-approved repo/host. Minimize scopes, use owner-supplied credentials held outside repo and logs, TLS with allowlisted origin/redirect policy and bounded responses. Preview each create, comment or label change and require session approval; no bulk mutation, automatic PR creation, token forwarding to model or silent remote fallback. Fake HTTP for tests.\n\n## Affected files / modules\n\n- `src/tracker/github.js` (new)\n- `src/tracker/gitlab.js` (new)\n- `src/tracker/adapter.js` (new)\n- `src/tracker/setup.js` (new)\n- `test/tracker-remote.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake GitHub and GitLab API fixtures verify pagination bounds, error handling, canonical repo mapping and equivalent local draft behavior.\n- [ ] No egress occurs before explicit setup; redirect/host mismatch and token leakage to logs, model or another host are rejected.\n- [ ] Each write requires fresh origin-session approval, and denial/unattended runs make zero write requests.\n\n## How to verify\n\n```bash\nnode --test test/tracker-remote.test.js test/tracker-local.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: `harness-10-tracker-local` (shipped)."
+    },
+    {
+      "id": "harness-12-triage",
+      "title": "feat(tracker): draft-only triage and spec-to-ticket pipeline",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "tracker-integration",
+        "agentic-flow",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/agent.js"
+      ],
+      "planned_files": [
+        "src/tracker/triage.js",
+        "src/tracker/spec-to-tickets.js",
+        "src/tracker/adapter.js",
+        "test/tracker-triage.test.js"
+      ],
+      "verify": "node --test test/tracker-triage.test.js test/tracker-local.test.js",
+      "not_before": "2026-11-17",
+      "depends_on": [
+        "harness-10-tracker-local",
+        "agentic-01-phased-flow"
+      ],
+      "problem_statement": "The existing repo labeler classifies GitHub issues, but the desktop assistant cannot convert an approved spec into portable, dependency-aware ticket drafts.",
+      "upgraded_design_spec": "Use the approved plan from agentic-01 and the tracker adapter to propose glossary-aware spec and vertical slices with stable local IDs, blocking edges, acceptance criteria and test seams. Provide configurable mappings for needs-triage, needs-info, ready-for-agent, ready-for-human and wontfix, without asserting auto-triage correctness. Show the full preview and require explicit approval for each publish/change; never auto-close issues or overwrite human work. Remote writes remain separately approved.",
+      "affected_files": [
+        "src/tracker/triage.js",
+        "src/tracker/spec-to-tickets.js",
+        "src/tracker/adapter.js",
+        "test/tracker-triage.test.js"
+      ],
+      "acceptance_criteria": [
+        "Fixtures produce independent vertical slices with resolvable, acyclic dependencies; missing evidence stays needs-info rather than ready-for-agent.",
+        "A user can edit or reject drafts; no issue, label, comment or close occurs before approval.",
+        "A malicious tracker response cannot change labels or authorize operations; local and remote adapters see the same normalized draft."
+      ],
+      "body": "## Context\n\nThe existing repo labeler classifies GitHub issues, but the desktop assistant cannot convert an approved spec into portable, dependency-aware ticket drafts.\n\n## Upgraded design specification\n\nUse the approved plan from agentic-01 and the tracker adapter to propose glossary-aware spec and vertical slices with stable local IDs, blocking edges, acceptance criteria and test seams. Provide configurable mappings for needs-triage, needs-info, ready-for-agent, ready-for-human and wontfix, without asserting auto-triage correctness. Show the full preview and require explicit approval for each publish/change; never auto-close issues or overwrite human work. Remote writes remain separately approved.\n\n## Affected files / modules\n\n- `src/tracker/triage.js` (new)\n- `src/tracker/spec-to-tickets.js` (new)\n- `src/tracker/adapter.js` (new)\n- `test/tracker-triage.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fixtures produce independent vertical slices with resolvable, acyclic dependencies; missing evidence stays needs-info rather than ready-for-agent.\n- [ ] A user can edit or reject drafts; no issue, label, comment or close occurs before approval.\n- [ ] A malicious tracker response cannot change labels or authorize operations; local and remote adapters see the same normalized draft.\n\n## How to verify\n\n```bash\nnode --test test/tracker-triage.test.js test/tracker-local.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: `harness-10-tracker-local` (shipped), `agentic-01-phased-flow` (shipped)."
+    },
+    {
+      "id": "harness-13-local-voice",
+      "title": "feat(voice): bounded opt-in local streaming speech interface",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "voice-engine",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "src/voice.js",
+        "src/server.js",
+        "public/index.html"
+      ],
+      "planned_files": [
+        "src/voice/stream.js",
+        "test/voice-stream.test.js"
+      ],
+      "verify": "node --test test/voice-stream.test.js test/voice.test.js test/voice-reply.test.js",
+      "not_before": "2026-11-17",
+      "depends_on": [],
+      "problem_statement": "Windows has local System.Speech recognition/TTS; browser dictation may be remote and the optional Whisper adapter is request/response, not a guaranteed local streaming pipeline.",
+      "upgraded_design_spec": "Introduce an optional loopback-only, explicitly configured local STT stream adapter behind existing voice paths. Mic starts muted; no raw audio is retained by default. Enforce chunk size, timeout, cancellation, local origin, DNS/redirect restrictions and visible recording state. Reuse existing local playback, cancel old speech on barge-in where supported; otherwise honestly report that capability unavailable. Never silently fall back to browser vendor or a remote endpoint.",
+      "affected_files": [
+        "src/voice/stream.js",
+        "src/voice.js",
+        "src/server.js",
+        "public/index.html",
+        "test/voice-stream.test.js"
+      ],
+      "acceptance_criteria": [
+        "Fake local stream yields ordered partial and final transcripts; cancellation, backpressure, device error and disconnect release the input.",
+        "Remote/redirected origins are refused in local-only mode; absence of adapter never invokes browser or cloud recognition silently.",
+        "Startup remains muted, no audio file or transcript telemetry is written by default, and old voice APIs remain compatible."
+      ],
+      "body": "## Context\n\nWindows has local System.Speech recognition/TTS; browser dictation may be remote and the optional Whisper adapter is request/response, not a guaranteed local streaming pipeline.\n\n## Upgraded design specification\n\nIntroduce an optional loopback-only, explicitly configured local STT stream adapter behind existing voice paths. Mic starts muted; no raw audio is retained by default. Enforce chunk size, timeout, cancellation, local origin, DNS/redirect restrictions and visible recording state. Reuse existing local playback, cancel old speech on barge-in where supported; otherwise honestly report that capability unavailable. Never silently fall back to browser vendor or a remote endpoint.\n\n## Affected files / modules\n\n- `src/voice/stream.js` (new)\n- `src/voice.js`\n- `src/server.js`\n- `public/index.html`\n- `test/voice-stream.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake local stream yields ordered partial and final transcripts; cancellation, backpressure, device error and disconnect release the input.\n- [ ] Remote/redirected origins are refused in local-only mode; absence of adapter never invokes browser or cloud recognition silently.\n- [ ] Startup remains muted, no audio file or transcript telemetry is written by default, and old voice APIs remain compatible.\n\n## How to verify\n\n```bash\nnode --test test/voice-stream.test.js test/voice.test.js test/voice-reply.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: none."
+    },
+    {
+      "id": "harness-14-voice-rag",
+      "title": "feat(voice): cite local document answers in spoken sessions",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "voice-engine",
+        "memory",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "src/documents.js",
+        "src/sources.js",
+        "src/agent.js"
+      ],
+      "planned_files": [
+        "src/voice/document-session.js",
+        "test/voice-document-session.test.js"
+      ],
+      "verify": "node --test test/voice-document-session.test.js test/documents.test.js test/citations.test.js",
+      "not_before": "2026-11-24",
+      "depends_on": [
+        "harness-13-local-voice"
+      ],
+      "problem_statement": "Local BM25 document retrieval and speech output already exist, but there is no dedicated voice-document retrieval end-to-end contract.",
+      "upgraded_design_spec": "Compose existing search_documents and source registry with the local voice path; preserve a visible text answer and source references while speaking a short answer using an explicitly local TTS voice. Never upload documents or audio, open a Qdrant service, or invent citations; if no source exists say so and allow text-only fallback. Keep spoken content, evidence and approval state in sync when interrupted.",
+      "affected_files": [
+        "src/voice/document-session.js",
+        "src/documents.js",
+        "src/sources.js",
+        "src/agent.js",
+        "test/voice-document-session.test.js"
+      ],
+      "acceptance_criteria": [
+        "Temporary local text/PDF fixture yields cited answer through mocked speech and document tool without network.",
+        "Missing source, cancelled playback or unavailable local voice cannot fabricate citations or trigger cloud TTS.",
+        "File permission and prompt-injection tests preserve workspace boundaries; no document or audio is persisted by this feature."
+      ],
+      "body": "## Context\n\nLocal BM25 document retrieval and speech output already exist, but there is no dedicated voice-document retrieval end-to-end contract.\n\n## Upgraded design specification\n\nCompose existing search_documents and source registry with the local voice path; preserve a visible text answer and source references while speaking a short answer using an explicitly local TTS voice. Never upload documents or audio, open a Qdrant service, or invent citations; if no source exists say so and allow text-only fallback. Keep spoken content, evidence and approval state in sync when interrupted.\n\n## Affected files / modules\n\n- `src/voice/document-session.js` (new)\n- `src/documents.js`\n- `src/sources.js`\n- `src/agent.js`\n- `test/voice-document-session.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Temporary local text/PDF fixture yields cited answer through mocked speech and document tool without network.\n- [ ] Missing source, cancelled playback or unavailable local voice cannot fabricate citations or trigger cloud TTS.\n- [ ] File permission and prompt-injection tests preserve workspace boundaries; no document or audio is persisted by this feature.\n\n## How to verify\n\n```bash\nnode --test test/voice-document-session.test.js test/documents.test.js test/citations.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 4; not before 2026-11-24 UTC. Prerequisites: `harness-13-local-voice` (shipped)."
+    },
+    {
+      "id": "harness-15-visualizer",
+      "title": "feat(voice): privacy-preserving local audio activity indicator",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "voice-engine",
+        "security",
+        "roadmap"
+      ],
+      "time_estimate": "2–3 engineer-days",
+      "files": [
+        "public/index.html",
+        "desktop/Companion.cs"
+      ],
+      "planned_files": [
+        "test/voice-visualizer.test.js"
+      ],
+      "verify": "node --test test/voice-visualizer.test.js test/voice-reply.test.js",
+      "not_before": "2026-11-24",
+      "depends_on": [
+        "harness-13-local-voice"
+      ],
+      "problem_statement": "Voice UI can indicate state but lacks a bounded reactive level visualization that consistently stops with microphone capture.",
+      "upgraded_design_spec": "Add an optional level meter using local in-memory audio amplitude only while the owner has enabled capture. Surface listening, processing and muted states in accessible text; respect reduced motion, no audio storage, no third-party assets or network. Remove listeners and stop rendering at mute, disconnect or tab close; provide an unavailable fallback rather than requesting new permissions solely for decoration.",
+      "affected_files": [
+        "public/index.html",
+        "desktop/Companion.cs",
+        "test/voice-visualizer.test.js"
+      ],
+      "acceptance_criteria": [
+        "Fake audio input drives level and accessible state while active and ceases immediately on mute/cancel.",
+        "No capture starts at boot or solely for visualization; no audio or amplitude trace leaves the process or is persisted.",
+        "Reduced-motion and no-WebAudio paths remain usable; repeated toggle does not leak event listeners."
+      ],
+      "body": "## Context\n\nVoice UI can indicate state but lacks a bounded reactive level visualization that consistently stops with microphone capture.\n\n## Upgraded design specification\n\nAdd an optional level meter using local in-memory audio amplitude only while the owner has enabled capture. Surface listening, processing and muted states in accessible text; respect reduced motion, no audio storage, no third-party assets or network. Remove listeners and stop rendering at mute, disconnect or tab close; provide an unavailable fallback rather than requesting new permissions solely for decoration.\n\n## Affected files / modules\n\n- `public/index.html`\n- `desktop/Companion.cs`\n- `test/voice-visualizer.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake audio input drives level and accessible state while active and ceases immediately on mute/cancel.\n- [ ] No capture starts at boot or solely for visualization; no audio or amplitude trace leaves the process or is persisted.\n- [ ] Reduced-motion and no-WebAudio paths remain usable; repeated toggle does not leak event listeners.\n\n## How to verify\n\n```bash\nnode --test test/voice-visualizer.test.js test/voice-reply.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n2–3 engineer-days.\n\n## Dependencies and release window\n\nWeek 4; not before 2026-11-24 UTC. Prerequisites: `harness-13-local-voice` (shipped)."
+    },
+    {
+      "id": "harness-16-offline-gate",
+      "title": "test(harness): integrated offline rollout and migration safety",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "harness",
+        "security",
+        "voice-engine",
+        "roadmap"
+      ],
+      "time_estimate": "3–4 engineer-days",
+      "files": [
+        "docs/GUIDE.md",
+        "docs/VOICE.md",
+        "docs/CAPABILITIES.json",
+        "src/config.js"
+      ],
+      "planned_files": [
+        "test/harness-e2e.test.js"
+      ],
+      "verify": "node --test test/harness-e2e.test.js && node --test && node scripts/audit.js",
+      "not_before": "2026-11-24",
+      "depends_on": [
+        "harness-02-config-scan",
+        "harness-03-skill-evals",
+        "harness-04-instinct-review",
+        "harness-05-memory-provenance",
+        "harness-06-compression-eval",
+        "harness-07-mcp-scope",
+        "harness-08-panel",
+        "harness-09-scout",
+        "harness-11-tracker-remote",
+        "harness-12-triage",
+        "harness-14-voice-rag",
+        "harness-15-visualizer"
+      ],
+      "problem_statement": "The proposed features require a cross-subsystem regression before any capability claim or default enablement.",
+      "upgraded_design_spec": "Keep all additions opt-in, no new mandatory runtime dependencies. Compose mock brain, fake local voice, mock tracker and temp workspace in an end-to-end fixture covering explicit setup, permission, memory migration, local scout, MCP scope and cancellation. Document backward-compatible defaults, data retention/export changes, rollback, optional remote egress and non-sandbox limits; update capability inventory only after each feature ships. Run supported Node CI matrix and audit.",
+      "affected_files": [
+        "test/harness-e2e.test.js",
+        "docs/GUIDE.md",
+        "docs/VOICE.md",
+        "docs/CAPABILITIES.json",
+        "src/config.js"
+      ],
+      "acceptance_criteria": [
+        "Disabled configuration produces unchanged existing behavior and no added outbound requests or stored private audio.",
+        "Integrated offline test demonstrates approval denial, prompt injection, tracker escape, stale memory and MCP trust isolation without external services.",
+        "Node 22, 24 and 26 run the suite and self-audit; migration/rollback is exercised on a copy and all outstanding risks are documented."
+      ],
+      "body": "## Context\n\nThe proposed features require a cross-subsystem regression before any capability claim or default enablement.\n\n## Upgraded design specification\n\nKeep all additions opt-in, no new mandatory runtime dependencies. Compose mock brain, fake local voice, mock tracker and temp workspace in an end-to-end fixture covering explicit setup, permission, memory migration, local scout, MCP scope and cancellation. Document backward-compatible defaults, data retention/export changes, rollback, optional remote egress and non-sandbox limits; update capability inventory only after each feature ships. Run supported Node CI matrix and audit.\n\n## Affected files / modules\n\n- `test/harness-e2e.test.js` (new)\n- `docs/GUIDE.md`\n- `docs/VOICE.md`\n- `docs/CAPABILITIES.json`\n- `src/config.js`\n\n## Acceptance criteria\n\n- [ ] Disabled configuration produces unchanged existing behavior and no added outbound requests or stored private audio.\n- [ ] Integrated offline test demonstrates approval denial, prompt injection, tracker escape, stale memory and MCP trust isolation without external services.\n- [ ] Node 22, 24 and 26 run the suite and self-audit; migration/rollback is exercised on a copy and all outstanding risks are documented.\n\n## How to verify\n\n```bash\nnode --test test/harness-e2e.test.js && node --test && node scripts/audit.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 4; not before 2026-11-24 UTC. Prerequisites: `harness-02-config-scan` (shipped), `harness-03-skill-evals` (shipped), `harness-04-instinct-review` (shipped), `harness-05-memory-provenance` (shipped), `harness-06-compression-eval` (shipped), `harness-07-mcp-scope` (shipped), `harness-08-panel` (shipped), `harness-09-scout` (shipped), `harness-11-tracker-remote` (shipped), `harness-12-triage` (shipped), `harness-14-voice-rag` (shipped), `harness-15-visualizer` (shipped)."
     }
   ]
 }
