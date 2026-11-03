@@ -80,7 +80,18 @@ pinch doctor        # prose, for setting things up (scripts/setup.js --check, un
 pinch health        # provider matrix, routing plan, verdict — exits 1 if anything fails
 npm run health -- --json          # the same as one object, for scripts and agents
 npm run health -- --no-network    # configuration only; no request leaves the machine
+npm run health -- --baseline      # + synthetic content-free latency baseline (docs/DIAGNOSTICS.md)
 ```
+
+The report also carries **structured readiness** (`readiness`, derived by
+`src/readiness.js` from these same checks — no second probe set): one state per surface
+from a closed set (`ready`, `ready-mock`, `missing-model`, `unreachable-backend`,
+`companion-unavailable`, `mic-muted`, `not-verified`, `blocked`), each with a
+`next_action`. A `--no-network` run is `not-verified`, never `ready` — a configured model
+name is not evidence — and the mock brain is `ready-mock`, never `ready`. The selected
+Ollama model's digest/quantisation ride along as `model_info` for the baseline
+artifact. States, the baseline schema and the consented Windows first-turn record are
+in [docs/DIAGNOSTICS.md](DIAGNOSTICS.md).
 
 | Check | What it observes |
 |---|---|

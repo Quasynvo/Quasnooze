@@ -431,6 +431,7 @@ Installs only when you ask. `systemctl stop pinch` and it is gone; `data/` and `
 | `pinch` | start the assistant |
 | `npm run setup` | the guided wizard |
 | `quasnooze doctor` | re-verify every token and connection |
+| `quasnooze health [--json] [--baseline]` | provider matrix + structured readiness with next actions; `--baseline` adds the synthetic, content-free latency artifact (see `docs/DIAGNOSTICS.md`) |
 | `quasnooze brain-test` | model speed **and** whether it can call tools at all |
 | `quasnooze chat` / `quasnooze ask "…"` | terminal use, same brain, same memory |
 | `quasnooze pair` | phone URL + locally-generated QR |

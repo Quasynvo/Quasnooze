@@ -236,7 +236,7 @@ From a checkout, use `node bin/quasnooze.js help`. The `pinch` entry remains a c
 | Command | Purpose |
 |---|---|
 | `quasnooze setup` / `quasnooze doctor` | Guided configuration / readiness checks |
-| `quasnooze health` | Provider matrix and routing verdict; `--json` for scripts |
+| `quasnooze health` | Provider matrix, routing verdict and structured readiness; `--json` for scripts, `--baseline` for the content-free latency artifact ([diagnostics](docs/DIAGNOSTICS.md)) |
 | `quasnooze desktop` | Windows native voice host |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
 | `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model and tool probe |
