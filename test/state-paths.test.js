@@ -102,6 +102,9 @@ test('ACL cleanup denial preserves originals and leaves an explicit incomplete m
 test('packaged runtime reads user config and persists data across restart and package replacement', () => fixture(({ base, target }) => {
   fs.mkdirSync(target);
   fs.writeFileSync(join(target, '.env'), 'OWNER_NAME=durable-owner\nPINCH_KEY=secret-fixture\n');
+  const marker = join(target, 'data', 'persistent.json');
+  fs.mkdirSync(join(target, 'data'));
+  fs.writeFileSync(marker, 'retained', { flag: 'wx' });
   const repo = fileURLToPath(new URL('../', import.meta.url));
   for (const install of ['global-v1', 'npx-v2', 'global-v1']) {
     const root = join(base, install);
@@ -119,9 +122,8 @@ test('packaged runtime reads user config and persists data across restart and pa
     });
     assert.ok(!output.includes('secret-fixture'));
     assert.deepEqual(JSON.parse(output), { owner: 'durable-owner', data: join(target, 'data'), profile: join(target, 'data/profile.md') });
-    const marker = join(target, 'data', 'persistent.json');
-    if (fs.existsSync(marker)) assert.equal(fs.readFileSync(marker, 'utf8'), 'retained');
-    fs.writeFileSync(marker, 'retained');
+    // Read directly: a missing or changed marker must fail, not be recreated.
+    assert.equal(fs.readFileSync(marker, 'utf8'), 'retained');
     assert.ok(!fs.existsSync(join(root, 'data')));
     assert.ok(!fs.existsSync(join(root, '.env')));
   }
