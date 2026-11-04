@@ -116,6 +116,8 @@ powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File desktop/windows.ps1
 
 The last command compiles and checks URL policy without opening a widget or microphone. CI adds that command on `windows-latest` plus desktop orchestration/HTTP tests. CI cannot establish real microphone accuracy.
 
+The [keyboard and assistive-technology acceptance matrix](DESKTOP-ACCESSIBILITY.md) records the actual-control audit, optional isolated accessibility checker, reproduced fixes, and **unperformed** consented Windows/screen-reader checks. Browser/DOM checks are not a screen-reader pass.
+
 For optional browser regression checks, install Playwright **as developer tooling outside runtime dependencies**, install its Chromium browser, then run `scripts/check-desktop-ui.cjs` against a disposable, loopback mock service with **no native host or Ollama**. Set `NODE_PATH` to that tooling's `node_modules`, `QUASNOOZE_UI_BASE=http://127.0.0.1:7777/`, and optionally `QUASNOOZE_UI_SCREENSHOT` to an output PNG. The script covers actual clock calls, disconnected native state, missing model, dialogs, four widths, and a **separate synthetic** text-injection response. Synthetic injection data is never used in the screenshot.
 
 ### Required Windows acceptance pass before calling this release-ready
