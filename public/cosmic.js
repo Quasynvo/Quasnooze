@@ -202,7 +202,7 @@ function init() {
       if (!busy && !previewing) {
         state(phaseFor(native.phase));
         if (native.approval)
-          approval(native.approval.id, native.approval.description, "native");
+          approval(native.approval.id, native.approval.description, "native", native.approval.preview);
         else if (pending?.kind === "native") {
           pending = null;
           $("approval").hidden = true;
@@ -231,11 +231,12 @@ function init() {
       mode();
     }
   }
-  function approval(id, description, kind = "web") {
+  function approval(id, description, kind = "web", preview) {
     pending = { id, kind };
     $("approvalText").textContent = String(
       description || "Review this action in the native Windows host.",
     );
+    if (preview) $("approvalText").textContent += "\n" + globalThis.approvalPreviewText(preview);
     $("approval").hidden = false;
     state("approval");
   }
@@ -331,7 +332,7 @@ function init() {
             throw Error("Service response exceeded the frame limit.");
           for (const { event, data } of parsed.events) {
             if (event === "step" && data.type === "approval")
-              approval(data.id, data.description);
+              approval(data.id, data.description, "web", data.preview);
             else if (event === "step" && data.type === "delta") {
               answer.textContent = (
                 answer.textContent + String(data.text || "")

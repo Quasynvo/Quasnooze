@@ -7,6 +7,7 @@
  *
  * Same agent, same memory, same approval flow — just a terminal.
  */
+import { formatActionPreview } from "./action-preview.js";
 import { loadLocalTools } from "./tools.js";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
@@ -27,7 +28,7 @@ function render(event) {
     const icon = event.ok ? C.teal("  ✓") : "\x1b[31m  ✕\x1b[0m";
     process.stdout.write(`${icon} ${C.dim(String(event.preview).split("\n")[0].slice(0, 100))}\n`);
   } else if (event.type === "approval") {
-    process.stdout.write(`\n  ${C.gold("✦ permission:")} ${event.description}\n  ${C.dim("allow? [y/N] ")}`);
+    process.stdout.write(`\n  ${C.gold("✦ permission:")} ${event.description}${event.preview ? "\n" + formatActionPreview(event.preview) : ""}\n  ${C.dim("allow? [y/N] ")}`);
   }
 }
 

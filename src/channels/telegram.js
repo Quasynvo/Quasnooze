@@ -2,6 +2,7 @@
  * telegram.js — long polling against the Bot API. No webhook, no public IP,
  * works from behind your router. Approvals get real inline buttons.
  */
+import { formatActionPreview } from "../action-preview.js";
 import { config } from "../config.js";
 import { isApprovalReply, routeMessage } from "./router.js";
 import { answerApproval, pendingApprovalsFor } from "../agent.js";
@@ -58,11 +59,11 @@ export function startTelegram(log = console) {
     }
   }
 
-  async function sendApproval(chatId, id, description) {
+  async function sendApproval(chatId, id, description, preview) {
+    const details = description + (preview ? "\n" + formatActionPreview(preview) : "");
     await call("sendMessage", {
       chat_id: chatId,
-      text: `✦ Quick check — I want to \`${description}\`.\n\nAllow it?`,
-      parse_mode: "Markdown",
+      text: `✦ Quick check — ${details}\n\nAllow it?`,
       reply_markup: {
         inline_keyboard: [
           [
@@ -72,7 +73,7 @@ export function startTelegram(log = console) {
         ],
       },
     }).catch(async () => {
-      await send(chatId, `✦ I want to \`${description}\`. Reply yes or no.`);
+      await send(chatId, `✦ ${details} Reply yes or no.`);
     });
   }
 
@@ -111,7 +112,7 @@ export function startTelegram(log = console) {
         onProgress: async () => {
           await call("sendChatAction", { chat_id: chatId, action: "typing" }).catch(() => {});
         },
-        onApproval: ({ id, description }) => sendApproval(chatId, id, description),
+        onApproval: ({ id, description, preview }) => sendApproval(chatId, id, description, preview),
       });
     } catch (err) {
       await send(chatId, `✦ Something jammed: ${err.message}`);

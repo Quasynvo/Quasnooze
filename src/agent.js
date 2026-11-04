@@ -9,6 +9,7 @@
  *    PINCH_AUTO_APPROVE=true;
  *  • every tool failure is fed back to the model as text, never swallowed.
  */
+import { buildActionPreview, previewSecrets, approvalDescription, sanitizeActionPreview } from "./action-preview.js";
 import { config } from "./config.js";
 import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
@@ -38,7 +39,10 @@ const approvals = new Map(); // id -> { resolve, timer, channel, description, cr
  * Create a permission prompt. Returns { id, promise } so the blocking
  * caller and the channel that draws the buttons share the same id.
  */
-export function createApproval({ channel, sessionId = "", description }) {
+export function createApproval({ channel, sessionId = "", description, preview }) {
+  const secrets = [...previewSecrets(), config.authKey, config.llm.openaiKey, config.telegram.token, config.discord.token, config.slack.token];
+  description = approvalDescription(description, secrets);
+  preview = preview ? sanitizeActionPreview(preview, secrets) : undefined;
   const id = `ap_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   let entry;
   const promise = new Promise((resolve) => {
@@ -48,7 +52,7 @@ export function createApproval({ channel, sessionId = "", description }) {
     }, APPROVAL_TIMEOUT_MS);
     // A prompt nobody answers must not be the only reason the process is alive.
     timer.unref?.();
-    entry = { resolve, timer, channel, sessionId, description, createdAt: Date.now() };
+    entry = { resolve, timer, channel, sessionId, description, preview, createdAt: Date.now() };
     approvals.set(id, entry);
   });
   return { id, promise };
@@ -94,14 +98,14 @@ export function answerApprovalByChannel(channel, allowed) {
 export function pendingApprovals(channel) {
   return [...approvals.entries()]
     .filter(([, v]) => !channel || v.channel === channel)
-    .map(([id, v]) => ({ id, channel: v.channel, sessionId: v.sessionId, description: v.description }));
+    .map(([id, v]) => ({ id, channel: v.channel, sessionId: v.sessionId, description: v.description, ...(v.preview ? { preview: v.preview } : {}) }));
 }
 
 /** Pending prompts for one conversation — what the panel and router ask for. */
 export function pendingApprovalsFor(sessionId) {
   return [...approvals.entries()]
     .filter(([, v]) => v.sessionId === sessionId)
-    .map(([id, v]) => ({ id, channel: v.channel, sessionId: v.sessionId, description: v.description }));
+    .map(([id, v]) => ({ id, channel: v.channel, sessionId: v.sessionId, description: v.description, ...(v.preview ? { preview: v.preview } : {}) }));
 }
 
 /* ─────────────────────────── tool argument contract ────────────────────── */
@@ -403,8 +407,11 @@ export async function runAgent({
 
       const mustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ;
       if (mustAsk) {
-        const { id, promise } = createApproval({ channel, sessionId, description: label });
-        onEvent({ type: "approval", id, description: label });
+        const secrets = [...previewSecrets(), config.authKey, config.llm.openaiKey, config.telegram.token, config.discord.token, config.slack.token];
+        const preview = buildActionPreview(tool.name, call.arguments, { risk: tier, secrets });
+        const description = approvalDescription(label, secrets);
+        const { id, promise } = createApproval({ channel, sessionId, description, preview });
+        onEvent({ type: "approval", id, description, preview });
         const allowed = await promise;
         if (!allowed) {
           messages.push({

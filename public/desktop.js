@@ -35,7 +35,7 @@ function render(state) {
  if (state.busy && !state.draft && !state.approval) { $('result').textContent='Preparing a reply…'; $('resultKind').textContent='REQUEST IN PROGRESS'; }
  if (state.busy && state.draft && !state.approval) { $('result').textContent=state.draft; $('resultKind').textContent='RESPONDING · LOCAL MODEL'; }
  if (!state.busy && state.text && (state.recent?.length || phase === 'reminder')) $('result').textContent=state.text;
- approvalId=state.approval?.id || ''; $('permission').hidden=!approvalId; $('approvalText').textContent=state.approval?.description || '';
+ approvalId=state.approval?.id || ''; $('permission').hidden=!approvalId; $('approvalText').textContent=(state.approval?.description || '') + (state.approval?.preview ? '\n'+approvalPreviewText(state.approval.preview) : '');
  if (state.recent?.length) {
   $('recent').replaceChildren();
   for (const record of state.recent) { const li=document.createElement('li'), command=document.createElement('span'), timing=document.createElement('span'); command.textContent=(record.ok ? '↗ ':'! ')+record.command; timing.textContent=`${record.ms} ms`; timing.className='timing'; li.append(command,timing); $('recent').append(li); }

@@ -283,6 +283,7 @@
   </div>
 </div>
 
+<script src="/approval-preview.js"></script>
 <script>
 // The brand mark, inlined once so every use costs no extra request.
 const QUASNOOZE_MARK = '<img src="/brand/voice-engine.svg" width="28" height="28" alt="">';
@@ -341,11 +342,18 @@ function addSteps() {
   return el;
 }
 
-function addApproval(id, description, onAnswer) {
+function addApproval(id, description, onAnswer, preview) {
   const el = document.createElement("div");
   el.className = "approval";
-  el.innerHTML = `<div class="q"><img class="quasnooze-mark" src="/brand/voice-engine.svg" width="28" height="28" alt=""> Quasnooze want to <code>${description.replace(/</g,"&lt;")}</code>. Allow?</div>
+  el.innerHTML = `<div class="q"><img class="quasnooze-mark" src="/brand/voice-engine.svg" width="28" height="28" alt=""> Quasnooze want to <code></code>. Allow?</div>
     <div class="row"><button class="allow">Allow</button><button class="deny">Deny</button></div>`;
+  el.querySelector("code").textContent = String(description || "Unknown action").slice(0, 2000);
+  if (preview) {
+    const details = document.createElement("pre");
+    details.style.whiteSpace = "pre-wrap";
+    details.textContent = approvalPreviewText(preview);
+    el.querySelector(".q").appendChild(details);
+  }
   el.querySelector(".allow").onclick = () => { onAnswer(true); el.remove(); };
   el.querySelector(".deny").onclick = () => { onAnswer(false); el.remove(); };
   $("thread").appendChild(el);
@@ -838,7 +846,7 @@ async function send() {
             thinking.querySelector("b").textContent = "waiting for your call";
             addApproval(data.id, data.description, async (allowed) => {
               await fetch("/api/approve", { method: "POST", headers: headers(), body: JSON.stringify({ id: data.id, allowed }) });
-            });
+            }, data.preview);
           } else if (data.type === "auto") {
             // A command that ran without a prompt must never be invisible.
             const row = document.createElement("div");
