@@ -69,14 +69,21 @@ export async function findDesktopFiles(query, { roots = config.workspaceRoots, l
 export class DesktopRuntime {
   constructor({ agent = runAgent, selection = () => brain.active, finder = findDesktopFiles } = {}) {
     this.agent = agent; this.selection = selection; this.finder = finder;
+    this.epoch = 0; this.retryHost = null;
     this.bridge = null; this.busy = false; this.approval = null;
     this.state = { available: false, phase: "not-running", mic: false, voice: "Windows companion not running", text: "Run npm run desktop on Windows.", lastMs: null };
     this.recent = []; this.notices = [];
   }
   snapshot() { return { ...this.state, audioAgeMs: this.state.audioUpdatedAt ? Date.now() - this.state.audioUpdatedAt : null, ...(this.state.speech ? { speech: { ...this.state.speech } } : {}), busy: this.busy, approval: this.approval ? { ...this.approval } : null, recent: this.recent.map((r) => ({ ...r })) }; }
   update(patch) { Object.assign(this.state, patch); this.bridge?.send({ op: "state", ...patch }); }
-  attach(bridge) { this.bridge = bridge; this.update({ available: true, phase: "muted", text: "Ready. Local wake listening is off until you enable it." }); }
-  detach() { this.bridge = null; if (this.approval) this.approve(this.approval.id, false); this.update({ available: false, phase: "not-running", mic: false, voice: "Companion disconnected" }); }
+  attach(bridge) { this.epoch++; this.bridge = bridge; this.update({ available: true, mic: false, micUnknown: false, voice: "Windows companion connected; microphone muted", audioLevel: null, audioUpdatedAt: null, speech: null, draft: "", phase: "muted", text: this.state.interruptedOutcome === "unknown" ? "Reconnected muted. Previous side-effect outcome unknown; inspect before issuing another request. Nothing was replayed." : "Ready. Local wake listening is off until you enable it." }); }
+  detach() {
+    this.epoch++; this.bridge = null;
+    for (const pending of pendingApprovalsFor(SESSION)) answerApproval(pending.id, false);
+    this.approval = null; this.notices = [];
+    if (this.busy) this.state.interruptedOutcome = "unknown";
+    this.update({ available: false, phase: "not-running", mic: false, micUnknown: true, audioLevel: null, audioUpdatedAt: null, speech: null, draft: "", voice: "Companion disconnected", text: this.busy ? "Connection lost. Side-effect outcome unknown; inspect before issuing a new request. Nothing will be replayed." : "Companion disconnected." });
+  }
   approve(id, allowed) {
     if (typeof allowed !== "boolean" || this.approval?.id !== id || !pendingApprovalsFor(SESSION).some((p) => p.id === id)) return false;
     const ok = answerApproval(id, allowed); this.approval = null; return ok;
@@ -92,6 +99,7 @@ export class DesktopRuntime {
     return true;
   }
   control(action) {
+    if (action === "retry" && this.retryHost) { this.retryHost(); return this.snapshot(); }
     if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });
     if (!["mute", "listen", "stop-voice", "show"].includes(action)) throw Object.assign(new Error("Unknown desktop control."), { status: 400 });
     this.bridge.send({ op: action });
@@ -101,6 +109,7 @@ export class DesktopRuntime {
     if (typeof text !== "string" || !text.trim() || text.length > 2000) throw Object.assign(new Error("Use a command of 1–2000 characters."), { status: 400 });
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });
     this.busy = true;
+    const epoch = this.epoch;
     const started = Date.now();
     this.update({ phase: "working", text: "Working…", draft: "", firstTextMs: null, lastMs: null });
     this.bridge?.send({ op: "working" }); // releases recognition until the response finishes
@@ -131,6 +140,10 @@ export class DesktopRuntime {
             throw new Error("Desktop requests require loopback Ollama (or explicit mock demo mode). No remote model or cloud fallback is permitted.");
           }
           const result = await this.agent({ sessionId: SESSION, channel: "desktop", target: "resident", text, onEvent: (event) => {
+            if (epoch !== this.epoch) {
+              if (event.type === "approval") answerApproval(event.id, false);
+              throw new Error("Desktop connection changed; stale work cancelled. Side-effect outcome unknown.");
+            }
             if (event.type === "delta") {
               streamDraft = (streamDraft + event.text).slice(0, 16000);
               const now = Date.now(), first = this.state.firstTextMs === null;
@@ -150,6 +163,7 @@ export class DesktopRuntime {
       }
     } catch (err) { reply = String(err.message || "Desktop request failed."); failed = true; }
     finally { this.busy = false; this.approval = null; }
+    if (epoch !== this.epoch) return { text: reply, ok: false, ms: Date.now() - started, fastPath: intent.kind !== "agent" };
     if (this.notices.length) reply = `${this.notices.splice(0).map((notice) => `Reminder: ${notice}`).join("\n")}\n\n${reply}`;
     const ms = Date.now() - started;
     this.recent.unshift({ command: text.slice(0, 160), ok: !failed, ms }); this.recent = this.recent.slice(0, 8);
