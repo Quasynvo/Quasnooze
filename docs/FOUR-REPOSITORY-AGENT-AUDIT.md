@@ -1,5 +1,11 @@
 # Four-repository functionality audit and local-first upgrade roadmap
 
+> **Scheduling note (2026-11-05).** The `not_before` dates quoted throughout this
+> document were removed from the manifest and are now refused by
+> `scripts/validate-roadmap.js`. Ordering is `depends_on` alone: an item opens
+> when the work it needs is closed, not on a calendar. Read every "Earliest:"
+> below as "as soon as its prerequisites are shipped", and the weeks as sequencing.
+
 **Audit date:** 2026-11-03. **Status:** architecture and issue proposals, not implemented assistant features. **Scope:** repository catalog and targeted inspection of representative runtime, integration, tests and documentation relevant to the six requested pillars. The four references contain hundreds of skills and demos; this is not a line-by-line review of every file or a measured competitive benchmark. No claim of market leadership or universal correctness is substantiated. The predecessor [comparative roadmap](AGENTIC-COMPARATIVE-ROADMAP.md) has been merged; its `agentic-*` issues remain proposals, not shipped runtime. This document adds distinct capability slices and explicit prerequisites rather than duplicating that roadmap.
 
 ## Pinned evidence index

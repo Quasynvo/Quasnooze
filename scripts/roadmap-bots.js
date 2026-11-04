@@ -129,18 +129,19 @@ export function renderStatusMarkdown(
   }
 
   // Why the board is quiet, in the board. "No eligible item" reads exactly like
-  // "nothing left to do"; a date and a reason do not.
-  const report = queueReport(roadmap, issues, today);
+  // "nothing left to do"; a bottleneck and a reason do not. There is no date to
+  // report: the queue has no calendar, only prerequisites.
+  const report = queueReport(roadmap, issues);
   lines.push("## Filing queue", "");
   lines.push(
     `- **Eligible now:** ${report.fileable.length} item(s) · **slots:** ${report.openContributorIssues}/${report.totalCap} open`,
   );
-  if (report.nextGate) {
+  if (report.waitingOn?.length) {
     lines.push(
-      `- **Next filing date:** \`${report.nextGate}\` — ${report.nextGateCount} item(s) file automatically on that date`,
+      `- **Bottleneck:** \`${report.waitingOn[0].id}\` — closing it unlocks ${report.waitingOn[0].unlocks} item(s)`,
     );
   } else {
-    lines.push("- **Next filing date:** nothing is future-dated; the queue is limited by caps only");
+    lines.push("- **Bottleneck:** none — no unfiled item is waiting on another item");
   }
   if (report.blockedByKind.manual) {
     lines.push(

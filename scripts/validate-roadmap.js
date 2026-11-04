@@ -66,11 +66,12 @@ for (const [i, item] of doc.items.entries()) {
   if (seen.has(item.id)) fail(`${at}: duplicate id`);
   seen.add(item.id);
 
+  // Ordering is dependency, not calendar. A date gate made a fully specified
+  // backlog look finished while it held sixty tasks nobody could claim, so the
+  // field is refused rather than quietly ignored: a manifest that carries a
+  // schedule the queue does not read is a lie written in JSON.
   if (item.not_before !== undefined) {
-    const date = item.not_before;
-    if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
-      fail(`${at}: not_before must be a valid UTC date (YYYY-MM-DD)`);
-    }
+    fail(`${at}: not_before is not supported — order work with depends_on, never a date`);
   }
   if (item.depends_on !== undefined && (!Array.isArray(item.depends_on) || item.depends_on.some(id => typeof id !== "string" || !id))) {
     fail(`${at}: depends_on must be an array of nonempty item IDs`);
@@ -136,7 +137,10 @@ if (easyReady > cap) {
   fail(`too many 'easy' items in status ready/filed: ${easyReady} > cap ${cap}. Move the rest to backlog.`);
 }
 const totalCap = doc.meta?.open_curated_cap ?? cap + 1;
-if (!Number.isInteger(totalCap) || totalCap < 1 || totalCap > 10) fail("open_curated_cap must be an integer from 1 to 10");
+// The ceiling moved from 10 to 20 when the dates came out: with no calendar to
+// stagger the board, the cap is the only thing that decides how much work is
+// open at once, and ten was starving a backlog of sixty specified tasks.
+if (!Number.isInteger(totalCap) || totalCap < 1 || totalCap > 20) fail("open_curated_cap must be an integer from 1 to 20");
 if (!Number.isInteger(cap) || cap < 0 || cap > totalCap) fail("open_easy_cap must be an integer between zero and open_curated_cap");
 if (readyCount > totalCap) {
   fail(`too many filing candidates: ${readyCount}. Keep the open queue small enough to answer.`);

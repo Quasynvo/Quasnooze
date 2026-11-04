@@ -13,9 +13,10 @@ These are medium/hard engineering tasks, not good-first-issue labels.
 - Complete `ready` entries are preferred, then complete `backlog` entries. Historical
   markers `<!-- roadmap:ID -->` prevent duplicate filing across open **and closed**
   issues. Closing a declined task does not cause it to be re-filed.
-- At most ten open contributor tasks share the board across roadmap and Growth
-  publishers; the easy roadmap-task cap remains three. This is a ceiling, not ten
-  new issues daily. PRs and the rolling status dashboard do not occupy task slots.
+- At most twenty open contributor tasks share the board across roadmap and Growth
+  publishers; the easy roadmap-task cap is six. This is a ceiling on how much work
+  is open at once, not a daily quota, and it has no dates behind it: an item opens
+  as soon as the work it depends on is closed. PRs and the rolling status dashboard do not occupy task slots.
   Markers or contributor labels identify tasks; ordinary unlabelled user reports
   are not automatically treated as approved contributor work.
   Ordinary analysis may still produce no eligible work; the bot never invents tasks.
@@ -45,10 +46,15 @@ summary:
 
 | Gate | Meaning | How it clears |
 |---|---|---|
-| `not_before` | Staged release date (UTC). The item is complete and approved; it is simply scheduled. | The calendar. The queue files it on that date, at the hourly run. |
-| `depends_on` | A prerequisite is not finished. | The manifest marking it `shipped`, **or** its issue closing. |
+| `depends_on` | A prerequisite is not finished. This is the only ordering rule. | The manifest marking it `shipped`, **or** its issue closing. |
 | `auto_file: false` | A maintainer veto on automatic filing, even for a complete item. | A human promotes it in a PR, or drops the flag. |
-| caps | Ten open contributor tasks, three of them easy. | Closing an issue. |
+| caps | Twenty open contributor tasks, six of them easy. | Closing an issue — every close opens the next eligible item. |
+
+There are no dates. `not_before` was removed on purpose and is now refused by
+`scripts/validate-roadmap.js`: it made a backlog of sixty fully specified tasks
+look like a finished project, and it turned "when does this start?" into a
+question about a calendar instead of about the work. Ordering is dependency, and
+the queue runs hourly, so the board refills as fast as work closes.
 
 Two rules exist because the alternative was a queue that stopped filing and said
 nothing:
@@ -59,20 +65,21 @@ nothing:
   disagree, the tracker wins, because otherwise every dependent item waits for a
   field nobody wrote.
 - **Refusals name themselves.** `node scripts/roadmap-queue.js .github/roadmap.json all.json --report`
-  prints what would file today, what each waiting item is blocked on, and the
-  soonest date any of them opens. `--check`-style silence is not allowed: a skip
-  reason without a date reads like "finished".
+  prints what would file now, what each waiting item is blocked on, and the
+  bottleneck — the unbuilt item that unlocks the most work. `--check`-style
+  silence is not allowed: a skip reason without a cause reads like "finished".
 
 `.github/roadmap.json` is still the reviewed source of truth, and the daily
 `Roadmap reconciliation` workflow keeps it honest: it derives `status: shipped`,
 `issue` and `shipped_at` from closed issues, then opens **one pull request**
 (branch `bot/roadmap-reconcile`) for a human to merge. It never pushes to main,
-never marks anything unshipped, and never edits a title, body, label or date.
+never marks anything unshipped, and never edits a title, body or label.
 
-To pull a staged cohort forward without editing dates — for example to test the
-queue itself — dispatch `Contributor queue` with `as_of: YYYY-MM-DD`. That date
-replaces "today" for the gate comparison **only**: `auto_file: false` and unmet
-dependencies still refuse.
+To see what the queue would do without filing anything, dispatch
+`Contributor queue` with `dry_run: true`, or run
+`node scripts/roadmap-queue.js .github/roadmap.json issues.json --report`
+locally. The report names the bottleneck — the unbuilt item that unlocks the most
+work — instead of a date, because there is no date to report.
 
 ## Contributing
 
@@ -103,9 +110,9 @@ markers when editing issues; use the workflow's dry-run input to inspect candida
 without filing, commenting or closing.
 
 
-## Ten-task shared board
+## Twenty-task shared board
 
-The reviewed manifest sets `open_curated_cap: 10`. Both automatic publishers use
+The reviewed manifest sets `open_curated_cap: 20` and `open_easy_cap: 6`. Both automatic publishers use
 that ceiling and the same Actions concurrency group to serialize publishing.
 Growth keeps its separate earned quota and proposal sub-cap; these are not raised.
 Roadmap selection counts open growth proposals and contributor-labelled tasks as
@@ -115,9 +122,9 @@ window contains many PRs. Existing deduplication rules and NEXT manual gates rem
 
 If people manually open tasks during a run, they can race the snapshot; this is a
 bot-side ceiling, not an atomic GitHub server quota. The bot does not delete or close
-human reports to force a count of ten. More than ten manually opened tasks causes
-future automatic filing to pause. Hourly checks cover every day, but an empty
-eligible backlog is a valid no-op; no issues are fabricated to fill ten slots.
+human reports to force a count of twenty. More than twenty manually opened tasks
+causes future automatic filing to pause. Hourly checks cover every day, but an empty
+eligible backlog is a valid no-op; no issues are fabricated to fill twenty slots.
 
 The seven additional entries distinguish one reproduced Growth planner state-case
 bug from six feature/evaluation proposals. See each issue for source evidence,

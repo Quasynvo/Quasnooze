@@ -30,50 +30,54 @@ test('ten total tasks is a ceiling, not a per-day quota, and preserves manual ga
  assert.equal(selectQueue(roadmap,first.map(t=>issue(t.id))).length,0);
  assert.equal(selectQueue(roadmap,first.map((t,i)=>issue(t.id,i===0?'closed':'open'))).length,1);
 });
-test('UTC rollout dates and shipped dependencies gate only opted-in tasks',()=>{
+test('work opens when its prerequisite closes, and a stray date cannot hold it back',()=>{
  const base=task('base',{status:'ready'});
- const next=task('next',{not_before:'2026-11-10',depends_on:['base']});
- const later=task('later',{not_before:'2026-11-17',depends_on:['next']});
- const roadmap={items:[base,next,later,task('legacy')]};
- assert.deepEqual(selectQueue(roadmap,[],'2026-11-03').map(t=>t.id),['base','legacy']);
- assert.deepEqual(selectQueue(roadmap,[],'2026-11-10').map(t=>t.id),['base','legacy']);
+ const next=task('next',{depends_on:['base']});
+ const later=task('later',{depends_on:['next']});
+ // A date left over from the old schema must not gate anything: the queue has
+ // no calendar, and the validator is what refuses the field.
+ const dated=task('dated',{not_before:'2099-01-01'});
+ const roadmap={items:[base,next,later,dated,task('legacy')]};
+ assert.deepEqual(selectQueue(roadmap,[]).map(t=>t.id),['base','dated','legacy']);
  base.status='shipped';
- assert.deepEqual(selectQueue(roadmap,[],'2026-11-10').map(t=>t.id),['next','legacy']);
+ assert.deepEqual(selectQueue(roadmap,[]).map(t=>t.id),['next','dated','legacy']);
  // A closed issue is evidence the prerequisite shipped, even while the manifest
  // still says `backlog`. That gap deadlocked every dependent item; the tracker
  // is the record, so `later` opens the moment `next` closes.
- assert.deepEqual(selectQueue(roadmap,[issue('next','closed')],'2026-11-17').map(t=>t.id),['later','legacy']);
+ assert.deepEqual(selectQueue(roadmap,[issue('next','closed')]).map(t=>t.id),['later','dated','legacy']);
  next.status='shipped';
- assert.deepEqual(selectQueue(roadmap,[],'2026-11-17').map(t=>t.id),['later','legacy']);
+ assert.deepEqual(selectQueue(roadmap,[]).map(t=>t.id),['later','dated','legacy']);
 });
-test('invalid rollout gates fail closed even without manifest validation',()=>{
- const items=[task('bad-date',{not_before:'2026-02-30'}),task('bad-dep',{depends_on:['missing']}),task('bad-type',{depends_on:'missing'}),task('ok')];
- assert.deepEqual(selectQueue({items},[],'2026-12-01').map(t=>t.id),['ok']);
+test('invalid dependency gates fail closed even without manifest validation',()=>{
+ const items=[task('bad-dep',{depends_on:['missing']}),task('bad-type',{depends_on:'missing'}),task('ok')];
+ assert.deepEqual(selectQueue({items},[]).map(t=>t.id),['ok']);
 });
 
 test('a closed prerequisite unlocks its dependents without a manifest edit',()=>{
  const dep=task('dep',{status:'backlog'});
  const after=task('after',{depends_on:['dep']});
  const roadmap={items:[dep,after]};
- assert.deepEqual(selectQueue(roadmap,[],'2026-11-04').map(t=>t.id),['dep']);
- assert.deepEqual(selectQueue(roadmap,[issue('dep','closed')],'2026-11-04').map(t=>t.id),['after']);
+ assert.deepEqual(selectQueue(roadmap,[]).map(t=>t.id),['dep']);
+ assert.deepEqual(selectQueue(roadmap,[issue('dep','closed')]).map(t=>t.id),['after']);
 });
 
-test('the queue can explain a quiet board: eligible count, gate reasons and next date',async()=>{
+test('the queue can explain a quiet board without inventing a date',async()=>{
  const {queueReport}=await import('../scripts/roadmap-queue.js');
  const roadmap={meta:{open_curated_cap:10,open_easy_cap:3},items:[
    task('manual',{auto_file:false}),
-   task('later',{not_before:'2026-11-10'}),
-   task('soonest',{not_before:'2026-11-10'}),
-   task('later-still',{not_before:'2026-11-17'}),
-   task('waiting',{depends_on:['later']}),
+   task('waiting',{depends_on:['blocker']}),
+   task('also-waiting',{depends_on:['blocker']}),
+   task('incomplete',{body:'no sections'}),
  ]};
- const report=queueReport(roadmap,[],'2026-11-04');
+ const report=queueReport(roadmap,[]);
  assert.deepEqual(report.fileable,[]);
- assert.equal(report.nextGate,'2026-11-10');
- assert.equal(report.nextGateCount,2);
+ assert.equal(report.nextGate,undefined,'there is no next filing date; work is gated by dependencies');
  assert.equal(report.blockedByKind.manual,1);
+ assert.equal(report.blockedByKind.dependency,2);
+ assert.equal(report.blockedByKind.incomplete,1);
  assert.ok(report.blocked.every(b=>b.reason && b.id));
- // Not merely "blocked": on the gate date the same board files them.
- assert.deepEqual(queueReport(roadmap,[],'2026-11-10').fileable,['later','soonest']);
+ // What the status issue says instead of a date: the item that is the bottleneck.
+ assert.deepEqual(report.waitingOn,[{id:'blocker',unlocks:2}]);
+ // Closing the blocker is the only thing that opens the board.
+ assert.deepEqual(queueReport(roadmap,[issue('blocker','closed')]).fileable,['waiting','also-waiting']);
 });

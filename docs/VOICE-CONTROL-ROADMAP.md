@@ -171,17 +171,20 @@ fake:
 
 ## 7. Delivery order
 
-The queue files these automatically; the dates are the pacing, not a promise.
+The queue files these automatically, and there is no calendar in it: a task opens
+when the work it depends on is closed, and the open-issue cap decides how many are
+on the board at once. The waves below are the order the work makes sense in, not a
+schedule.
 
-| Wave | Files from | Items |
+| Wave | Opens when | Items |
 |---|---|---|
-| **1 — the control floor** | now | `voice-01-latency-budget`, `voice-02-endpointing-partials`, `laptop-01-media-volume`, `laptop-02-app-window-focus`, `laptop-03-clipboard-preview`, `laptop-04-typed-input`, `laptop-05-file-actions-undo` |
-| **2 — judgement and gating** | 2026-11-10 | `voice-04-wake-gating`, `voice-05-stt-accuracy-harness`, `reason-01-plan-verify`, `reason-02-tool-arg-validation`, `laptop-06-screen-grounding` |
-| **3 — conversation quality** | 2026-11-17 | `voice-03-barge-in` (after `voice-02`), `voice-06-repair-dialogue`, `voice-07-voice-memory`, `laptop-07-voice-macros` |
+| **1 — the control floor** | immediately — no prerequisites | `voice-01-latency-budget`, `voice-02-endpointing-partials`, `laptop-01-media-volume`, `laptop-02-app-window-focus`, `laptop-03-clipboard-preview`, `laptop-04-typed-input`, `laptop-05-file-actions-undo` |
+| **2 — judgement and gating** | immediately, as wave 1 fills the cap | `voice-04-wake-gating`, `voice-05-stt-accuracy-harness`, `reason-01-plan-verify`, `reason-02-tool-arg-validation`, `laptop-06-screen-grounding` |
+| **3 — conversation quality** | `voice-03` and `voice-06` wait on `voice-02`; the rest have no prerequisites | `voice-03-barge-in`, `voice-06-repair-dialogue`, `voice-07-voice-memory`, `laptop-07-voice-macros` |
 
-Wave 1 fills the current seven open slots. Waves 2–3 are gated so the board does
-not become a wish list: an item files when its prerequisite is *closed*, not when
-someone remembers to edit a JSON file.
+Nothing here is held behind a date. An item with a prerequisite waits for that
+prerequisite to close; everything else files as slots free up, hourly, which is
+why the board refills on its own.
 
 ---
 
@@ -212,10 +215,10 @@ comparing Quasnooze against the voice, computer-use and assistant projects that
 are actually good at each axis, and by picking only the work that would not be a
 fast follower: [COMPETITIVE-FRONTIER.md](COMPETITIVE-FRONTIER.md).
 
-Those twelve items (`duplex-*`, `ear-*`, `skill-*`, `mind-*`) are scheduled from
-2026-12-01, and a further nine (`lead-*`, from 2027-01-15) go past the leaders
-rather than level with them, and depend on the waves above, because speed in an assistant that
-cannot act is decoration, and a compiled skill that cannot be verified or undone
-is a way to fail faster. Every one of them carries a performance contract —
+Those twelve items (`duplex-*`, `ear-*`, `skill-*`, `mind-*`) each declare the
+wave above as a dependency, and a further nine (`lead-*`) go past the leaders
+rather than level with them. None of them waits for a date — they wait for the
+work underneath, because speed in an assistant that cannot act is decoration, and
+a compiled skill that cannot be verified or undone is a way to fail faster. Every one of them carries a performance contract —
 baseline, target, and the behaviour it may not regress — enforced by
 `test/frontier-roadmap.test.js`.
