@@ -50,6 +50,7 @@ ${c.coral("✦ quasnooze")} — local, private, yours
   ${c.bold("quasnooze audit")}           run the adversarial self-check against this install
   ${c.bold("quasnooze radar")}           what has drifted: runtime, CI, pinned actions
   ${c.bold("quasnooze growth")}          what to build next, measured from this checkout
+  ${c.bold("quasnooze support-bundle")}  preview opt-in local diagnostics; no upload
   ${c.bold("quasnooze retention-plan")}  preview retention metadata; never deletes data
   ${c.bold("quasnooze export")}          write everything Quasnooze knows to one JSON file
   ${c.bold("quasnooze cost")}            what the last 30 days of turns would have cost
@@ -67,6 +68,9 @@ function run(script, args = []) {
 }
 
 switch (command) {
+  case "support-bundle":
+    run("scripts/support-bundle.js", rest);
+    break;
   case "retention-plan":
     run("scripts/retention-plan.js", rest);
     break;
