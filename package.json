@@ -89,7 +89,7 @@
   "bugs": {
     "url": "https://github.com/Quasynvo/Quasnooze/issues"
   },
-  "homepage": "https://github.com/Quasynvo/Quasnooze#readme",
+  "homepage": "https://quasynvo.github.io/Quasnooze/",
   "quasnooze": {
     "node": {
       "min": 22,
