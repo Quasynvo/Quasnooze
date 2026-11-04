@@ -284,7 +284,7 @@ This also synchronizes the shared renderer into the static website. The [validat
 
 Motion changes must preserve signal honesty, keyboard access and reduced-motion behavior. See [CONTRIBUTING.md](CONTRIBUTING.md), the [visualizer contract](docs/VISUALIZER.md) and the [product roadmap](docs/ROADMAP-PROPOSED.md).
 
-[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Voice control roadmap](docs/VOICE-CONTROL-ROADMAP.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
+[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Voice control roadmap](docs/VOICE-CONTROL-ROADMAP.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
 
 Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous attribution is preserved. [MIT license](LICENSE).
 

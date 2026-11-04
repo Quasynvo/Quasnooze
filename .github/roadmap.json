@@ -1845,6 +1845,281 @@
       "time_estimate": "~2-3 days",
       "body": "## Context\n\n\"Do it again\" and \"the second one\" are how people talk, and they require the assistant to know what \"it\" and \"the second one\" were. The store already keeps sessions and memory, but referents from the previous turn \u2014 the window it just focused, the file it just moved \u2014 are not carried forward.\n\nThis is the difference between a voice assistant you repeat yourself to and one you talk to.\n\n## What to change\n\n- `src/store.js`: a small per-session referent table (last target per tool family, last list shown, last error) with an expiry, written only for actions the user actually took.\n- `src/agent.js`: include the referents in the prompt as structured context, clearly labelled as what happened, not as instructions from the model.\n- `src/prompt.js`: forbid inventing a referent when none is present \u2014 \"the second one\" with no prior list must ask.\n- Deleting a session deletes its referents; nothing here is long-term memory.\n\n**Safety:** carrying a referent is not permission; the same approval rules apply to the repeated action.\n\n## Acceptance criteria\n\n- [ ] A referent is never offered when the previous turn did not establish one\n- [ ] \"Do it again\" repeats the last action only after a fresh approval where the action is destructive\n- [ ] Session deletion removes referents\n- [ ] Referents never appear in telemetry or a support bundle\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/personas.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~2-3 days",
       "not_before": "2026-11-17"
+    },
+    {
+      "id": "duplex-01-semantic-turn-detection",
+      "title": "feat(voice): semantic end-of-turn detection, not a silence timer",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "public/audio-input.js",
+        "src/voice.js",
+        "scripts/doctor.js"
+      ],
+      "verify": "node --test test/audio-input.test.js test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "body": "## Context\n\nLiveKit ships semantic turn detection as a first-class feature because silence is a bad proxy for \"finished\": people pause mid-sentence, and they also stop talking without pausing. Every silence-only endpointing scheme therefore picks one failure and lives with it \u2014 either it cuts people off or it makes them wait a full timeout after every clause. Our `voice-02` adds VAD endpointing, which is the floor, not the ceiling.\n\n## What to change\n\n- A small on-device classifier over features we already have: trailing-silence length, recent speech rate, whether the partial transcript ends in a conjunction/preposition/article, and pitch drop from the existing analyser.\n- Two outputs, not one: `likelyDone` and `confidence`. The UI renders the listening state from them, so a person can see it is still waiting.\n- A hard timeout ceiling (~1.5 s) so the model can never hold a turn open indefinitely.\n- `docs/VOICE.md`: which layers decide the endpoint, and that this is a heuristic, not comprehension.\n\n**Safety:** a wrong endpoint is worse than a slow one. When confidence is low, wait \u2014 never guess faster.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 no semantic signal; endpointing is a fixed silence window (whatever `voice-02` settles on), and every mid-sentence pause costs the full window\n- **Target:** false end-of-turn under 8% on the labelled corpus while median endpoint latency falls to 250 ms or less at the same cut-off rate\n- **Must not regress:** must not increase the cut-off rate (turns ended while the speaker was still going) versus the fixed-window baseline\n\n## Acceptance criteria\n\n- [ ] Classification uses only local features; no audio or text leaves the machine\n- [ ] The 1.5 s ceiling holds even when the classifier is uncertain\n- [ ] Disabling the classifier restores exact `voice-02` behaviour\n- [ ] The corpus report publishes cut-off and false-end rates side by side\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js test/voice.test.js\nnode scripts/doctor.js --json | head -30\n```\n\n## Time estimate\n\n~4-6 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-02-endpointing-partials"
+      ]
+    },
+    {
+      "id": "duplex-02-streaming-tts-first-audio",
+      "title": "feat(voice): speak the first clause before the answer is finished",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/voice.js",
+        "public/cosmic.js",
+        "desktop/Companion.cs"
+      ],
+      "verify": "node --test test/voice.test.js test/voice-reply.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "body": "## Context\n\n\"Speak while the model is still writing\" is how every low-latency assistant gets its first sound out in under a second, and it is the single biggest gap between a local assistant and a hosted one. Today the text streams (SSE deltas) but nothing is synthesised until the whole answer exists, so a fast local model still produces a slow-feeling assistant.\n\n## What to change\n\n- Sentence- and clause-level chunking of the stream: synthesise each chunk as it completes, queue playback, never re-synthesise.\n- Chunk boundary rules that avoid mid-word and mid-number breaks (\"1\" + \".5\", \"New\" + \"York\"), with a small lookahead buffer.\n- Cancellation wiring to `voice-03`: an interrupted turn drops queued chunks immediately.\n- `docs/VOICE.md`: that first-audio latency is chunked and that the full text may arrive after the first sound.\n\n**Safety:** synthesis is local. No chunk and no text may be sent to a cloud TTS endpoint without the same per-call consent as any other off-device data.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 first audio only after the complete answer exists, so on a 3-sentence reply it is the whole generation time\n- **Target:** first audio 250 ms or less after the first token, with no mid-word break in a 200-case chunking suite\n- **Must not regress:** must not regress total speech duration or the barge-in stop time (150 ms)\n\n## Acceptance criteria\n\n- [ ] Chunking never splits a number, an abbreviation or an inline code span\n- [ ] An interrupted turn produces no audio after the stop signal\n- [ ] Typed-only users see no change to text streaming\n- [ ] The suite asserts chunk joins reconstruct the original text exactly\n\n## How to verify\n\n```bash\nnode --test test/voice.test.js test/voice-reply.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~4-6 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-03-barge-in"
+      ]
+    },
+    {
+      "id": "duplex-03-speculative-prefill",
+      "title": "perf(voice): start the model on the partial transcript and discard a bad guess",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/agent.js",
+        "src/brain.js",
+        "src/telemetry.js"
+      ],
+      "verify": "node --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~5-7 days",
+      "body": "## Context\n\nA local 7B model spends most of its time-to-first-token in prefill, and prefill cannot start until the transcript is final. Meanwhile the partial transcript has been stable for 400 ms. VoiceMem's streaming architecture calls this speculative prefetch: begin work on a high-confidence partial so the final turn inherits it.\n\n## What to change\n\n- When the partial transcript has been stable above a confidence bar, begin a *provisional* provider call; if the final transcript matches within a normalised edit distance, adopt it, otherwise discard and run normally.\n- Never speculative-run a turn that contains a tool call: side effects are not speculations.\n- Telemetry records `speculativeStarted`, `speculativeAdopted`, `speculativeDiscarded` \u2014 the discard rate is the honest cost of the technique.\n- A per-minute cap so a talkative user cannot spin the local model continuously.\n\n**Safety:** speculation must be invisible when wrong and free when right. Any observable side effect disqualifies it.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 prefill begins only after the final transcript; the item must first record the real time-to-first-token p50 with `voice-01`'s harness, using its 700 ms ceiling as the starting figure\n- **Target:** time-to-first-token p50 drops 30% or more on the stable-partial corpus, with adoption rate at or above 60%\n- **Must not regress:** must not increase wrong-answer rate by more than 1 percentage point on the fixed evaluation set\n\n## Acceptance criteria\n\n- [ ] No tool call is ever issued speculatively\n- [ ] A discarded speculation leaves no trace in the conversation history\n- [ ] The per-minute cap is enforced and visible in telemetry\n- [ ] Disabling the feature returns exactly today's timings\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~5-7 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-02-endpointing-partials"
+      ]
+    },
+    {
+      "id": "ear-01-local-streaming-stt",
+      "title": "feat(voice): on-device streaming transcription with no cloud path at all",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/voice.js",
+        "public/audio-input.js",
+        "scripts/doctor.js"
+      ],
+      "verify": "node --test test/voice.test.js test/audio-input.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "body": "## Context\n\nThe fast path today is the browser's `SpeechRecognition`, which may send audio to the browser vendor \u2014 the repo says so plainly. The local path is a whole-clip Whisper POST. So \"fast\" and \"private\" are still two different products, and the privacy-first user pays for it in latency.\n\n## What to change\n\n- A local streaming recogniser behind the existing adapter interface: whisper.cpp or sherpa-onnx launched as a local child process, chosen by the user, not bundled.\n- Keep the zero-dependency rule: no npm package, no model in git. The doctor detects an installed binary and reports it; absence is a typed, actionable failure.\n- Streaming partials with a stable-prefix API so `voice-02` and `duplex-03` can use them without knowing which engine produced them.\n- `docs/VOICE.md`: a table of the three paths (browser, local streaming, optional HTTP) with what each can send where.\n\n**Safety:** the local path must be the private one *and* the fast one. If it is slower, it will not be used, and the privacy claim becomes theoretical.\n\n## Performance contract\n\n- **Baseline:** local path is whole-clip with a 5 s deadline; browser path is faster but may leave the device\n- **Target:** final transcript 300 ms or less after endpoint, partials every 200 ms, zero network bytes on the local path\n- **Must not regress:** must not regress word error rate by more than 2% relative versus the whole-clip baseline on the same corpus\n\n## Acceptance criteria\n\n- [ ] The local path demonstrably makes no network calls during a transcription\n- [ ] A missing binary produces an actionable message and a working fallback, never a hang\n- [ ] The adapter interface is engine-agnostic; swapping engines needs no UI change\n- [ ] No model weights, binaries or npm packages enter the repository\n\n## How to verify\n\n```bash\nnode --test test/voice.test.js test/audio-input.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~1-2 weeks",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-02-endpointing-partials"
+      ]
+    },
+    {
+      "id": "ear-02-noise-robustness",
+      "title": "feat(voice): local denoise and gain control before recognition",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "public/audio-input.js",
+        "src/voice.js"
+      ],
+      "verify": "node --test test/audio-input.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-5 days",
+      "body": "## Context\n\nLiveKit's agent stack treats noise cancellation as table stakes, because a laptop microphone in a room with a fan is the normal case, not the edge case. Our analyser graph measures audio but never conditions it, so the recogniser gets whatever the room sounded like.\n\n## What to change\n\n- A conditioning stage in the existing Web Audio graph: high-pass, adaptive gain, and a browser-native noise-suppression constraint where available (`noiseSuppression`, `autoGainControl`, `echoCancellation` are getUserMedia constraints the page does not currently request).\n- Expose the three constraints as explicit, default-on toggles with the current state shown next to the microphone indicator.\n- No new dependency and no model download.\n- A fixture-based test that runs the same synthetic noisy clip through the stage and asserts the recogniser input improves.\n\n**Safety:** conditioning must not create the impression of a better microphone. If the browser cannot suppress noise, say so instead of pretending.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 raw microphone input with default `getUserMedia` constraints and no conditioning; the WER of that input must be measured and published before it is changed\n- **Target:** word error rate 20% lower relative on the noisy corpus, with conditioning CPU under 10% of one core\n- **Must not regress:** must not regress clean-audio word error rate (any regression beyond 1% relative fails the item)\n\n## Acceptance criteria\n\n- [ ] The three constraints are visible and switchable in the UI, and their effect is stated honestly\n- [ ] Conditioning runs in the page; no audio is uploaded to condition it\n- [ ] Clean-audio accuracy is unchanged within the stated tolerance\n- [ ] The messy-input path degrades to raw audio rather than failing\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~3-5 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-05-stt-accuracy-harness"
+      ]
+    },
+    {
+      "id": "ear-03-on-device-wake-model",
+      "title": "feat(voice): a real on-device wake model instead of a string match",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "public/audio-input.js",
+        "desktop/Companion.cs"
+      ],
+      "verify": "node --test test/audio-input.test.js test/desktop.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "body": "## Context\n\n`voice-04` gates listening by matching a phrase in the recogniser's own output, which means the recogniser must already be running \u2014 the expensive part \u2014 before the gate can open. openWakeWord exists because the cheap version is a tiny always-on model that costs almost nothing until it fires.\n\n## What to change\n\n- An optional ONNX or TFLite wake model loaded from a user-provided path, matching the existing zero-dependency posture: the app ships no weights.\n- Run it on a decimated copy of the analyser stream; the full-rate stream and the recogniser only start after a detection.\n- Report false-accepts and misses locally so the user can judge the trade-off, and expose a sensitivity control.\n- `docs/VOICE.md`: the phrase triggers listening and authenticates nothing \u2014 the same sentence as `voice-04`, repeated where the model lives.\n\n**Safety:** always-on audio is the most sensitive capability here. Explicit opt-in, visible armed state, and release on hide.\n\n## Performance contract\n\n- **Baseline:** not implemented as always-on \u2014 phrase matching happens inside an already-running recogniser, so idle cost equals full recognition cost (1 core busy)\n- **Target:** under 1% of one core while idle and false-accepts at or below 1 per hour in a 24-hour fixture run\n- **Must not regress:** must not regress detection latency for the first word after the phrase (500 ms or less)\n\n## Acceptance criteria\n\n- [ ] Idle CPU stays under the stated ceiling in a measured run\n- [ ] No wake model ships in the repository; absence disables the feature cleanly\n- [ ] The UI shows armed/disarmed and the measured sensitivity\n- [ ] Nothing about the feature claims speaker verification\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js test/desktop.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~4-6 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-04-wake-gating"
+      ]
+    },
+    {
+      "id": "skill-01-conversation-skill-compiler",
+      "title": "feat(skills): compile a successful conversation into a replayable, verified skill",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/agent.js",
+        "src/custom-tools.js",
+        "src/store.js"
+      ],
+      "verify": "node --test test/custom-tools.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~2-3 weeks",
+      "body": "## Context\n\nThis is the item the rest of the frontier exists to make possible, and the one that is not available anywhere today in a local-first personal assistant.\n\nThree products each solve a third of it. OpenAdapt records a task once and compiles it into a program that runs with no model calls and no screenshots leaving the machine \u2014 but you record it by hand, and the program is not conversational. OpenClaw has skills, but they are written instructions a model re-reads every time, so they are as slow and as variable as the model. Pipecat and LiveKit give you a fast voice loop with no memory of how a task was done.\n\nQuasnooze already has the two halves that no one has joined: a tool trace with typed results (`src/agent.js`) and an undo journal (`laptop-05`). Join them and a successful task becomes a program, proposed in conversation, approved by the user, replayable in milliseconds.\n\n## What to change\n\n- Capture: after a multi-step turn that succeeded, keep the ordered `(tool, arguments, verified result)` trace, including the preconditions the trace observed (window focused, file existed, volume was X).\n- Compile: propose a named skill with the recorded calls as literals plus declared parameters, its preconditions, its postconditions, and the undo plan. Show it as a diff a person can edit before saving.\n- Replay: execute without a model call when every precondition holds; the same risk classifier and approval gates apply per call as before, and a skill cannot grant permissions it was not approved with.\n- Storage: a JSON file next to the existing custom-tool config, diffable and reviewable, with a version and the turn it was compiled from.\n\n**Safety:** a compiled skill is code that runs on the user's machine. It is shown before it is saved, it is editable as text, and it never gains a permission the original turn did not have.\n\n## Performance contract\n\n- **Baseline:** every repetition of a known task costs a full model turn (4-8 s and tokens) and can vary between runs\n- **Target:** replay p50 under 300 ms with zero model calls for a five-step skill, and byte-identical tool arguments across runs\n- **Must not regress:** must not reduce tool-call accuracy: a compiled skill must reproduce the approved trace exactly or refuse to run\n\n## Acceptance criteria\n\n- [ ] A compiled skill never contains a destructive step that was not in the approved trace\n- [ ] Every replay still passes the risk classifier, and `act` steps still ask\n- [ ] Editing one literal in the JSON changes exactly that literal on the next replay\n- [ ] A skill refuses to run when its declared preconditions do not hold, and says which one failed\n- [ ] The trace records no message text, only tool names, arguments and results\n\n## How to verify\n\n```bash\nnode --test test/custom-tools.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~2-3 weeks",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "reason-01-plan-verify",
+        "laptop-05-file-actions-undo"
+      ]
+    },
+    {
+      "id": "skill-02-verified-execution",
+      "title": "feat(skills): read the result back from the system of record before claiming success",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/agent.js",
+        "src/tools.js",
+        "src/action-preview.js"
+      ],
+      "verify": "node --test test/agent.test.js test/action-preview.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "body": "## Context\n\nOpenAdapt's benchmark is the argument for this feature: an agent acting alone was right 62 times out of 63 and *looked* right every time, while a verified program was right 18 of 18 and stopped when it could not confirm. Confidence is not correctness, and a tool returning `ok: true` only means the call did not throw.\n\n`reason-01` checks that a claim matches the receipts. This goes further: it makes the receipt itself an observation of the outside world.\n\n## What to change\n\n- A postcondition per tool family, checked against the system rather than the call: file exists at the destination and its hash matches, window title is focused, volume level reads back, clipboard content equals what was written.\n- A three-valued outcome \u2014 `verified`, `unverified`, `contradicted` \u2014 instead of a boolean, surfaced in the transcript so an unverified step is visibly unverified.\n- A `contradicted` step halts the remaining plan and reports the divergence, rather than continuing on a false premise.\n- `docs/ACTION-PREVIEWS.md`: postconditions appear in the preview, so approval covers the check as well as the action.\n\n**Safety:** verification is not permission: reading state back must not require new privileges, and a verified action is still an approved action.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 success is asserted from a tool's return value, so a silently failed action is reported as done; 0 observed steps carry an independent read-back\n- **Target:** zero silent wrong-success claims across a 20-case fault-injection suite, with verified steps at 95% or more on the happy path\n- **Must not regress:** must not add more than 50 ms p95 per step for local read-backs\n\n## Acceptance criteria\n\n- [ ] A contradicted postcondition stops the plan and names the mismatch\n- [ ] An unreadable state reports `unverified`, never `verified`\n- [ ] Fault injection (file vanished, window closed, write reverted) is covered by tests\n- [ ] Read-back cost stays inside the stated budget\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/action-preview.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~1-2 weeks",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "skill-01-conversation-skill-compiler"
+      ]
+    },
+    {
+      "id": "skill-03-drift-repair",
+      "title": "feat(skills): detect drift and stop cleanly instead of misapplying a stale skill",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/agent.js",
+        "src/custom-tools.js",
+        "src/store.js"
+      ],
+      "verify": "node --test test/custom-tools.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "body": "## Context\n\nThe failure mode that kills recorded macros is drift: an app updates, a button moves, a file is named differently, and the recorded program does something adjacent and wrong. OpenAdapt's answer is to stop and tell the agent rather than guess; ours has to be the same, because a skill that misapplies is worse than no skill.\n\n## What to change\n\n- Precondition diffing at replay time: name the specific precondition that failed and what it expects versus what it found.\n- Two bounded repairs, in order: re-resolve a named target by the same fuzzy-but-visible matching used for windows, or hand the diff back to the model for a single re-plan. If both fail, stop with the diff.\n- A drift record per skill (last failure, failing precondition, count) so a skill that keeps drifting is visibly unreliable and can be quarantined.\n- Never silently widen a target: if a file match goes from one candidate to three, ask.\n\n**Safety:** recovering is optional; misapplying is not permitted. When in doubt, stop.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 a stale skill either fails obscurely or applies to the wrong target; there is no precondition list to compare against, so drift is undetectable in 1 run out of 1\n- **Target:** 90% or more of drifted replay attempts either recover correctly or stop with a named precondition, and zero misapplied runs in the drift suite\n- **Must not regress:** must not regress replay latency on the non-drifted path\n\n## Acceptance criteria\n\n- [ ] Every drift produces a diff naming expected versus found\n- [ ] Ambiguity (more than one candidate) always asks instead of picking\n- [ ] A quarantined skill is refused with the reason attached\n- [ ] No repair path bypasses approval for an `act` step\n\n## How to verify\n\n```bash\nnode --test test/custom-tools.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~1-2 weeks",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "skill-02-verified-execution"
+      ]
+    },
+    {
+      "id": "mind-01-intent-fast-path",
+      "title": "perf(agent): answer simple machine requests without a model turn",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/router.js",
+        "src/agent.js",
+        "src/tools.js"
+      ],
+      "verify": "node --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "body": "## Context\n\n\"Louder.\" \"Open Slack.\" \"Pause.\" do not need a 7B model. Routing every utterance through one is why local assistants feel slower than their hardware should allow, and it also wastes tokens on requests whose entire meaning fits in a grammar. `src/router.js` already decides provider routing; this adds a deterministic intent tier in front of generation.\n\n## What to change\n\n- A hand-written grammar and matcher for the machine-intent classes the tools already provide: media, volume, launch/focus, lock/sleep, timer, clipboard read. Deterministic, inspectable, testable.\n- A confidence floor and a mandatory fallback: anything unmatched or ambiguous goes to the model unchanged.\n- The matcher never invents arguments. A phrase it cannot fill completely falls through, so \"open the thing from yesterday\" is a model request, not a guess.\n- The transcript says which path answered, so a fast path that got it wrong is visible immediately.\n\n**Safety:** a fast wrong action is worse than a slow right one. Approvals still apply, and the fallback is not allowed to be lossy.\n\n## Performance contract\n\n- **Baseline:** every turn goes through generation; p50 700 ms plus model time for a one-word request\n- **Target:** p50 under 400 ms end-to-end for matched intents at 95% or higher routing accuracy on a labelled set of 200 utterances\n- **Must not regress:** must not reduce answer quality: unmatched or ambiguous utterances must fall through at 100%, and the model path must remain byte-identical\n\n## Acceptance criteria\n\n- [ ] Ambiguous and out-of-grammar utterances fall through, verified case by case\n- [ ] The same risk tiers and approvals apply to fast-path actions\n- [ ] The labelled set achieves the stated accuracy, and its misses are published\n- [ ] Disabling the fast path returns exactly today's behaviour\n\n## How to verify\n\n```bash\nnode --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~4-6 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-01-latency-budget"
+      ]
+    },
+    {
+      "id": "mind-02-context-budget",
+      "title": "perf(agent): compress conversation history to a token budget with pinned facts",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/prompt.js",
+        "src/agent.js",
+        "src/store.js"
+      ],
+      "verify": "node --test test/agent.test.js test/personas.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "body": "## Context\n\nPrefill is the dominant cost of a local turn, and it grows with the conversation. By turn twenty the assistant is slower than it was at turn one for no reason the user can see. Streaming-memory systems solve this by keeping a compressed fact set instead of the raw transcript; we need the smallest honest version of that.\n\n## What to change\n\n- A token budget with two tiers: pinned facts (names, preferences, active task, recent referents) that are never dropped, and a rolling summary of older turns.\n- Summaries are produced by the same local model, on demand, and are labelled as summaries in the prompt so the model does not treat them as verbatim.\n- A visible indicator when context was compressed, and a command to inspect what was kept.\n- No summarisation of tool results that are still in play in the current turn.\n\n**Safety:** summaries must not invent. If the model cannot compress without fabricating, keep the raw turns and say the budget could not be met.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 raw growing history, so prefill cost grows linearly in turns (no cap at turn 20 or any other turn)\n- **Target:** prefill p50 down 40% at turn 20, with answer quality on a fixed 30-question eval no worse than baseline\n- **Must not regress:** must not lose a pinned fact (names, preferences, active task) across compression \u2014 100% retention is the pass mark\n\n## Acceptance criteria\n\n- [ ] Pinned facts survive 20 turns of compression in a test\n- [ ] Summaries are always labelled as summaries\n- [ ] Compression is visible to the user and inspectable\n- [ ] The eval set shows no quality regression beyond the stated tolerance\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/personas.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~4-6 days",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "voice-01-latency-budget"
+      ]
+    },
+    {
+      "id": "mind-03-model-router",
+      "title": "perf(agent): route each turn to the smallest local model that can do it",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice"
+      ],
+      "files": [
+        "src/brain.js",
+        "src/router.js",
+        "src/model-choice.js"
+      ],
+      "verify": "node --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "body": "## Context\n\nModel routing is the cheapest large win available on fixed local hardware: most turns are short lookups, a few need the bigger model, and running everything on the big one pays the worst-case cost on every request. PilotDeck reports roughly 70% cost reduction from routing; our version is measured in latency and watts, not dollars.\n\n## What to change\n\n- A capability probe at setup: which installed models exist, their measured prefill costs, and a small accuracy sample per model.\n- A router that maps observed intent (fast-path grammar, tool need, expected answer length) to a model, with an escalation rule when the first answer fails verification.\n- Escalation must be bounded (one retry on the larger model) and visible, so the user learns why a turn was slow.\n- Never route a turn down to a weaker model when it carries a tool call with an `act` risk tier.\n\n**Safety:** speed is not worth a worse answer. The eval gate, not the latency number, decides whether this ships.\n\n## Performance contract\n\n- **Baseline:** not implemented \u2014 one model for everything, so the largest installed model sets the p50 for every request (1 model, 100% of turns)\n- **Target:** overall p50 down 35% at equal or better task success on the fixed eval, with escalation rate under 15%\n- **Must not regress:** must not reduce task success rate; any regression on the eval suite fails the item regardless of the latency win\n\n## Acceptance criteria\n\n- [ ] Task success on the eval suite is at or above baseline\n- [ ] Escalations are bounded, visible, and recorded in telemetry\n- [ ] A turn with an `act` tool call never routes down\n- [ ] The probe measures rather than assumes each model's speed\n\n## How to verify\n\n```bash\nnode --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~1-2 weeks",
+      "not_before": "2026-12-01",
+      "depends_on": [
+        "mind-01-intent-fast-path"
+      ]
     }
   ]
 }
