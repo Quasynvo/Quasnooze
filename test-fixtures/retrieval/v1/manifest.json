@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "name": "quasnooze-synthetic-retrieval-v1",
+  "synthetic": true,
+  "description": "Hand-labelled tiny lexical baseline with distractors, multi-passage evidence and deliberately overlapping no-answer vocabulary. No private records.",
+  "cutoffs": [
+    1,
+    5
+  ],
+  "passages": [
+    {
+      "id": "travel",
+      "file": "travel.md",
+      "start": 1,
+      "end": 4
+    },
+    {
+      "id": "meals",
+      "file": "meals.md",
+      "start": 1,
+      "end": 4
+    },
+    {
+      "id": "garden",
+      "file": "garden.md",
+      "start": 1,
+      "end": 4
+    },
+    {
+      "id": "release",
+      "file": "release.md",
+      "start": 1,
+      "end": 4
+    },
+    {
+      "id": "retired",
+      "file": "retired.md",
+      "start": 1,
+      "end": 3
+    },
+    {
+      "id": "access",
+      "file": "access.md",
+      "start": 1,
+      "end": 4
+    },
+    {
+      "id": "handbook",
+      "file": "handbook.md",
+      "start": 1,
+      "end": 24
+    },
+    {
+      "id": "handbook-assembly",
+      "file": "handbook.md",
+      "start": 25,
+      "end": 48
+    }
+  ],
+  "queries": [
+    {
+      "id": "travel-ceiling",
+      "query": "travel reimbursement ceiling",
+      "relevant": [
+        "travel"
+      ],
+      "rationale": "Travel policy states the journey reimbursement cap; meal allowance is a distractor."
+    },
+    {
+      "id": "meal-ceiling",
+      "query": "meal allowance ceiling",
+      "relevant": [
+        "meals"
+      ],
+      "rationale": "Meal policy, not the travel cap."
+    },
+    {
+      "id": "workshop-hours",
+      "query": "workshop opens weekdays",
+      "relevant": [
+        "access"
+      ],
+      "rationale": "Access policy states opening time."
+    },
+    {
+      "id": "garden-care",
+      "query": "marigolds water",
+      "relevant": [
+        "garden"
+      ],
+      "rationale": "Garden-care instructions."
+    },
+    {
+      "id": "release-beacon",
+      "query": "Orchid staging beacon",
+      "relevant": [
+        "release"
+      ],
+      "rationale": "Current release checklist."
+    },
+    {
+      "id": "evacuation-route",
+      "query": "north exit fire",
+      "relevant": [
+        "handbook"
+      ],
+      "rationale": "First handbook passage gives the exit."
+    },
+    {
+      "id": "evacuation-complete",
+      "query": "Workshop evacuation assembly",
+      "relevant": [
+        "handbook",
+        "handbook-assembly"
+      ],
+      "rationale": "Both route and assembly passages are needed for the complete procedure."
+    },
+    {
+      "id": "absent-vocabulary",
+      "query": "zephyrquartz heliopassport",
+      "relevant": [],
+      "rationale": "Neither concept appears in this synthetic corpus."
+    },
+    {
+      "id": "absent-medical",
+      "query": "insulin dosage milligrams",
+      "relevant": [],
+      "rationale": "The corpus contains no medical guidance."
+    },
+    {
+      "id": "overlap-no-answer",
+      "query": "travel teleportation allowance",
+      "relevant": [],
+      "rationale": "Travel and allowance words overlap existing policies, but none specifies teleportation. Hits are not proof of an answer."
+    }
+  ],
+  "mutations": {
+    "changedFile": "release.md",
+    "replacement": "updates/release.md",
+    "oldQuery": "cobalt",
+    "newQuery": "silver",
+    "deletedFile": "retired.md",
+    "deletedQuery": "aqueductpassphrase"
+  },
+  "citations": [
+    {
+      "id": "supported-reference",
+      "text": "The travel reimbursement ceiling is 4200 credits [1].",
+      "expectedUnknown": [],
+      "fixtureSupport": "supported"
+    },
+    {
+      "id": "unsupported-claim-valid-reference",
+      "text": "The travel reimbursement ceiling is 9900 credits [1].",
+      "expectedUnknown": [],
+      "fixtureSupport": "unsupported"
+    },
+    {
+      "id": "fabricated-reference",
+      "text": "The travel ceiling is 4200 credits [99].",
+      "expectedUnknown": [
+        99
+      ],
+      "fixtureSupport": "reference-missing"
+    }
+  ]
+}

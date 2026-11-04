@@ -293,3 +293,11 @@ Run `quasnooze retention-plan --json` for a bounded, metadata-only inventory of
 sessions, memory, reminders, schedules and telemetry. Policies default off;
 optional age thresholds are preview-only and are never saved or applied. See
 [retention categories, safety and platform limitations](docs/RETENTION.md).
+
+### Synthetic retrieval evaluation
+
+Run `node scripts/evaluate-retrieval.js` from a source checkout to reproduce the
+[labelled offline retrieval baseline](docs/RETRIEVAL-EVALUATION.md). It reports
+recall/rank metrics, cold/warm index counters, stale-update checks and known
+no-answer failures. Citation provenance is tested separately; model-answer
+faithfulness is explicitly not run. No private corpus, model or network is used.
