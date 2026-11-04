@@ -213,7 +213,8 @@ are actually good at each axis, and by picking only the work that would not be a
 fast follower: [COMPETITIVE-FRONTIER.md](COMPETITIVE-FRONTIER.md).
 
 Those twelve items (`duplex-*`, `ear-*`, `skill-*`, `mind-*`) are scheduled from
-2026-12-01 and depend on the waves above, because speed in an assistant that
+2026-12-01, and a further nine (`lead-*`, from 2027-01-15) go past the leaders
+rather than level with them, and depend on the waves above, because speed in an assistant that
 cannot act is decoration, and a compiled skill that cannot be verified or undone
 is a way to fail faster. Every one of them carries a performance contract —
 baseline, target, and the behaviour it may not regress — enforced by

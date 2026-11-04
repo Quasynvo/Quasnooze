@@ -28,7 +28,7 @@ import { readFileSync } from "node:fs";
 const manifest = JSON.parse(readFileSync(".github/roadmap.json", "utf8"));
 const doc = readFileSync("docs/COMPETITIVE-FRONTIER.md", "utf8");
 
-const FRONTIER_PREFIXES = ["duplex-", "ear-", "skill-", "mind-"];
+const FRONTIER_PREFIXES = ["duplex-", "ear-", "skill-", "mind-", "lead-"];
 const frontier = manifest.items.filter((item) =>
   FRONTIER_PREFIXES.some((prefix) => item.id.startsWith(prefix)),
 );
@@ -181,7 +181,7 @@ test("the frontier document and the manifest describe the same work", () => {
     );
   }
 
-  const documented = new Set(doc.match(/\b(?:duplex|ear|skill|mind)-\d{2}[a-z0-9-]*/g));
+  const documented = new Set(doc.match(/\b(?:duplex|ear|skill|mind|lead)-\d{2}[a-z0-9-]*/g));
   const known = new Set(frontier.map((item) => item.id));
   for (const id of documented) {
     const resolved = [...known].filter((real) => real === id || real.startsWith(`${id}-`));

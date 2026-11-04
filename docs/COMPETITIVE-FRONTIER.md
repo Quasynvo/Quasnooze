@@ -119,7 +119,7 @@ make worse.
 | Item | Borrowed from | Contract |
 |---|---|---|
 | `skill-01-conversation-skill-compiler` | OpenAdapt's program compilation, applied to a conversation | replay p50 < 300 ms with zero model calls, arguments byte-identical |
-| `skill-02-verified-execution` | OpenAdapt's read-back from the system of record | zero silent wrong-success in a 20-case fault-injection suite, +50 ms p95 per step |
+| `skill-02-verified-execution` ✅ **shipped** | OpenAdapt's read-back from the system of record | zero silent wrong-success in a 20-case fault-injection suite, +50 ms p95 per step — **measured: 20/20 verdicts, p95 0.69 ms** |
 | `skill-03-drift-repair` | OpenAdapt's "stop, do not guess" | ≥ 90% of drifted runs recover or stop cleanly, zero misapplied runs |
 
 ### Mind
@@ -153,7 +153,53 @@ exists to remove.
 
 ---
 
-## 5. The non-degradation law
+## 5. What each leader is best at — and the lead we take from it
+
+Parity is not the goal, so none of the items below is "match X". Each is defined
+by the thing the leader structurally cannot do: a component has no product around
+it, a framework has no machine to act on, a recorder has no conversation, and a
+channel hub has no per-action discipline.
+
+| Leader | Its best function | Why it does not transfer as-is | The lead we take |
+|---|---|---|---|
+| moshi | true full duplex at ~200 ms | GPU-bound, speech only, no tools | **`lead-01`** — duplex on the laptop CPU: ≤25% of one core, 150 ms barge-in, zero network bytes |
+| livekit/agents | semantic turn detection, noise cancellation, test judges | a framework: you bring the agent and the permissions | `duplex-01` + `ear-02`, then `lead-01` |
+| pipecat | transport abstraction and interruption handling | infrastructure, not a product | `voice-03` + `duplex-02` + `lead-01` |
+| whisper.cpp / faster-whisper | local streaming transcription | a component | `ear-01` |
+| openWakeWord | a tiny always-on wake model, trainable in under an hour | a component | `ear-03` |
+| silero-vad | robust voice activity detection | a component | `voice-02` uses it |
+| Piper / Kokoro | small, fast local synthesis | a component | `duplex-02` |
+| UI-TARS | pixel grounding for any GUI | a model call per click, coordinates that cannot be replayed tomorrow | **`lead-02`** — accessibility tree first, stable selectors, pixels as a labelled fallback |
+| OpenAdapt | record → compile → verify against the system of record, stop on mismatch | recorded by hand, not conversational, and nothing can be undone | `skill-01/02/03` + **`lead-04`** journal-first undo + **`lead-05`** teach-and-correct |
+| OpenClaw | reach: twenty-plus channels, native apps, swap-in harness | breadth without per-approval discipline; skills are prose re-read every turn | **`lead-08`** approval integrity + **`lead-09`** portable skill files |
+| open-interpreter | code as the action | no gate, no voice, no verification | not followed — typed tools beat generated code for a laptop |
+| vibe-kanban / task agents | board-driven execution | process, not capability | not followed — one person, one laptop |
+
+### The lead set
+
+Nine items, scheduled from 2027-01-15, behind the frontier they depend on. Every
+one carries a Performance contract like the rest of the roadmap.
+
+| Item | The lead, in one line | Worst-case contract |
+|---|---|---|
+| `lead-01-cpu-duplex` | duplex without a GPU | barge-in ≤150 ms, endpoint ≤250 ms, ≤25% of one core, zero network bytes |
+| `lead-02-accessibility-tree-grounding` | ground on the tree before the pixels | 0 model calls for a named control, p50 ≤120 ms, ≥95% element accuracy |
+| `lead-03-proof-carrying-replies` | the read-back reaches the user, the API and the export | 100% of act actions carry a state; 0 contradicted actions described as done |
+| `lead-04-journal-first-undo` | the undo record exists before the action | 100% coverage, undo verified in 95% of 20 scenarios, ≤20 ms p95 |
+| `lead-05-teach-and-correct-skills` | teach by talking, correct mid-run, diff approved | ≥90% of 15 corrections applied as approved diffs; 0 silent mutations |
+| `lead-06-laptop-control-bench` | publish a bench anyone can run | 40 tasks, ≤5 min, deterministic, four measurements per task |
+| `lead-07-work-memory` | remember the work, not just the words | 90% recall@5, p50 ≤250 ms, 0 answers citing a non-existent action |
+| `lead-08-approval-integrity` | an approval is single-use, session-bound, expiring | 0 of 20 adversarial cases satisfied out of band |
+| `lead-09-portable-skill-format` | skills that travel and can be checked | byte-identical round-trip, 100% of unsafe imports refused |
+
+Two of these are not features at all: `lead-06` is how the category is measured,
+and `lead-09` is how it spreads. A project that only ships features is
+out-featured by the next model release; a project that defines the bench and the
+file format is not.
+
+---
+
+## 6. The non-degradation law
 
 A feature that makes the product faster and less trustworthy is not a feature.
 Every frontier item therefore carries the same three lines, and the build fails
@@ -168,7 +214,7 @@ without them:
    already established.
 
 `test/frontier-roadmap.test.js` enforces the shape and the number. It cannot
-enforce honesty about the number — that is what the measurement plan in §6 is for.
+enforce honesty about the number — that is what the measurement plan in §7 is for.
 
 Three rules follow from this and apply to review, not just to the roadmap:
 
@@ -181,7 +227,7 @@ Three rules follow from this and apply to review, not just to the roadmap:
 
 ---
 
-## 6. How we prove any of this
+## 7. How we prove any of this
 
 The repository already has the pattern — `docs/RETRIEVAL-EVALUATION.md` is a
 labelled corpus and a reproducible report, not a paragraph of praise. The frontier
@@ -200,7 +246,7 @@ reason this product can make claims the rest of the field cannot.
 
 ---
 
-## 7. What we will still refuse
+## 8. What we will still refuse
 
 | Temptation | Why not |
 |---|---|
@@ -213,7 +259,7 @@ reason this product can make claims the rest of the field cannot.
 
 ---
 
-## 8. Order of work
+## 9. Order of work
 
 1. **Control floor** — `voice-*`, `laptop-*` (shipping now). Without hands, none of
    this matters.
@@ -221,6 +267,10 @@ reason this product can make claims the rest of the field cannot.
    liability.
 3. **Frontier** — `duplex-*`, `ear-*`, `skill-*`, `mind-*` (2026-12-01 onward),
    each behind the dependency that makes it buildable.
+4. **Leadership** — `lead-*` (2027-01-15 onward). These are only buildable on top
+   of the frontier: a CPU duplex loop needs local STT, an accessibility resolver
+   needs a grounding bench, and a portable skill file needs a compiler that
+   verifies.
 
 The queue files these automatically; `skill-01` will not appear until `reason-01`
 and `laptop-05` are closed, because a skill compiler that cannot verify a trace or

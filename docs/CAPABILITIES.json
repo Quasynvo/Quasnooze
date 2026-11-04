@@ -563,6 +563,28 @@
         "test/fast-path.test.js: ambiguity, unattended runs and attachments never route"
       ],
       "note": "Five sentence shapes (clock, arithmetic, remember, task, reminder). Anything ambiguous falls through to the model; QUASNOOZE_FAST_PATH=off restores the old path exactly."
+    },
+    {
+      "id": "verified-execution",
+      "name": "Reads the result of an action back from the system of record",
+      "keywords": [
+        "verification",
+        "read back",
+        "verified",
+        "contradicted",
+        "trust",
+        "proof",
+        "did it work"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/verify.js: verified / contradicted / unverified from an independent read",
+        "test/verify.test.js: 20 injected faults, 20 correct verdicts, 0 silent wrong successes",
+        "docs/VERIFIED-EXECUTION.md: p95 0.69 ms read-back for a 2 KB write",
+        "src/agent.js: a contradiction reaches the model and the reply"
+      ],
+      "note": "A tool's return value is a claim. File writes, arithmetic, tasks, reminders and facts are read back; everything else is honestly unverified rather than green. It does not prevent an action and does not stop a plan."
     }
   ]
 }
