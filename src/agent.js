@@ -25,6 +25,8 @@ import { auditReply, renderGuardNote } from "./guard.js";
 import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
 import { record } from "./telemetry.js";
+import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
+import { verifyAction, describeVerification, CONTRADICTED as VERIFY_CONTRADICTED } from "./verify.js";
 
 const MAX_ROUNDS = 8;
 /** Characters of tool output one turn may carry into the context, in total. */
@@ -266,6 +268,78 @@ export async function runAgent({
       : {}),
   });
 
+  // ── deterministic turns ────────────────────────────────────────────────
+  // "What time is it" has one correct reading and one correct tool. Sending it
+  // through a model costs a prefill and a decode, and occasionally invents the
+  // time. The matcher is narrow on purpose: a miss is one ordinary model turn,
+  // while a false match is an action nobody asked for — so ambiguity falls
+  // through unchanged, and a tool that fails falls through too, because the
+  // model can ask a better question than an error string.
+  if (config.fastPath && !unattended && !social && !attachments.length) {
+    const fast = matchFastIntent(text);
+    const tool = fast ? TOOL_MAP.get(fast.name) : null;
+    if (tool && FAST_TOOLS.has(fast.name) && !DANGEROUS.has(fast.name) && !validateArgs(tool, fast.args)) {
+      let fastResult;
+      try {
+        fastResult = await tool.run(fast.args, {
+          channel,
+          target: addressFor(channel, target),
+          sessionId,
+          sources: createSources(),
+        });
+      } catch (err) {
+        fastResult = { ok: false, output: err instanceof SafePathError ? err.message : `Tool ${fast.name} threw: ${err.message}` };
+      }
+      const fastVerification = await verifyAction(fast.name, fast.args, { sessionId, channel }, fastResult);
+      // A deterministic answer that cannot be confirmed is not an answer: hand
+      // the turn to the model rather than return a claim nobody checked.
+      if (fastResult?.ok && fastVerification?.status !== VERIFY_CONTRADICTED) {
+        let reply = composeFastReply(fast, fastResult.output);
+        const fastTrace = [{
+          tool: fast.name,
+          args: fast.args,
+          ok: true,
+          output: String(fastResult.output).slice(0, 400),
+          ...(fastVerification ? { verification: fastVerification } : {}),
+        }];
+        let fastGuard = { flags: [], clean: true };
+        if (!config.disableGuard) {
+          fastGuard = auditReply({
+            reply,
+            trace: fastTrace,
+            sources: [],
+            citedIds: [],
+            memoryFacts: loadMemory().facts,
+            userText: text,
+            toolOutput: String(fastResult.output ?? ""),
+          });
+          if (!fastGuard.clean) reply += renderGuardNote(fastGuard.flags);
+        }
+        appendMessage(sessionId, { role: "assistant", content: reply, trace: fastTrace, guard: fastGuard.flags });
+        const fastMs = Date.now() - startedAt;
+        record({
+          kind: "turn",
+          sessionId,
+          channel,
+          autonomy,
+          provider: activeModel.provider,
+          model: activeModel.model,
+          ms: fastMs,
+          firstTextMs: fastMs,
+          mode: "fast",
+          rounds: 0,
+          tokens: 0,
+          tools: 1,
+          auto: 0,
+          guardFlags: fastGuard.flags.length,
+          error: null,
+        });
+        onEvent({ type: "tool_done", name: fast.name, ok: true, preview: String(fastResult.output).slice(0, 300) });
+        return { text: reply, firstTextMs: fastMs, error: null, trace: fastTrace, sessionId, guard: fastGuard.flags, sources: [], ms: fastMs };
+      }
+    }
+  }
+
   // Attached files become a labelled block ahead of the question, and images
   // travel with the message itself for a vision-capable model. The wrapper is
   // the mitigation against a document that contains instructions; see
@@ -440,6 +514,15 @@ export async function runAgent({
         };
       }
 
+      // A tool's return value is a claim, not proof. Read the world back before
+      // the model is allowed to describe what happened; a contradiction goes
+      // into the tool message so the model must correct itself rather than
+      // reporting an action that did not take effect.
+      const verification = await verifyAction(tool.name, call.arguments || {}, ctx, result);
+      if (verification) {
+        onEvent({ type: "verification", name: tool.name, status: verification.status, detail: verification.detail });
+      }
+
       // Per call it was already capped at 12 000 chars; eight rounds of eight
       // calls could still push ~750 KB into one context. The budget is per
       // turn, and when it runs out the model is told why rather than fed a
@@ -458,11 +541,17 @@ export async function runAgent({
         args: call.arguments,
         ok: result.ok,
         output: kept.slice(0, 400),
+        ...(verification ? { verification } : {}),
         ...(tier?.tier === TIER_READ ? { tier: "read", auto: true } : {}),
       });
       onEvent({ type: "tool_done", name: tool.name, ok: result.ok, preview: kept.slice(0, 300) });
 
-      messages.push({ role: "tool", name: call.name, toolCallId: call.id, content });
+      // A contradicted action is not allowed to be described as done: the note
+      // travels with the tool output, so the next model turn cannot miss it.
+      const proof = verification?.status === VERIFY_CONTRADICTED
+        ? `\n\n[verification: contradicted — ${verification.detail}. Do not describe this action as done; state what is actually true and what you will try instead.]`
+        : "";
+      messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: content + proof });
     }
   }
 
@@ -496,6 +585,16 @@ export async function runAgent({
       finalText += renderGuardNote(guard.flags);
       onEvent({ type: "guard", flags: guard.flags });
     }
+  }
+
+  // If an action was contradicted, the user is told by the transcript itself.
+  // The model was already handed the contradiction; this is the half that does
+  // not depend on the model repeating it.
+  const contradicted = trace.filter((t) => t.verification?.status === "contradicted");
+  if (contradicted.length) {
+    finalText +=
+      `\n\n⚠︎ ${contradicted.length === 1 ? "One action" : `${contradicted.length} actions`} could not be ` +
+      `confirmed by an independent read-back: ${contradicted.map((t) => describeVerification(t.verification)).join("; ")}`;
   }
 
   // The footer is evidence, so it appears only when the reply cites something.

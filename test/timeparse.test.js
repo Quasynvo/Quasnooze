@@ -59,6 +59,20 @@ test("parseClock edge cases", () => {
   assert.deepEqual(parseClock("midnight"), { h: 0, m: 0 });
 });
 
+test("an impossible clock time is refused, not rolled over", () => {
+  // setHours() silently rolls 99pm into four days later. A reminder nobody
+  // asked for is worse than one we admit we could not set.
+  assert.equal(parseClock("99pm"), null);
+  assert.equal(parseClock("13pm"), null);
+  assert.equal(parseClock("0am"), null);
+  assert.equal(parseWhen("at 13pm"), null);
+  assert.equal(parseWhen("at 99pm"), null);
+  // The valid boundary cases still work.
+  assert.deepEqual(parseClock("12am"), { h: 0, m: 0 });
+  assert.deepEqual(parseClock("12pm"), { h: 12, m: 0 });
+  assert.deepEqual(parseClock("1pm"), { h: 13, m: 0 });
+});
+
 test("humaniseDuration reads like a person", () => {
   assert.equal(humaniseDuration(30 * 60000), "30 minutes");
   assert.equal(humaniseDuration(60 * 60000), "1 hour");

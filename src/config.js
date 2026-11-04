@@ -102,6 +102,8 @@ export const config = Object.freeze({
   profilePath: env.PINCH_PROFILE || join(dataDir, "profile.md"),
   // Set PINCH_GUARD=off to silence the post-reply honesty check (not advised).
   disableGuard: /^(0|false|off|no)$/i.test(env.PINCH_GUARD || ""),
+  // Set PINCH_FAST_PATH=off to send deterministic turns through the model again.
+  fastPath: !/^(0|false|off|no)$/i.test(env.PINCH_FAST_PATH || ""),
   autoApprove: desktopRequested ? false : bool(env.PINCH_AUTO_APPROVE, false),
   // Read-only shell commands run without a prompt; everything else still asks.
   // Off restores "ask for every shell command", which is the old behaviour.
