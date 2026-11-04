@@ -4,6 +4,7 @@
  * Deliberately dependency-free: a 40-line parser instead of dotenv, so
  * `git clone && node src/index.js` works with no install step.
  */
+import { resolveStatePaths, assertNoLegacyState } from "./state-paths.js";
 import { normalizeBrandEnv } from "./brand-config.js";
 import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -35,12 +36,16 @@ export function parseEnv(text) {
 }
 
 export function loadEnv(root = ROOT) {
-  const file = join(root, ".env");
+  const paths = resolveStatePaths({ root });
+  assertNoLegacyState(root, paths);
+  const file = paths.envPath;
   const fromFile = existsSync(file) ? parseEnv(readFileSync(file, "utf8")) : {};
   return { ...normalizeBrandEnv(fromFile), ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
 }
 
 const env = loadEnv();
+const statePaths = resolveStatePaths({ root: ROOT });
+const dataDir = env.PINCH_DATA || statePaths.dataDir;
 // Only the explicit Windows launcher enables the resident companion.
 const desktopRequested = process.platform === "win32" && (process.env.QUASNOOZE_DESKTOP ?? process.env.PINCH_DESKTOP) === "1";
 
@@ -62,7 +67,7 @@ const workspaceRoots = list(env.PINCH_WORKSPACE).map((p) =>
 export const config = Object.freeze({
   root: ROOT,
   // PINCH_DATA exists so tests (and power users with a NAS) can move memory.
-  dataDir: env.PINCH_DATA || join(ROOT, "data"),
+  dataDir,
   publicDir: join(ROOT, "public"),
 
   ownerName: env.OWNER_NAME || "friend",
@@ -94,7 +99,7 @@ export const config = Object.freeze({
 
   workspaceRoots: workspaceRoots.length ? workspaceRoots : [homedir()],
   // Optional user profile, like an about_me file: injected into the prompt.
-  profilePath: env.PINCH_PROFILE || join(env.PINCH_DATA || join(ROOT, "data"), "profile.md"),
+  profilePath: env.PINCH_PROFILE || join(dataDir, "profile.md"),
   // Set PINCH_GUARD=off to silence the post-reply honesty check (not advised).
   disableGuard: /^(0|false|off|no)$/i.test(env.PINCH_GUARD || ""),
   autoApprove: desktopRequested ? false : bool(env.PINCH_AUTO_APPROVE, false),

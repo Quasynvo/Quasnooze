@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { resolveStatePaths, assertNoLegacyState } from "../src/state-paths.js";
+import { normalizeBrandEnv } from "../src/brand-config.js";
 import { parseSetupEnv, renderSetupEnv } from "../src/setup-env.js";
 import { resolveModelChoice } from "../src/model-choice.js";
 import { checkVoice } from "../src/voice.js";
@@ -26,7 +28,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ENV_PATH = join(ROOT, ".env");
+const paths = resolveStatePaths({ root: ROOT });
+assertNoLegacyState(ROOT, paths);
+const ENV_PATH = paths.envPath;
 const EXAMPLE_PATH = join(ROOT, ".env.example");
 
 /* ────────────────────────────── pretty output ──────────────────────────── */
@@ -421,7 +425,8 @@ async function setup() {
   section("5/7 · Tell Quasnooze about you", "Written once, read every turn, never invented beyond.");
   hint("Like an about-me note. One fact per line, blank line to finish.");
   hint("Example: Name: Ranjith · City: Chennai · Work: ML engineer at Accenture");
-  const existingProfile = join(ROOT, "data", "profile.md");
+  const settings = normalizeBrandEnv({ ...values, ...normalizeBrandEnv(process.env) });
+  const existingProfile = settings.PINCH_PROFILE || join(settings.PINCH_DATA || paths.dataDir, "profile.md");
   const profileLines = [];
   // Read without an existsSync probe: ENOENT means "no profile yet", and there
   // is no check-then-use window for a race to slip through.
@@ -433,7 +438,7 @@ async function setup() {
   }
   if (current) {
     ok(`you already have a profile (${current.split("\n").length} line(s)) — press Enter to keep it`);
-    hint(current.split("\n").slice(0, 3).join(" · ").slice(0, 150));
+    // Profile contents are personal; never echo them into setup logs.
   }
   for (let i = 0; i < 6; i++) {
     const line = (await question(`  ${C.dim(i === 0 ? "fact" : "more (blank to stop)")} ${C.coral("›")} `)).trim();
@@ -444,11 +449,11 @@ async function setup() {
     // No existsSync gate: writeFileSync creates or truncates in one step, so
     // there is no window between "does it exist" and "write it".
     try {
-      mkdirSync(dirname(existingProfile), { recursive: true });
+      mkdirSync(dirname(existingProfile), { recursive: true, mode: 0o700 });
       // Write-then-rename: the file you already have is either the old one or
       // the new one, never a half-written mixture (same trick store.js uses).
       const tmp = `${existingProfile}.${process.pid}.tmp`;
-      writeFileSync(tmp, profileLines.join("\n") + "\n", "utf8");
+      writeFileSync(tmp, profileLines.join("\n") + "\n", { mode: 0o600 });
       renameSync(tmp, existingProfile);
       ok(`saved ${profileLines.length} fact(s) to data/profile.md`);
     } catch (err) {
@@ -475,7 +480,7 @@ async function setup() {
   values.QUASNOOZE_HOST = "0.0.0.0";
   if (!values.QUASNOOZE_KEY) values.QUASNOOZE_KEY = randomBytes(18).toString("hex");
   const keepKey = await confirm(
-    `Keep the generated access key (${values.QUASNOOZE_KEY.slice(0, 6)}…)? Without one, anyone on your Wi-Fi can use Quasnooze.`,
+    `Keep the generated access key (stored privately in .env)? Without one, anyone on your Wi-Fi can use Quasnooze.`,
     true
   );
   if (!keepKey) values.QUASNOOZE_KEY = "";
@@ -496,7 +501,8 @@ async function setup() {
   } catch (err) {
     if (err.code !== "ENOENT") hint(`could not back up the old .env: ${err.message}`);
   }
-  writeFileSync(ENV_PATH, renderEnv(values), "utf8");
+  mkdirSync(dirname(ENV_PATH), { recursive: true, mode: 0o700 });
+  writeFileSync(ENV_PATH, renderEnv(values), { mode: 0o600 });
   console.log(`\n  ${C.green("✔")} wrote ${C.bold(".env")} (permissions: keep this file private)\n`);
 
   /* ── verify ──────────────────────────────────────────────────────────── */
@@ -574,10 +580,10 @@ ${C.coral("━".repeat(4))} ${C.bold("Ready")}
 
    ${C.bold("npm start")}   ${C.dim("or: node src/index.js")}
 
-   panel on this machine   ${C.bold(`http://localhost:${port}`)}${values.QUASNOOZE_KEY ? `?key=${values.QUASNOOZE_KEY}` : ""}
-   panel from your phone   ${C.bold(url)}${values.QUASNOOZE_KEY ? `?key=${values.QUASNOOZE_KEY}` : ""}
+   panel on this machine   ${C.bold(`http://localhost:${port}`)}
+   panel from your phone   ${C.bold(url)}
 
-   ${C.dim("Open the phone link once on each device — the key is remembered in a cookie.")}
+   ${C.dim("Read the access key from your private .env and enter it in the panel.")}
    ${C.dim("Then: Add to Home Screen, tap 🎙️, and just talk.")}
 `);
   return rows;

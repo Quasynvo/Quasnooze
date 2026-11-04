@@ -36,6 +36,7 @@ function usage() {
 ${c.coral("✦ quasnooze")} — local, private, yours
 
   ${c.bold("quasnooze")}                 start Quasnooze (web panel + configured chat apps)
+  ${c.bold("quasnooze migrate-state")}   preview legacy state copy (--apply to confirm)
   ${c.bold("quasnooze setup")}           guided setup — brain, Telegram, Discord, Slack, WhatsApp, voice
   ${c.bold("quasnooze desktop")}         Windows resident assistant; microphone starts muted
   ${c.bold("quasnooze doctor")}          verify configuration and connectivity
@@ -65,6 +66,9 @@ function run(script, args = []) {
 }
 
 switch (command) {
+  case "migrate-state":
+    run("scripts/migrate-state.js", rest);
+    break;
   case "start":
   case "serve":
     run("src/index.js");
