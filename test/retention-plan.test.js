@@ -71,10 +71,19 @@ test('injected clock and explicit ages identify old files but preserve aggregate
 function snapshot(root) {
   const result = {};
   function walk(path, rel = '') {
-    const stat = fs.lstatSync(path);
-    result[rel] = { mode: stat.mode, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs };
-    if (stat.isDirectory()) for (const name of fs.readdirSync(path)) walk(join(path, name), `${rel}/${name}`);
-    else if (stat.isFile()) result[rel].content = fs.readFileSync(path).toString('hex');
+    // Open first so metadata and contents refer to the same object, even if
+    // its pathname is replaced. Snapshot only our private synthetic fixtures.
+    const fd = fs.openSync(path, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try {
+      const stat = fs.fstatSync(fd);
+      result[rel] = { mode: stat.mode, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs };
+      if (stat.isDirectory()) {
+        const directory = `${process.platform === 'linux' ? '/proc/self/fd' : '/dev/fd'}/${fd}`;
+        for (const name of fs.readdirSync(directory)) walk(join(directory, name), `${rel}/${name}`);
+      } else if (stat.isFile()) result[rel].content = fs.readFileSync(fd).toString('hex');
+    } finally {
+      fs.closeSync(fd);
+    }
   }
   walk(root); return result;
 }
