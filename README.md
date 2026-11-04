@@ -42,7 +42,7 @@ Quasnooze runs on **your own computer**. Ask a question, plan your day, find a d
 | **Speaking / output** | High-contrast radial spectrum with luminous trails | Bright cyan / magenta | Native speech state, or a clearly labelled silent preview. Output-frequency reactivity requires an output analyser. |
 | **Error / interrupted** | One brief, damped shake; warm glow that settles | Crimson / amber | A failed request, denied permission or interrupted stream. Read the accompanying explanation. |
 
-**Approval is separate from these five audio states:** it uses a calm amber presentation plus explicit **Allow once / Deny** controls. A spoken “yes” or an animation cannot approve a sensitive action.
+**Approval is separate from these five audio states:** it uses a calm amber presentation plus explicit **Allow once / Deny** controls. A spoken “yes” or an animation cannot approve a sensitive action. [Structured approval previews](docs/ACTION-PREVIEWS.md) show bounded targets, risks, expected effects and redaction notices without changing the approval gate.
 
 ### Signal honesty
 

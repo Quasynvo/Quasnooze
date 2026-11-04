@@ -5,6 +5,7 @@
  * back the same behaviour: approvals, agent turn, chunked reply. That is why
  * Quasnooze behaves identically in Telegram, Discord, Slack, WhatsApp and web.
  */
+import { formatActionPreview } from "../action-preview.js";
 import { runAgent, answerApproval, answerApprovalFor, pendingApprovalsFor } from "../agent.js";
 import { brain, modelCommand } from "../brain.js";
 import { config } from "../config.js";
@@ -116,8 +117,11 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
     target: target || sessionId || `${channel}-main`,
     onEvent: async (event) => {
       if (event.type !== "approval") return;
-      if (onApproval) await onApproval({ id: event.id, description: event.description });
-      else await send(approvalPrompt(event.description));
+      if (onApproval) await onApproval({ id: event.id, description: event.description, ...(event.preview ? { preview: event.preview } : {}) });
+      else {
+        const prompt = approvalPrompt(event.description + (event.preview ? "\n" + formatActionPreview(event.preview) : ""));
+        for (const chunk of splitForLimit(prompt, channel === "discord" ? 1900 : 4000)) await send(chunk);
+      }
     },
   });
 

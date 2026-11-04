@@ -37,6 +37,7 @@ main{padding:0 40px 35px;max-width:1550px;width:100%;margin:auto}.top{height:92p
 <dialog id="modelDialog"><div class="dialog-head"><h2>Choose the real local model</h2><button class="close" data-close="modelDialog" aria-label="Close">×</button></div><p>Names come from Ollama’s installed-model list. Choosing a menu number cannot save a model named “1”. Selection applies to subsequent turns and resets when Quasnooze restarts.</p><label for="modelSelect">Installed Ollama models</label><select id="modelSelect"><option value="">Loading…</option></select><div class="button-row"><button class="primary" id="saveModel">Use this model</button><button class="subtle-button" id="refreshModels">Refresh list</button></div><p id="modelFeedback" role="status"></p></dialog>
 <dialog id="keyDialog"><div class="dialog-head"><h2>Connect securely</h2><button class="close" data-close="keyDialog" aria-label="Close">×</button></div><p>Enter this instance’s QUASNOOZE_KEY. It stays in this browser tab’s session storage and is sent only to this origin.</p><label for="keyInput">Instance key</label><input type="password" id="keyInput" autocomplete="off"><button class="primary" id="saveKey">Connect</button></dialog>
 <div class="toast" id="toast" role="status" hidden></div>
+<script src="/approval-preview.js"></script>
 <script src="/desktop.js" defer></script>
 <script type="module" src="/desktop-motion.js"></script>
 </body></html>

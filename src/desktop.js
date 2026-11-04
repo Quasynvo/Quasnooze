@@ -1,4 +1,5 @@
 /** Resident-desktop orchestration. No microphone or process starts on import. */
+import { formatActionPreview } from "./action-preview.js";
 import { personaCommand } from "./personas.js";
 import { randomUUID } from "node:crypto";
 import { opendir } from "node:fs/promises";
@@ -153,9 +154,9 @@ export class DesktopRuntime {
                 this.update({ draft: streamDraft, firstTextMs: this.state.firstTextMs ?? now - started });
               }
             } else if (event.type === "approval") {
-              this.approval = { id: event.id, description: event.description };
+              this.approval = { id: event.id, description: event.description, ...(event.preview ? { preview: event.preview } : {}) };
               this.update({ phase: "approval", text: event.description });
-              this.bridge?.send({ op: "approval", id: event.id, text: event.description });
+              this.bridge?.send({ op: "approval", id: event.id, text: event.description + (event.preview ? "\n" + formatActionPreview(event.preview) : "") });
             } else if (event.type === "tool") { this.approval = null; this.update({ phase: "working", text: event.label || event.name }); }
           } });
           reply = result.text; failed = Boolean(result.error); break;
