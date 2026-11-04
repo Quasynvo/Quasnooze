@@ -144,6 +144,12 @@ function rewrite(html, page) {
   return html;
 }
 
+/** The only parent reference the build emits: back to the landing page. */
+const LANDING = "../index.html";
+
+/** `./module.js` — one segment below the importing file, no traversal. */
+const SIBLING_MODULE = /^\.\/[A-Za-z0-9_-][A-Za-z0-9._-]*\.js$/;
+
 /** A relative reference that is not a URL, an anchor, a data URI or a mailto. */
 function isLocalRef(ref) {
   return ref && !/^(https?:|mailto:|tel:|data:|#|\/\/)/.test(ref);
@@ -188,12 +194,20 @@ function build(outDir) {
     if (/(?:href|src)="\//.test(html)) missing.push(`${page} still contains an absolute path`);
     for (const ref of refs(html)) {
       if (!isLocalRef(ref)) continue;
-      // "../index.html" leaves the preview for the landing page that links
-      // here. It is not built by this script, so it is checked against site/
-      // itself — including when the rest is built into a temp directory.
-      const landing = ref.startsWith("../") ? join(ROOT, "site", ref.replace(/^\.\.\//, "")) : null;
-      if (landing) {
-        if (!existsSync(landing)) missing.push(`${page} links to "${ref}", which is not in site/`);
+      // The one parent reference this build emits on purpose: the landing page
+      // that links here. It is not built by this script, so it is checked
+      // against site/ itself even when everything else goes to a temp dir.
+      if (ref === LANDING) {
+        if (!existsSync(join(ROOT, "site", "index.html"))) {
+          missing.push(`${page} links to "${ref}", which is not in site/`);
+        }
+        continue;
+      }
+      // Anything else trying to leave the preview directory is a build error,
+      // not a path to follow. A page is a file in this repository today, but a
+      // reference that climbs directories is how a generator stops being one.
+      if (ref.includes("..")) {
+        missing.push(`${page} references "${ref}", which escapes the published preview`);
         continue;
       }
       if (!existsSync(resolve(outDir, ref))) {
@@ -206,6 +220,13 @@ function build(outDir) {
     const path = join(outDir, file.toString());
     if (!statSync(path).isFile() || !path.endsWith(".js")) continue;
     for (const spec of imports(readFileSync(path, "utf8"))) {
+      // A relative sibling module and nothing else: no parent segments, no
+      // absolute paths, no bare package names. This is a static copy, so an
+      // import it cannot resolve is a 404 at runtime rather than a build error.
+      if (!SIBLING_MODULE.test(spec)) {
+        missing.push(`${relative(outDir, path)} imports "${spec}", which is not a sibling module`);
+        continue;
+      }
       if (!existsSync(resolve(dirname(path), spec))) {
         missing.push(`${relative(outDir, path)} imports "${spec}", which was not copied`);
       }
