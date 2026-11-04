@@ -301,3 +301,10 @@ Run `node scripts/evaluate-retrieval.js` from a source checkout to reproduce the
 recall/rank metrics, cold/warm index counters, stale-update checks and known
 no-answer failures. Citation provenance is tested separately; model-answer
 faithfulness is explicitly not run. No private corpus, model or network is used.
+
+### Local support diagnostics
+
+`quasnooze support-bundle` previews a separate, allowlisted diagnostic artifact.
+Saving requires `--out FILE --write` and interactive confirmation; there is no
+upload or automatic personal-data export. See
+[support-bundle fields, limits and privacy caveats](docs/SUPPORT-BUNDLE.md).

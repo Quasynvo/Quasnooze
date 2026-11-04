@@ -51,6 +51,7 @@
     "scripts/setup.js",
     "scripts/migrate-state.js",
     "scripts/retention-plan.js",
+    "scripts/support-bundle.js",
     "scripts/braincheck.js",
     "scripts/pair.js",
     "scripts/service.js",
