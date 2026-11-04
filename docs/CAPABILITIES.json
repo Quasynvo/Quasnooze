@@ -1,7 +1,7 @@
 {
   "$comment": "Quasnooze's capability inventory. Every entry claims evidence — a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
   "$policy": "in-scope may be proposed. settled has been decided and is only shown so the decision stays visible. out-of-scope contradicts the product identity in .github/prompts/self-improvement.md; the researcher reports it and the proposer is forbidden from acting on it.",
-  "updated": "2026-11-03",
+  "updated": "2026-11-05",
   "capabilities": [
     {
       "id": "local-model",
@@ -543,6 +543,26 @@
         "src/readiness.js + src/baseline.js: structured readiness states derived from the doctor, and a synthetic content-free latency baseline via npm run health -- --baseline (docs/DIAGNOSTICS.md)"
       ],
       "note": "Local only, never transmitted, and it records timings and counts — not message text. No dashboards and no distributed tracing: this is a file you can `tail`, not an observability platform."
+    },
+    {
+      "id": "deterministic-fast-path",
+      "name": "Answers deterministic requests without a model",
+      "keywords": [
+        "fast path",
+        "instant",
+        "zero latency",
+        "no model",
+        "deterministic",
+        "intent routing"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/fast-path.js: matchFastIntent() over a five-tool allowlist",
+        "docs/FAST-PATH-EVAL.md: 4.3 ms p50 end to end, 31/31 matched, 0/28 neighbours routed",
+        "test/fast-path.test.js: ambiguity, unattended runs and attachments never route"
+      ],
+      "note": "Five sentence shapes (clock, arithmetic, remember, task, reminder). Anything ambiguous falls through to the model; QUASNOOZE_FAST_PATH=off restores the old path exactly."
     }
   ]
 }

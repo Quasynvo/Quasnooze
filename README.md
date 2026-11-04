@@ -214,6 +214,7 @@ The [integration guide](docs/VISUALIZER.md) includes the complete capture exampl
 | Work with documents | Workspace search, supported attachments and source/citation handling | Bounded access; citations do not guarantee correctness. |
 | Use engineering tools | File operations, command tools, calculations and optional MCP/custom tools | Workspace policy and approvals apply; plugins are not OS-sandboxed. |
 | Remember and schedule | Reminders, schedules, local history and personal-data export | Delivery needs a running, awake host; validated restore is separate work. |
+| Ask the clock, a sum, or a reminder | Deterministic turns answer without a model: time, arithmetic, remembered facts, tasks and reminders | Five closed sentence shapes only; anything ambiguous goes to the model, and `QUASNOOZE_FAST_PATH=off` restores the previous behaviour. |
 | Use your chat apps | Telegram, Discord, Slack, WhatsApp and web | Optional setup; external services receive messages sent through them. |
 
 Read-only shell commands such as `ls`, `cat`, `grep`, `git status` and friends
@@ -284,7 +285,7 @@ This also synchronizes the shared renderer into the static website. The [validat
 
 Motion changes must preserve signal honesty, keyboard access and reduced-motion behavior. See [CONTRIBUTING.md](CONTRIBUTING.md), the [visualizer contract](docs/VISUALIZER.md) and the [product roadmap](docs/ROADMAP-PROPOSED.md).
 
-[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Voice control roadmap](docs/VOICE-CONTROL-ROADMAP.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
+[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Voice control roadmap](docs/VOICE-CONTROL-ROADMAP.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
 
 Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous attribution is preserved. [MIT license](LICENSE).
 

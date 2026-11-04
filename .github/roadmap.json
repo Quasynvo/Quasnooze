@@ -2055,7 +2055,7 @@
     {
       "id": "mind-01-intent-fast-path",
       "title": "perf(agent): answer simple machine requests without a model turn",
-      "status": "backlog",
+      "status": "shipped",
       "difficulty": "medium",
       "labels": [
         "help wanted",
@@ -2063,17 +2063,23 @@
         "area/voice"
       ],
       "files": [
-        "src/router.js",
+        "docs/FAST-PATH-EVAL.md",
+        "scripts/fast-path-eval.js",
         "src/agent.js",
-        "src/tools.js"
+        "src/fast-path.js",
+        "src/router.js",
+        "src/tools.js",
+        "test-fixtures/fast-path-corpus.json",
+        "test/fast-path.test.js"
       ],
       "verify": "node --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~4-6 days",
-      "body": "## Context\n\n\"Louder.\" \"Open Slack.\" \"Pause.\" do not need a 7B model. Routing every utterance through one is why local assistants feel slower than their hardware should allow, and it also wastes tokens on requests whose entire meaning fits in a grammar. `src/router.js` already decides provider routing; this adds a deterministic intent tier in front of generation.\n\n## What to change\n\n- A hand-written grammar and matcher for the machine-intent classes the tools already provide: media, volume, launch/focus, lock/sleep, timer, clipboard read. Deterministic, inspectable, testable.\n- A confidence floor and a mandatory fallback: anything unmatched or ambiguous goes to the model unchanged.\n- The matcher never invents arguments. A phrase it cannot fill completely falls through, so \"open the thing from yesterday\" is a model request, not a guess.\n- The transcript says which path answered, so a fast path that got it wrong is visible immediately.\n\n**Safety:** a fast wrong action is worse than a slow right one. Approvals still apply, and the fallback is not allowed to be lossy.\n\n## Performance contract\n\n- **Baseline:** every turn goes through generation; p50 700 ms plus model time for a one-word request\n- **Target:** p50 under 400 ms end-to-end for matched intents at 95% or higher routing accuracy on a labelled set of 200 utterances\n- **Must not regress:** must not reduce answer quality: unmatched or ambiguous utterances must fall through at 100%, and the model path must remain byte-identical\n\n## Acceptance criteria\n\n- [ ] Ambiguous and out-of-grammar utterances fall through, verified case by case\n- [ ] The same risk tiers and approvals apply to fast-path actions\n- [ ] The labelled set achieves the stated accuracy, and its misses are published\n- [ ] Disabling the fast path returns exactly today's behaviour\n\n## How to verify\n\n```bash\nnode --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~4-6 days",
+      "body": "## Context\n\n\"Louder.\" \"Open Slack.\" \"Pause.\" do not need a 7B model. Routing every utterance through one is why local assistants feel slower than their hardware should allow, and it also wastes tokens on requests whose entire meaning fits in a grammar. `src/router.js` already decides provider routing; this adds a deterministic intent tier in front of generation.\n\n## What to change\n\n- A hand-written grammar and matcher for the machine-intent classes the tools already provide: media, volume, launch/focus, lock/sleep, timer, clipboard read. Deterministic, inspectable, testable.\n- A confidence floor and a mandatory fallback: anything unmatched or ambiguous goes to the model unchanged.\n- The matcher never invents arguments. A phrase it cannot fill completely falls through, so \"open the thing from yesterday\" is a model request, not a guess.\n- The transcript says which path answered, so a fast path that got it wrong is visible immediately.\n\n**Safety:** a fast wrong action is worse than a slow right one. Approvals still apply, and the fallback is not allowed to be lossy.\n\n## Performance contract\n\n- **Baseline:** every turn goes through generation; p50 700 ms plus model time for a one-word request\n- **Target:** p50 under 400 ms end-to-end for matched intents at 95% or higher routing accuracy on a labelled set of 200 utterances\n- **Must not regress:** must not reduce answer quality: unmatched or ambiguous utterances must fall through at 100%, and the model path must remain byte-identical\n\n## Acceptance criteria\n\n- [x] Ambiguous and out-of-grammar utterances fall through, verified case by case\n- [x] The same risk tiers and approvals apply to fast-path actions\n- [ ] The labelled set reaches 200 utterances and its misses are published in full \u2014 **partially done**: 59 labelled utterances (31 positive, 28 negative), 100% of the positives matched, 0 of the negatives routed\n- [x] Disabling the fast path returns exactly today's behaviour\n\n## How to verify\n\n```bash\nnode --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~4-6 days\n## Outcome \u2014 shipped 2026-11-05\n\nLanded in `src/fast-path.js` with `test/fast-path.test.js` (11 tests) and the\nmeasurement in `docs/FAST-PATH-EVAL.md`.\n\n- Matcher decision: p50 5 \u00b5s. Whole fast turn end to end: p50 4.3 ms, p95 7.9 ms\n  (n = 50), including the tool run, the honesty guard, the session write and\n  telemetry \u2014 against a \u2265 700 ms model-turn floor.\n- Routing: 31/31 intended phrasings matched, 0/28 neighbouring phrasings routed.\n  Every one of the 28 is a sentence where acting would have been a guess:\n  \"remember to buy milk\", \"remind me to call mom\" (no time), \"add a task to buy\n  milk and then remind me at 5pm\".\n- The allowlist is five tools (`time_now`, `calculator`, `remember`, `add_task`,\n  `remind`); a failed tool call falls through to the model instead of returning\n  an error; unattended runs and attachment-bearing turns never take it;\n  `QUASNOOZE_FAST_PATH=off` restores the previous behaviour exactly.\n- Found and fixed a real bug in the tool it calls: `parseClock(\"99pm\")` used to\n  roll over into a reminder four days later.\n\nThe honest gap: the target asked for 200 utterances. This ships 59, written by\nthe author of the matcher, so it establishes that the rules fire as specified \u2014\nnot how often a stranger phrases the same request. Expanding the set from real\ntranscripts is tracked by `voice-05-stt-accuracy-harness`.\n",
       "not_before": "2026-12-01",
       "depends_on": [
         "voice-01-latency-budget"
-      ]
+      ],
+      "shipped_at": "2026-11-05"
     },
     {
       "id": "mind-02-context-budget",

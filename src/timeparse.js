@@ -34,6 +34,10 @@ export function parseClock(text) {
   const min = m[2] ? Number(m[2]) : 0;
   const mer = m[3];
   if (min > 59) return null;
+  // "13pm" and "99pm" used to survive this parse and become 13:00 and +4 days,
+  // because setHours() rolls over silently. A time nobody said is worse than a
+  // time we admit we could not read.
+  if (mer && (h < 1 || h > 12)) return null;
   if (mer === "pm" && h < 12) h += 12;
   if (mer === "am" && h === 12) h = 0;
   if (!mer && h > 23) return null;

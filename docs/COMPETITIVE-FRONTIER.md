@@ -126,9 +126,30 @@ make worse.
 
 | Item | Borrowed from | Contract |
 |---|---|---|
-| `mind-01-intent-fast-path` | Deterministic grammars in voice assistants | p50 < 400 ms for matched intents, ≥ 95% routing accuracy, 100% fall-through when unsure |
+| `mind-01-intent-fast-path` ✅ **shipped** | Deterministic grammars in voice assistants | p50 < 400 ms for matched intents, ≥ 95% routing accuracy, 100% fall-through when unsure — **measured: 4.3 ms p50 end to end, 31/31 matched, 0/28 neighbours routed** |
 | `mind-02-context-budget` | Streaming-memory compression | prefill p50 −40% at turn 20, 100% pinned-fact retention, no eval regression |
 | `mind-03-model-router` | PilotDeck-style routing (~70% cost cut) | overall p50 −35%, task success at or above baseline, escalation < 15% |
+
+### The first one shipped
+
+`mind-01` landed in this branch rather than being filed, because it is the
+cheapest place to prove the contract is real: five deterministic intents
+(`time_now`, `calculator`, `remember`, `add_task`, `remind`) now answer without
+touching a model, and the turn still runs the same honesty guard, the same
+telemetry and the same permission classification as every other turn.
+
+| | before | after |
+|---|---|---|
+| "what time is it" | prefill + decode, ≥ 700 ms floor | **4.3 ms p50, 7.9 ms p95** (n = 50) |
+| matched deterministic utterances | 0 of 31 phrasings | **31 of 31** |
+| neighbouring phrasings wrongly acted on | n/a — the model judged them | **0 of 28** |
+| off-switch | n/a | `QUASNOOZE_FAST_PATH=off` restores it exactly |
+
+The evaluation, including the bugs it found and the honest gaps, is in
+[FAST-PATH-EVAL.md](FAST-PATH-EVAL.md). The most useful thing it turned up was
+not in the new code: `parseClock("99pm")` used to roll into a reminder four days
+later, which is precisely the class of silent wrong answer the deterministic path
+exists to remove.
 
 ---
 

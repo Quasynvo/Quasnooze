@@ -25,6 +25,7 @@ import { auditReply, renderGuardNote } from "./guard.js";
 import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
 import { record } from "./telemetry.js";
+import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
 
 const MAX_ROUNDS = 8;
 /** Characters of tool output one turn may carry into the context, in total. */
@@ -265,6 +266,69 @@ export async function runAgent({
       ? { attachments: attached, excerpt: attachments.map((a) => a.text || "").join("\n").slice(0, 2000) }
       : {}),
   });
+
+  // ── deterministic turns ────────────────────────────────────────────────
+  // "What time is it" has one correct reading and one correct tool. Sending it
+  // through a model costs a prefill and a decode, and occasionally invents the
+  // time. The matcher is narrow on purpose: a miss is one ordinary model turn,
+  // while a false match is an action nobody asked for — so ambiguity falls
+  // through unchanged, and a tool that fails falls through too, because the
+  // model can ask a better question than an error string.
+  if (config.fastPath && !unattended && !social && !attachments.length) {
+    const fast = matchFastIntent(text);
+    const tool = fast ? TOOL_MAP.get(fast.name) : null;
+    if (tool && FAST_TOOLS.has(fast.name) && !DANGEROUS.has(fast.name) && !validateArgs(tool, fast.args)) {
+      let fastResult;
+      try {
+        fastResult = await tool.run(fast.args, {
+          channel,
+          target: addressFor(channel, target),
+          sessionId,
+          sources: createSources(),
+        });
+      } catch (err) {
+        fastResult = { ok: false, output: err instanceof SafePathError ? err.message : `Tool ${fast.name} threw: ${err.message}` };
+      }
+      if (fastResult?.ok) {
+        let reply = composeFastReply(fast, fastResult.output);
+        const fastTrace = [{ tool: fast.name, args: fast.args, ok: true, output: String(fastResult.output).slice(0, 400) }];
+        let fastGuard = { flags: [], clean: true };
+        if (!config.disableGuard) {
+          fastGuard = auditReply({
+            reply,
+            trace: fastTrace,
+            sources: [],
+            citedIds: [],
+            memoryFacts: loadMemory().facts,
+            userText: text,
+            toolOutput: String(fastResult.output ?? ""),
+          });
+          if (!fastGuard.clean) reply += renderGuardNote(fastGuard.flags);
+        }
+        appendMessage(sessionId, { role: "assistant", content: reply, trace: fastTrace, guard: fastGuard.flags });
+        const fastMs = Date.now() - startedAt;
+        record({
+          kind: "turn",
+          sessionId,
+          channel,
+          autonomy,
+          provider: activeModel.provider,
+          model: activeModel.model,
+          ms: fastMs,
+          firstTextMs: fastMs,
+          mode: "fast",
+          rounds: 0,
+          tokens: 0,
+          tools: 1,
+          auto: 0,
+          guardFlags: fastGuard.flags.length,
+          error: null,
+        });
+        onEvent({ type: "tool_done", name: fast.name, ok: true, preview: String(fastResult.output).slice(0, 300) });
+        return { text: reply, firstTextMs: fastMs, error: null, trace: fastTrace, sessionId, guard: fastGuard.flags, sources: [], ms: fastMs };
+      }
+    }
+  }
 
   // Attached files become a labelled block ahead of the question, and images
   // travel with the message itself for a vision-capable model. The wrapper is

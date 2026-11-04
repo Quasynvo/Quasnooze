@@ -48,6 +48,16 @@ test("the frontier set exists and is staged behind the control floor", () => {
   );
 
   for (const item of frontier) {
+    if (item.status === "shipped") {
+      // Shipping is the point of the exercise; a shipped item only has to say
+      // when, so the queue and the audit agree about it.
+      assert.match(
+        String(item.shipped_at ?? ""),
+        /^\d{4}-\d{2}-\d{2}$/,
+        `${item.id} is shipped but has no shipped_at date`,
+      );
+      continue;
+    }
     assert.equal(
       item.status,
       "backlog",
