@@ -46,6 +46,12 @@ jobs:
           grep -q "<title>" site/index.html || { echo "no <title>"; exit 1; }
           grep -q 'name="description"' site/index.html || { echo "no meta description"; exit 1; }
           grep -q "application/ld+json" site/index.html || { echo "no structured data"; exit 1; }
+          # The preview is the only way to see the product without installing it.
+          # It must exist, it must stay pinned to preview mode, and it must still
+          # match public/.
+          test -f site/demo/index.html || { echo "site/demo/index.html is missing"; exit 1; }
+          grep -q 'data-preview="true"' site/demo/index.html || { echo "the preview drifted out of preview mode"; exit 1; }
+          node scripts/build-demo-site.js --check
           echo "landing page checks passed"
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

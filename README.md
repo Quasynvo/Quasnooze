@@ -15,6 +15,16 @@
 
 <p align="center"><a href="#start-in-three-steps">Start here</a> · <a href="#the-fluid-motion-voice-engine">See the motion</a> · <a href="#voice-and-microphone-setup">Voice setup</a> · <a href="docs/VISUALIZER.md">Integration guide</a> · <a href="docs/GUIDE.md">Full guide</a></p>
 
+<p align="center">
+  <a href="https://quasynvo.github.io/Quasnooze/demo/"><strong>▶ Open the live preview</strong></a>
+  — the conversation surface, scripted, in your browser.<br>
+  <sub>No install. No model. No tools. No microphone. <a href="https://quasynvo.github.io/Quasnooze/demo/visualizer.html">Try the five motion states ↗</a></sub>
+</p>
+
+<p align="center">
+  <sub>Already have a checkout? <code>npm run demo</code> boots the real panel with a canned brain in about two seconds — no keys, no Ollama, no network.</sub>
+</p>
+
 > **Preview provenance:** the header is a silent, scripted walkthrough—not live AI, recorded microphone input or a performance benchmark. Prefer less motion? Use the [static SVG](assets/banner.svg) or open the interface with your OS reduced-motion preference enabled.
 >
 > **Existing installations:** the product name, saved data, configuration aliases and `pinch` CLI remain supported. This identity refresh does not move data or enable a microphone. [Compatibility details →](docs/REBRANDING.md)
