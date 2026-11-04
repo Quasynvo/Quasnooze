@@ -33,6 +33,47 @@ unreviewed features or install plugins. More reviewed entries can be added over
 successive delivery cycles, so the queue is replenishable, not an infinite task
 factory.
 
+## Why the board can look empty
+
+A quiet board and a finished roadmap look identical from the outside: four open
+issues either way. They are not the same thing, and the status issue now says
+which one you are looking at.
+
+Every unfiled item is held by exactly one gate, and the reason is printed in the
+**Filing queue** section of the rolling status issue and in the workflow run
+summary:
+
+| Gate | Meaning | How it clears |
+|---|---|---|
+| `not_before` | Staged release date (UTC). The item is complete and approved; it is simply scheduled. | The calendar. The queue files it on that date, at the hourly run. |
+| `depends_on` | A prerequisite is not finished. | The manifest marking it `shipped`, **or** its issue closing. |
+| `auto_file: false` | A maintainer veto on automatic filing, even for a complete item. | A human promotes it in a PR, or drops the flag. |
+| caps | Ten open contributor tasks, three of them easy. | Closing an issue. |
+
+Two rules exist because the alternative was a queue that stopped filing and said
+nothing:
+
+- **A closed issue is shipped.** Dependency checks accept either the manifest's
+  `status` or a closed, non-PR issue carrying `<!-- roadmap:ID -->`. The manifest
+  is reviewed at review speed; the tracker records what happened. When they
+  disagree, the tracker wins, because otherwise every dependent item waits for a
+  field nobody wrote.
+- **Refusals name themselves.** `node scripts/roadmap-queue.js .github/roadmap.json all.json --report`
+  prints what would file today, what each waiting item is blocked on, and the
+  soonest date any of them opens. `--check`-style silence is not allowed: a skip
+  reason without a date reads like "finished".
+
+`.github/roadmap.json` is still the reviewed source of truth, and the daily
+`Roadmap reconciliation` workflow keeps it honest: it derives `status: shipped`,
+`issue` and `shipped_at` from closed issues, then opens **one pull request**
+(branch `bot/roadmap-reconcile`) for a human to merge. It never pushes to main,
+never marks anything unshipped, and never edits a title, body, label or date.
+
+To pull a staged cohort forward without editing dates — for example to test the
+queue itself — dispatch `Contributor queue` with `as_of: YYYY-MM-DD`. That date
+replaces "today" for the gate comparison **only**: `auto_file: false` and unmet
+dependencies still refuse.
+
 ## Contributing
 
 Comment on an issue before starting to coordinate ownership. Include targeted
