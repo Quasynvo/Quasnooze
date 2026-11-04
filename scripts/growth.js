@@ -400,11 +400,26 @@ function collectUndocumentedConfig() {
   return out;
 }
 
+/** Accept REST and gh/GraphQL issue snapshots without mutating caller-owned data.
+ * Unknown state is not evidence of closure: retain it for caps/history, but do
+ * not treat it as a human's open request eligible for an automated comment.
+ * Apply at each public consumer, not only loadExisting: callers import these.
+ */
+function normalizeIssues(existing) {
+  return existing
+    .filter((issue) => issue && !issue.pull_request && issue.isPullRequest !== true && issue.__typename !== "PullRequest")
+    .map((issue) => {
+      const state = typeof issue.state === "string" ? issue.state.trim().toLowerCase() : "";
+      return { ...issue, state: state === "open" || state === "closed" ? state : "unknown" };
+    });
+}
+
 /** Someone opened an issue asking for something. That is the strongest signal
  *  this bot has, and it is the one a model cannot invent. Rather than file a
  *  duplicate, the bot writes the missing half of the request — where it fits,
  *  what it costs, what could break — as a comment on the original. */
 function collectDemand(existing) {
+  existing = normalizeIssues(existing);
   const out = [];
   const SKIP_LABELS = new Set([LABEL, "security", "dependencies", "duplicate", "wontfix"]);
   for (const issue of existing) {
@@ -540,7 +555,8 @@ function collectMarket(path) {
  * quiet run is a successful run, not a broken one.
  */
 function decide(cands, existing) {
-  const open = existing.filter((i) => i.state === "open");
+  existing = normalizeIssues(existing);
+  const open = existing.filter((i) => i.state !== "closed");
   const ranked = [...cands].sort((a, b) => b.score - a.score || a.fingerprint.localeCompare(b.fingerprint));
 
   if (ranked.length === 0) {
@@ -594,9 +610,14 @@ function decide(cands, existing) {
  * asked is never the thing that makes a backlog noisy.
  */
 function plan(cands, existing, { quota = 1, maxOpen = MAX_OPEN, shard = null, boardCap = 10 } = {}) {
+  existing = normalizeIssues(existing);
   const ranked = shard ? rankForShard(cands, shard) : [...cands].sort((a, b) => b.score - a.score || a.fingerprint.localeCompare(b.fingerprint));
-  const open = existing.filter((i) => i.state === "open");
+  const open = existing.filter((i) => i.state !== "closed");
   const openGrowth = open.filter((i) => (i.labels || []).some((l) => (typeof l === "string" ? l : l.name) === LABEL));
+  // Keep the shared board guard unchanged; only this planner treats an unknown
+  // snapshot as potentially open rather than using it to create filing room.
+  const contributorCount = countContributorIssues(existing.map((issue) =>
+    issue.state === "unknown" ? { ...issue, state: "open" } : issue));
   const files = [];
   const annotates = [];
   const skipped = [];
@@ -617,7 +638,7 @@ function plan(cands, existing, { quota = 1, maxOpen = MAX_OPEN, shard = null, bo
       skipped.push({ fingerprint: c.fingerprint, reason: `already filed as #${history.number}` });
       continue;
     }
-    if (countContributorIssues(existing) + files.length >= boardCap) {
+    if (contributorCount + files.length >= boardCap) {
       skipped.push({ fingerprint: c.fingerprint, reason: `shared contributor cap reached (${boardCap})` });
       continue;
     }
@@ -711,12 +732,13 @@ function quotaFor(mergedCount) {
 }
 
 function historyFor(fingerprint, existing, today = TODAY) {
+  existing = normalizeIssues(existing);
   for (const issue of existing) {
     const body = String(issue.body || "");
     if (!body.includes(`growth:fingerprint:${fingerprint}`)) continue;
     const stamp = issue.updatedAt || issue.createdAt || "";
     const ageDays = stamp ? Math.floor((Date.parse(today) - Date.parse(stamp)) / 86_400_000) : 0;
-    if (issue.state === "open" || ageDays <= WINDOW_DAYS) {
+    if (issue.state !== "closed" || ageDays <= WINDOW_DAYS) {
       return { number: issue.number, state: issue.state, age: ageDays };
     }
   }
