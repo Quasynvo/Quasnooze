@@ -491,3 +491,92 @@ test('shared contributor board cap stops growth even with uppercase REST/GraphQL
  const result=plan([strong()],existing,{quota:5,maxOpen:20,boardCap:10});
  assert.equal(result.decision,'skip');assert.equal(result.files.length,0);assert.match(result.reason,/shared contributor cap/);
 });
+
+test('uppercase OPEN growth issue fills the growth-specific cap of one', () => {
+  const existing = [{ number: 999, state: 'OPEN', body: '', labels: [{ name: 'growth' }] }];
+  const result = plan([strong()], existing, { maxOpen: 1, quota: 1 });
+  assert.equal(result.decision, 'skip');
+  assert.equal(result.files.length, 0);
+  assert.match(result.reason, /open-proposal cap/);
+});
+
+test('REST/gh open and closed inputs preserve cap and history semantics', () => {
+  const recent = `${TODAY}T00:00:00Z`, old = '2020-01-01T00:00:00Z';
+  for (const state of ['open', 'OPEN', 'closed', 'CLOSED']) {
+    const isOpen = state.toLowerCase() === 'open';
+    const base = { number: 901, state, labels: ['growth'], body: '', updatedAt: old };
+    assert.equal(plan([strong()], [base], { maxOpen: 1 }).decision, isOpen ? 'skip' : 'file');
+    const full = Array.from({ length: MAX_OPEN }, (_, i) => ({ ...base, number: 901 + i }));
+    assert.equal(decide([strong()], full).decision, isOpen ? 'skip' : 'file');
+    for (const updatedAt of [recent, old]) {
+      const issue = { ...base, body: 'growth:fingerprint:tests:src-thing-js', updatedAt };
+      const blocks = isOpen || updatedAt === recent;
+      assert.equal(Boolean(historyFor('tests:src-thing-js', [issue], TODAY)), blocks);
+      assert.equal(plan([strong()], [issue], { maxOpen: 10 }).decision, blocks ? 'skip' : 'file');
+      assert.equal(decide([strong()], [issue]).decision, blocks ? 'skip' : 'file');
+      if (blocks) assert.equal(historyFor('tests:src-thing-js', [issue], TODAY).state, state.toLowerCase());
+    }
+  }
+});
+
+test('demand annotation accepts both open spellings without duplicate specs', () => {
+  for (const state of ['open', 'OPEN', 'closed', 'CLOSED']) {
+    const issue = { number: 902, state, title: 'a human request', labels: ['enhancement'], body: 'Please help', comments: [] };
+    const demand = collectDemand([issue]);
+    if (state.toLowerCase() === 'closed') { assert.deepEqual(demand, []); continue; }
+    assert.equal(demand.length, 1);
+    assert.equal(demand[0].action, 'annotate');
+    assert.equal(decide(demand, [issue]).decision, 'annotate');
+    // Annotations remain allowed even when no new issue can be filed.
+    const result = plan(demand, [issue], { maxOpen: 0, boardCap: 0 });
+    assert.equal(result.decision, 'annotate');
+    assert.equal(result.files.length, 0);
+    assert.equal(result.annotates[0].issue, 902);
+    assert.deepEqual(collectDemand([{ ...issue, comments: [{ body: 'already written <!-- growth:spec:#902 -->' }] }]), []);
+    assert.deepEqual(collectDemand([{ ...issue, body: 'growth:fingerprint:existing' }]), []);
+  }
+});
+
+test('unknown states fail closed for caps/history but never invite demand comments', () => {
+  for (const state of [undefined, null, '', 'unexpected', 42]) {
+    const issue = { number: 903, state, labels: ['growth'], body: 'growth:fingerprint:tests:src-thing-js', updatedAt: '2020-01-01T00:00:00Z' };
+    assert.deepEqual(collectDemand([{ ...issue, body: '' }]), []);
+    assert.equal(historyFor('tests:src-thing-js', [issue], TODAY).state, 'unknown');
+    assert.equal(plan([strong()], [{ ...issue, body: '' }], { maxOpen: 1 }).decision, 'skip');
+    assert.equal(plan([strong()], [{ ...issue, body: '' }], { maxOpen: 10, boardCap: 1 }).decision, 'skip');
+    assert.equal(decide([strong()], Array.from({ length: MAX_OPEN }, () => ({ ...issue, body: '' }))).decision, 'skip');
+  }
+});
+
+test('PRs are excluded from demand, fingerprint history and both caps', () => {
+  for (const prFields of [{ pull_request: { url: 'https://example.invalid/pr' } }, { isPullRequest: true }, { __typename: 'PullRequest' }]) {
+    for (const state of ['open', 'OPEN', 'closed', 'CLOSED', 'unknown']) {
+      const pr = { number: 904, state, labels: ['growth'], body: 'growth:fingerprint:tests:src-thing-js', ...prFields };
+      assert.equal(historyFor('tests:src-thing-js', [pr], TODAY), null);
+      assert.deepEqual(collectDemand([{ ...pr, labels: [], body: '' }]), []);
+      assert.equal(plan([strong()], [pr], { maxOpen: 1, boardCap: 1 }).decision, 'file');
+      assert.equal(decide([strong()], Array.from({ length: MAX_OPEN }, () => pr)).decision, 'file');
+    }
+  }
+});
+
+test('shared and growth caps remain separate across mixed state and label formats', () => {
+  const existing = [
+    { number: 905, state: 'OPEN', labels: ['growth'], body: '' },
+    { number: 906, state: 'open', labels: [], body: '<!-- roadmap:fixture -->' },
+    { number: 907, state: 'CLOSED', labels: [{ name: 'growth' }], body: '' },
+  ];
+  const candidates = [strong(), strong({ fingerprint: 'another-fixture' })];
+  assert.match(plan(candidates, existing, { quota: 5, maxOpen: 1, boardCap: 10 }).reason, /open-proposal cap/);
+  assert.match(plan(candidates, existing, { quota: 5, maxOpen: 10, boardCap: 2 }).reason, /shared contributor cap/);
+  const result = plan(candidates, existing, { quota: 5, maxOpen: 10, boardCap: 3 });
+  assert.equal(result.files.length, 1);
+  assert.match(result.reason, /1 already open/);
+});
+
+test('normalization does not mutate issue snapshots', () => {
+  const issue = Object.freeze({ number: 908, state: 'OPEN', labels: Object.freeze(['growth']), body: '' });
+  const existing = Object.freeze([issue]);
+  plan([strong()], existing); decide([strong()], existing); collectDemand(existing); historyFor('missing', existing);
+  assert.equal(issue.state, 'OPEN');
+});
