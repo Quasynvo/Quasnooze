@@ -286,3 +286,10 @@ local paths; explicit `PINCH_DATA` / `QUASNOOZE_DATA` overrides are preserved.
 Use `quasnooze migrate-state` to preview copying legacy package state, then
 `quasnooze migrate-state --apply` for interactive confirmation. See
 [storage locations, migration and uninstall guidance](docs/USER-STATE.md).
+
+### Retention preview (no deletion)
+
+Run `quasnooze retention-plan --json` for a bounded, metadata-only inventory of
+sessions, memory, reminders, schedules and telemetry. Policies default off;
+optional age thresholds are preview-only and are never saved or applied. See
+[retention categories, safety and platform limitations](docs/RETENTION.md).
