@@ -187,6 +187,12 @@ function build(outDir) {
     written.push(page.to);
   }
 
+  // Membership in this set is the whole test for "will this 404?": a reference
+  // either names a file that is here or it does not. Resolving it into a path
+  // and then asking the filesystem asked the same question, in a way that made
+  // the build script a file-existence oracle for whatever HTML it was given.
+  const publishedFiles = new Set(readdirSync(outDir, { recursive: true }).map(String));
+
   // Every reference must resolve to a file that is really here. This is the
   // check that catches `/visualizer.css` on a project Pages site, and the one
   // that catches a new asset added to public/ without being added to ASSETS.
@@ -210,7 +216,7 @@ function build(outDir) {
         missing.push(`${page} references "${ref}", which escapes the published preview`);
         continue;
       }
-      if (!existsSync(resolve(outDir, ref))) {
+      if (!publishedFiles.has(ref.replace(/^\.\//, ""))) {
         missing.push(`${page} references "${ref}", which is not in the published preview`);
       }
     }
@@ -227,7 +233,7 @@ function build(outDir) {
         missing.push(`${relative(outDir, path)} imports "${spec}", which is not a sibling module`);
         continue;
       }
-      if (!existsSync(resolve(dirname(path), spec))) {
+      if (!publishedFiles.has(spec.slice(2))) {
         missing.push(`${relative(outDir, path)} imports "${spec}", which was not copied`);
       }
     }
