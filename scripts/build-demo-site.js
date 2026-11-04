@@ -29,7 +29,7 @@
  * that normally has a microphone, a model and a shell must say, in the page
  * itself, that none of them are here.
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -222,19 +222,26 @@ function build(outDir) {
     }
   }
 
-  for (const file of readdirSync(outDir, { recursive: true })) {
-    const path = join(outDir, file.toString());
-    if (!statSync(path).isFile() || !path.endsWith(".js")) continue;
-    for (const spec of imports(readFileSync(path, "utf8"))) {
+  // The import graph is read from the sources named in ASSETS, not from the
+  // output directory. Same files, no filesystem walk feeding a read: a build
+  // script that turns whatever it finds into a path is a file-existence oracle
+  // with extra steps, and "the files it finds" is not a set this script can
+  // vouch for the way it can vouch for a literal array.
+  for (const asset of ASSETS.filter((a) => a.endsWith(".js"))) {
+    if (!publishedFiles.has(asset)) {
+      missing.push(`public/${asset} was not published`);
+      continue;
+    }
+    for (const spec of imports(readFileSync(join(PUBLIC, asset), "utf8"))) {
       // A relative sibling module and nothing else: no parent segments, no
-      // absolute paths, no bare package names. This is a static copy, so an
-      // import it cannot resolve is a 404 at runtime rather than a build error.
+      // absolute paths, no bare package names. In a static copy an import that
+      // cannot be resolved is a 404 at runtime, not a build failure to skip.
       if (!SIBLING_MODULE.test(spec)) {
-        missing.push(`${relative(outDir, path)} imports "${spec}", which is not a sibling module`);
+        missing.push(`${asset} imports "${spec}", which is not a sibling module`);
         continue;
       }
       if (!publishedFiles.has(spec.slice(2))) {
-        missing.push(`${relative(outDir, path)} imports "${spec}", which was not copied`);
+        missing.push(`${asset} imports "${spec}", which was not copied`);
       }
     }
   }
@@ -258,9 +265,13 @@ function check() {
     }
     return out;
   };
-  const freshFiles = new Set(walk(fresh));
+  // The expected contents are known: the copied assets plus the emitted pages.
+  // Comparing that list (rather than whatever is on disk) keeps the check
+  // deterministic, and means a stale file left behind is reported instead of
+  // being read.
+  const expected = [...ASSETS, ...PAGES.map((p) => p.to)];
   const committedFiles = existsSync(OUT) ? new Set(walk(OUT)) : new Set();
-  for (const file of freshFiles) {
+  for (const file of expected) {
     if (!committedFiles.has(file)) {
       drift.push(`site/demo/${file} is missing — run: npm run demo:site`);
       continue;
@@ -270,7 +281,7 @@ function check() {
     if (!a.equals(b)) drift.push(`site/demo/${file} is out of date — run: npm run demo:site`);
   }
   for (const file of committedFiles) {
-    if (!freshFiles.has(file)) drift.push(`site/demo/${file} is not produced by the builder any more`);
+    if (!expected.includes(file)) drift.push(`site/demo/${file} is not produced by the builder any more`);
   }
   rmSync(tmp, { recursive: true, force: true });
   return { missing, drift };
