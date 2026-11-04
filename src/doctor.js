@@ -114,7 +114,7 @@ function readState(path) {
 
 function writeState(path, report) {
   try {
-    mkdirSync(join(path, ".."), { recursive: true });
+    mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
     const checks = {};
     for (const row of report.checks) if (row.status !== STATUS.SKIP) checks[row.id] = { status: row.status, at: report.generated_at };
     writeFileSync(path, `${JSON.stringify({ schema_version: SCHEMA_VERSION, checks }, null, 2)}\n`);
@@ -180,7 +180,7 @@ export async function runDoctor({
 
   /* ── data directory: writable, and not world-readable ────────────────── */
   try {
-    mkdirSync(cfg.dataDir, { recursive: true });
+    mkdirSync(cfg.dataDir, { recursive: true, mode: 0o700 });
     accessSync(cfg.dataDir, constants.W_OK);
     const mode = statSync(cfg.dataDir).mode & 0o777;
     const open = (mode & 0o077) !== 0;

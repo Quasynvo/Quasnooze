@@ -277,3 +277,12 @@ Motion changes must preserve signal honesty, keyboard access and reduced-motion 
 [User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
 
 Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous attribution is preserved. [MIT license](LICENSE).
+
+### Durable configuration for packaged installs
+
+Packaged installs keep `.env` and personal data in a stable per-user location,
+not in the npm installation or npx cache. Git checkouts retain their existing
+local paths; explicit `PINCH_DATA` / `QUASNOOZE_DATA` overrides are preserved.
+Use `quasnooze migrate-state` to preview copying legacy package state, then
+`quasnooze migrate-state --apply` for interactive confirmation. See
+[storage locations, migration and uninstall guidance](docs/USER-STATE.md).

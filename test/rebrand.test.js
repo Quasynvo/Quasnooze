@@ -36,7 +36,8 @@ test("real config precedence works across prefixes and native residency ignores 
   const dir = mkdtempSync(join(tmpdir(), "quasnooze-brand-"));
   try {
     mkdirSync(join(dir, "src"));
-    for (const f of ["config.js", "brand-config.js"])
+    mkdirSync(join(dir, ".git"));
+    for (const f of ["config.js", "brand-config.js", "state-paths.js"])
       copyFileSync(join(root, "src", f), join(dir, "src", f));
     writeFileSync(join(dir, "package.json"), '{"type":"module"}');
     const base = Object.fromEntries(

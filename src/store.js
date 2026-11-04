@@ -19,8 +19,8 @@ import { config } from "./config.js";
 const DATA = config.dataDir;
 
 export function ensureData() {
-  mkdirSync(DATA, { recursive: true });
-  mkdirSync(join(DATA, "sessions"), { recursive: true });
+  mkdirSync(DATA, { recursive: true, mode: 0o700 });
+  mkdirSync(join(DATA, "sessions"), { recursive: true, mode: 0o700 });
 }
 
 /**
@@ -45,7 +45,7 @@ function atomicWrite(path, text) {
     JSON.parse(text);
   }
 
-  mkdirSync(dirname(target), { recursive: true });
+  mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
   const tmp = `${target}.${process.pid}.tmp`;
   writeFileSync(tmp, text, "utf8");
   // Without the fsync, a power cut between write and rename can leave a

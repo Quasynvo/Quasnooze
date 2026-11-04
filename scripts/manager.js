@@ -163,6 +163,7 @@ function fixers() {
 
 /** The default a config key actually has, read from the source that defines it. */
 function defaultForEnv(name) {
+  if (name === "PINCH_DATA") return { value: "", source: "src/state-paths.js (checkout ./data; packaged per-user state/data)" };
   const file = join(ROOT, "src", "config.js");
   if (!existsSync(file)) return { value: "", source: "unknown" };
   const src = readFileSync(file, "utf8");

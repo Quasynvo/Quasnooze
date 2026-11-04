@@ -152,7 +152,7 @@ async function main() {
     let shown = false;
     try {
       const marker = join(config.dataDir, `notice-node-${support.major}`);
-      mkdirSync(config.dataDir, { recursive: true });
+      mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
       // "wx" creates the file only if it is not there, so the write itself
       // answers "have I said this before?" — there is no check to race with.
       try {

@@ -49,6 +49,8 @@ test('desktop is enabled only by Windows process flag 1, with safety overrides',
   const fixture = mkdtempSync(join(tmpdir(), 'pinch-desktop-env-'));
   try {
     mkdirSync(join(fixture, 'src'));
+    mkdirSync(join(fixture, '.git'));
+    copyFileSync(join(root, 'src', 'state-paths.js'), join(fixture, 'src', 'state-paths.js'));
     copyFileSync(join(root, 'src', 'config.js'), join(fixture, 'src', 'config.js'));
     copyFileSync(join(root, 'src', 'brand-config.js'), join(fixture, 'src', 'brand-config.js'));
     writeFileSync(join(fixture, 'package.json'), '{"type":"module"}');
