@@ -29,9 +29,9 @@
  * that normally has a microphone, a model and a shell must say, in the page
  * itself, that none of them are here.
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -169,12 +169,16 @@ function build(outDir) {
 
   const missing = [];
   for (const asset of ASSETS) {
-    const from = join(PUBLIC, asset);
-    if (!existsSync(from)) {
+    // Copy, then classify the failure. Asking `existsSync` first and copying
+    // second is a check-then-use: the answer can change between the two calls,
+    // and the copy already reports ENOENT for a source that is not there. One
+    // operation, one failure mode, nothing to race.
+    try {
+      cpSync(join(PUBLIC, asset), join(outDir, asset), { dereference: true });
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
       missing.push(`public/${asset} is listed in ASSETS but does not exist`);
-      continue;
     }
-    cpSync(from, join(outDir, asset), { dereference: true });
   }
 
   const written = [];
@@ -204,7 +208,12 @@ function build(outDir) {
       // that links here. It is not built by this script, so it is checked
       // against site/ itself even when everything else goes to a temp dir.
       if (ref === LANDING) {
-        if (!existsSync(join(ROOT, "site", "index.html"))) {
+        // Read it rather than stat it: "is it there" is the question, "can it
+        // be served" is the answer, and reading asks it once.
+        try {
+          readFileSync(join(ROOT, "site", "index.html"));
+        } catch (err) {
+          if (err.code !== "ENOENT") throw err;
           missing.push(`${page} links to "${ref}", which is not in site/`);
         }
         continue;
@@ -249,6 +258,32 @@ function build(outDir) {
   return { missing, written };
 }
 
+/** Every file under `dir`, read once, keyed by its path relative to `dir`.
+ *  Returning the bytes alongside the name means the comparison in `check`
+ *  never turns a name it found on disk back into a path to open: a directory
+ *  listing is read, not trusted as a description of what will be there next.
+ *  A missing directory is an empty snapshot — that is the state before the
+ *  first build, not an error. */
+function snapshot(dir) {
+  const files = new Map();
+  const visit = (current, base) => {
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+      return;
+    }
+    for (const entry of entries) {
+      const rel = base ? `${base}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) visit(join(current, entry.name), rel);
+      else files.set(rel, readFileSync(join(current, entry.name)));
+    }
+  };
+  visit(dir, "");
+  return files;
+}
+
 /** Compare a fresh build against the committed one, byte for byte. */
 function check() {
   const tmp = mkdtempSync(join(tmpdir(), "quasnooze-demo-"));
@@ -256,31 +291,23 @@ function check() {
   const { missing } = build(fresh);
   const drift = [];
   if (missing.length) return { missing, drift };
-  const walk = (dir, base = "") => {
-    const out = [];
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const rel = base ? join(base, entry.name) : entry.name;
-      if (entry.isDirectory()) out.push(...walk(join(dir, entry.name), rel));
-      else out.push(rel);
-    }
-    return out;
-  };
   // The expected contents are known: the copied assets plus the emitted pages.
   // Comparing that list (rather than whatever is on disk) keeps the check
   // deterministic, and means a stale file left behind is reported instead of
   // being read.
   const expected = [...ASSETS, ...PAGES.map((p) => p.to)];
-  const committedFiles = existsSync(OUT) ? new Set(walk(OUT)) : new Set();
+  const built = snapshot(fresh);
+  const committedFiles = snapshot(OUT);
   for (const file of expected) {
     if (!committedFiles.has(file)) {
       drift.push(`site/demo/${file} is missing — run: npm run demo:site`);
       continue;
     }
-    const a = readFileSync(join(fresh, file));
-    const b = readFileSync(join(OUT, file));
-    if (!a.equals(b)) drift.push(`site/demo/${file} is out of date — run: npm run demo:site`);
+    if (!built.get(file).equals(committedFiles.get(file))) {
+      drift.push(`site/demo/${file} is out of date — run: npm run demo:site`);
+    }
   }
-  for (const file of committedFiles) {
+  for (const file of committedFiles.keys()) {
     if (!expected.includes(file)) drift.push(`site/demo/${file} is not produced by the builder any more`);
   }
   rmSync(tmp, { recursive: true, force: true });
