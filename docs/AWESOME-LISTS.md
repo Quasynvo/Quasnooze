@@ -29,6 +29,8 @@ maintained, and covers apps that use a local model as their default brain.
 | [Quasnooze](https://github.com/Quasynvo/Quasnooze) | Local-first personal assistant with permission-gated tools | Source | MIT |
 ```
 
+- **Placement** — `## Assistants`, between **OpenClaw** and **Talos**, which is
+  where the section's existing ordering puts it.
 - **Description** — six words, factual, and deliberately does **not** mention
   Ollama: that list's `CONTRIBUTING.md` says "Don't mention Ollama (implied)".
 - **Install** — `Source`, not `npm`. The package metadata names
@@ -37,7 +39,13 @@ maintained, and covers apps that use a local model as their default brain.
   release actually installs.
 - **License** — `MIT`, the SPDX identifier, matching [LICENSE](../LICENSE).
 - **Linting** — that repository requires `python scripts/lint.py README.md` to
-  pass; run it with `--fix` for cell padding before pushing.
+  pass. The row above was inserted into a clean clone of the list on
+  2026-11-05, re-padded with `--fix`, and re-checked: **9 sections, 93 entries,
+  0 errors**. The linter rewrites the row to this, and nothing else changes:
+
+  ```markdown
+  | [Quasnooze](https://github.com/Quasynvo/Quasnooze)                           | Local-first personal assistant with permission-gated tools                                          | Source      | MIT          |
+  ```
 - Longer alternative if a reviewer asks for more detail: *"Local-first
   assistant for the desktop and five chat channels, with a visible
   risk-classified approval gate."*
@@ -188,3 +196,34 @@ about exactly this:
 Track the outcome in the issue that references this document rather than adding
 a status table here — a stale "submitted" claim is the same failure mode as a
 stale capability claim in [`CAPABILITIES.json`](CAPABILITIES.json).
+
+## Running the submission
+
+The pull requests themselves must be opened from an account that can fork the
+target repository. The GitHub token available in this workspace is fine-grained
+and scoped to the Quasynvo repositories only, so `gh repo fork` against a
+third-party list returns `403 Resource not accessible by integration`. Nothing
+is wrong with the token; it simply has no permission over repositories it does
+not list. Submitting needs either a token with public-repository access or the
+five commands below run locally.
+
+```sh
+# 1 · fork and branch
+gh repo fork EndoTheDev/Awesome-Ollama --clone=true
+cd Awesome-Ollama && git switch -c add-quasnooze
+
+# 2 · add the row to ## Assistants, after OpenClaw, then re-pad
+python3 scripts/lint.py README.md --fix && python3 scripts/lint.py README.md
+
+# 3 · push and open the PR with the body from section 1
+git commit -am "Add Quasnooze to Assistants"
+git push -u origin add-quasnooze
+gh pr create --repo EndoTheDev/Awesome-Ollama \
+  --title "Add Quasnooze to Assistants" --body-file pr-body.md
+```
+
+Two things worth checking before the push, because both are cheap and both get
+PRs closed: that the fork really is current with `EndoTheDev/main` (the list was
+last pushed 2026-10-15), and that the checksum of a fresh `lint.py` run is still
+`0 errors`. Duplicate or stale-fork PRs are the most common rejection in these
+lists.
