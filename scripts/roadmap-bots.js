@@ -12,6 +12,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { queueReport } from "./roadmap-queue.js";
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const STATUS_MARKER = "<!-- roadmap-status -->";
 export const PR_MARKER = "<!-- pr-guide-bot -->";
@@ -44,7 +46,12 @@ export function detectFileDrift(roadmap, repoRoot = ROOT) {
   return missing;
 }
 
-export function renderStatusMarkdown(roadmap, issues = [], repoRoot = ROOT) {
+export function renderStatusMarkdown(
+  roadmap,
+  issues = [],
+  repoRoot = ROOT,
+  today = new Date().toISOString().slice(0, 10),
+) {
   const items = roadmap.items || [];
   const shipped = items.filter((i) => i.status === "shipped");
   const openByMarker = new Map();
@@ -121,6 +128,33 @@ export function renderStatusMarkdown(roadmap, issues = [], repoRoot = ROOT) {
     lines.push("");
   }
 
+  // Why the board is quiet, in the board. "No eligible item" reads exactly like
+  // "nothing left to do"; a date and a reason do not.
+  const report = queueReport(roadmap, issues, today);
+  lines.push("## Filing queue", "");
+  lines.push(
+    `- **Eligible now:** ${report.fileable.length} item(s) · **slots:** ${report.openContributorIssues}/${report.totalCap} open`,
+  );
+  if (report.nextGate) {
+    lines.push(
+      `- **Next filing date:** \`${report.nextGate}\` — ${report.nextGateCount} item(s) file automatically on that date`,
+    );
+  } else {
+    lines.push("- **Next filing date:** nothing is future-dated; the queue is limited by caps only");
+  }
+  if (report.blockedByKind.manual) {
+    lines.push(
+      `- **Maintainer approval required:** ${report.blockedByKind.manual} item(s) carry \`auto_file: false\``,
+    );
+  }
+  if (report.blockedByKind.dependency) {
+    lines.push(`- **Waiting on other items:** ${report.blockedByKind.dependency}`);
+  }
+  if (report.blockedByKind.incomplete) {
+    lines.push(`- **Incomplete bodies:** ${report.blockedByKind.incomplete} (never filed)`);
+  }
+  lines.push("");
+
   const drift = detectFileDrift(roadmap, repoRoot);
   const needsShippedUpdate = items.filter(
     (i) => i.status !== "shipped" && closedMarkers.has(i.id),
@@ -128,9 +162,11 @@ export function renderStatusMarkdown(roadmap, issues = [], repoRoot = ROOT) {
   if (drift.length || needsShippedUpdate.length) {
     lines.push("## Drift & maintenance notes", "");
     for (const d of drift) lines.push(`- ⚠️ ${d}`);
-    for (const item of needsShippedUpdate) {
+    if (needsShippedUpdate.length) {
+      const named = needsShippedUpdate.slice(0, 4).map((i) => `\`${i.id}\``).join(", ");
       lines.push(
-        `- ℹ️ \`${item.id}\` issue was closed; mark \`"status": "shipped"\` in \`.github/roadmap.json\` once released.`,
+        `- ℹ️ ${needsShippedUpdate.length} item(s) are closed in the tracker but not marked \`shipped\` (${named}${needsShippedUpdate.length > 4 ? ", …" : ""}). ` +
+          "The queue treats a closed issue as shipped regardless, but run `node scripts/reconcile-roadmap.js --issues-json … --write` so the manifest stops disagreeing with the record.",
       );
     }
     lines.push("");

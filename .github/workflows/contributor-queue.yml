@@ -35,6 +35,10 @@ on:
         description: "Report decisions without filing, commenting or closing"
         type: boolean
         default: true
+      as_of:
+        description: "Optional YYYY-MM-DD. File against this date instead of today — a deliberate early drain of a staged item. Empty means today."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -175,6 +179,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EASY_COUNT: ${{ steps.queue.outputs.easy }}
           CURATED_COUNT: ${{ steps.queue.outputs.curated }}
+          AS_OF_INPUT: ${{ inputs.as_of }}
         run: |
           set -euo pipefail
           EASY_CAP="$(jq -r '.meta.open_easy_cap // 3' .github/roadmap.json)"
@@ -188,14 +193,35 @@ jobs:
             exit 0
           fi
 
+          # Optional early drain. A staged item carries a `not_before` date so the
+          # board paces itself; this lets a maintainer pull one cohort forward
+          # without editing the manifest. It cannot skip `auto_file: false` or a
+          # dependency, because selection still runs every other gate.
+          AS_OF="${AS_OF_INPUT:-}"
+          if [ -n "$AS_OF" ] && ! printf '%s' "$AS_OF" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+            echo "::error::as_of must be YYYY-MM-DD, got '${AS_OF}'"
+            exit 1
+          fi
+
           # Select through the tested helper. auto_file:false is an explicit
           # maintainer gate, even for fully specified ready/backlog tasks.
-          node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json > /tmp/picked.json
+          node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json "$AS_OF" > /tmp/picked.json
 
           COUNT="$(jq 'length' /tmp/picked.json)"
           if [ "$COUNT" -eq 0 ]; then
+            REPORT="$(node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json "$AS_OF" --report)"
+            NEXT="$(printf '%s' "$REPORT" | jq -r '.nextGate // "none"')"
+            BLOCKED="$(printf '%s' "$REPORT" | jq -r '(.blocked | length)')"
             echo "decision=skip" >> "$GITHUB_OUTPUT"
-            echo "reason=no unfiled eligible item within caps (open=${CURATED}/${TOTAL_CAP}, easy=${EASY}/${EASY_CAP})" >> "$GITHUB_OUTPUT"
+            echo "reason=no unfiled eligible item within caps (open=${CURATED}/${TOTAL_CAP}, easy=${EASY}/${EASY_CAP}); next gate ${NEXT}; ${BLOCKED} item(s) wait on a gate" >> "$GITHUB_OUTPUT"
+            {
+              echo "**queue is quiet, and why:**"
+              printf '%s' "$REPORT" | jq -r '
+                "- eligible now: \(.fileable | length) · slots \(.openContributorIssues)/\(.totalCap)",
+                "- next filing date: \(.nextGate // "none") (\(.nextGateCount // 0) item(s))",
+                "- waiting on maintainers: \(.blockedByKind.manual // 0)",
+                "- waiting on other items: \(.blockedByKind.dependency // 0)"'
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           echo "decision=file" >> "$GITHUB_OUTPUT"

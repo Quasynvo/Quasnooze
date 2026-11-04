@@ -172,8 +172,15 @@ test("roadmap status, issue classifier, and PR context helpers stay deterministi
   assert.ok(labels.includes("area/voice"));
   assert.ok(labels.includes("type/bug"));
 
+  // Match against whatever is still open rather than a hard-coded id: this test
+  // is about the file→task lookup, and pinning it to one task meant the
+  // assertion silently depended on that task never shipping.
+  const openTask = rm.items.find(
+    (i) => i.status !== "shipped" && (i.files || []).includes("src/store.js"),
+  );
+  assert.ok(openTask, "the roadmap should still have an open task touching src/store.js");
   const ctx = renderPrContext(rm, ["src/store.js"], "Implements session search");
-  assert.match(ctx, /pinch-004-session-history-search/);
+  assert.match(ctx, new RegExp(openTask.id));
   assert.match(ctx, /Closes #<issue-number>/);
 });
 

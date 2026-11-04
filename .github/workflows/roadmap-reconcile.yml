@@ -1,0 +1,114 @@
+name: Roadmap reconciliation
+
+# The contributor queue gates dependencies on `"status": "shipped"`. Nothing was
+# writing that field, so seventeen finished items still read as unfinished, the
+# status board claimed 3/53 while 20 were merged, and every future item that
+# depended on one of them waited for a status only a human remembered to type.
+#
+# This derives the field from the one thing that cannot drift — a closed issue
+# carrying the item's `<!-- roadmap:ID -->` marker — and proposes the manifest
+# change as a pull request. Same fence as the growth loop's fix lane:
+#
+#   - it never pushes to main
+#   - it never edits a title, a body, a label, or a date
+#   - it never marks anything unshipped
+#
+# Only `status`, `issue` and `shipped_at` move, and a human merges the result.
+
+on:
+  schedule:
+    # Daily, before the queue's hourly run at :23 gets going for the day.
+    - cron: "13 5 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report drift without opening a pull request"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roadmap-reconcile
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    name: Derive shipped status from closed issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # the bot branch only; main is protected
+      issues: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+
+      - name: Read every issue this queue has ever filed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # `state=all` matters: the evidence for "shipped" is a closed issue, so
+          # a dump of open issues would prove nothing.
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues?state=all&per_page=100" \
+            | jq 'add | map(select(.pull_request | not))' > /tmp/history.json
+
+      - name: Reconcile the manifest
+        id: reconcile
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          node scripts/reconcile-roadmap.js --issues-json /tmp/history.json --write | tee /tmp/reconcile.log
+          if git diff --quiet -- .github/roadmap.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The manifest already agrees with the issue tracker." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          node scripts/validate-roadmap.js .github/roadmap.json
+
+          # The claim in the PR body is generated from the diff, not remembered.
+          git diff --numstat -- .github/roadmap.json > /tmp/stat.txt
+          {
+            echo "### Roadmap reconciliation"
+            echo ""
+            echo '```'
+            grep -E '^(shipped|linked) ' /tmp/reconcile.log || true
+            echo '```'
+            echo ""
+            echo "Derived from closed issues carrying a \`<!-- roadmap:ID -->\` marker."
+            echo "Only \`status\`, \`issue\` and \`shipped_at\` were touched."
+          } > /tmp/pr-body.md
+          cat /tmp/pr-body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open a pull request
+        if: steps.reconcile.outputs.changed == 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: bot/roadmap-reconcile
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add .github/roadmap.json
+          git commit -m "chore(roadmap): mark finished items shipped from the issue tracker"
+          git push --force origin "$BRANCH"
+
+          if gh pr list --head "$BRANCH" --state open --json number --jq 'length' | grep -qv '^0$'; then
+            echo "A reconciliation PR is already open; its branch was updated." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(roadmap): reconcile shipped status with the issue tracker" \
+            --body-file /tmp/pr-body.md \
+            --label "roadmap"
