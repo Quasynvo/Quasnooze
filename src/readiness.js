@@ -33,7 +33,7 @@ export const READINESS = Object.freeze({
 });
 
 const COMPANION_PHASES = new Set([
-  "not-running", "muted", "muting", "armed", "listening", "speaking",
+  "starting", "recovering", "unavailable", "not-running", "muted", "muting", "armed", "listening", "speaking",
   "working", "ready", "approval", "attention", "reminder",
 ]);
 

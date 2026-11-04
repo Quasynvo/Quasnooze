@@ -195,7 +195,7 @@ async function main() {
   console.log(c.dim(`   data: ${config.dataDir}\n   ctrl-c to stop\n`));
 
   const companion = config.desktopRequested ? startWindowsCompanion({ log }) : null;
-  if (companion) log.info("Windows companion started; microphone is muted. Enable local wake from its widget or tray.");
+  if (companion) log.info("Windows companion launch requested; waiting for readiness. Every connection starts muted.");
 
   const shutdown = () => {
     companion?.stop();

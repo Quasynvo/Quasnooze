@@ -73,7 +73,7 @@ public static class QuasnoozeCompanion {
     static Prompt CurrentPrompt;
     static Icon BrandIcon;
     static PictureBox CompanionArt;
-    static bool WantWake, Quitting, Working, FollowUps;
+    static bool WantWake, Quitting, Working, FollowUps, Connected;
     static string Panel = "", Root = "", Node = "", Launcher = "", Approval = "", ApprovalText = "";
     static readonly Color Cyan = Color.FromArgb(131, 245, 237);
 
@@ -110,6 +110,7 @@ public static class QuasnoozeCompanion {
     static void StopRecognition() { SpeechAction(SpeechGate.Stop()); }
     static void StopSpeech() { CurrentPrompt = null; if (Speaker != null) Speaker.SpeakAsyncCancelAll(); }
     static bool Consent() {
+        if (!Connected) return false;
         Window.Show(); Window.Activate();
         SpeechStatus("permission", "Accept the native microphone consent dialog to begin; no browser microphone is used.");
         bool allowed = MessageBox.Show(Window,
@@ -298,6 +299,10 @@ public static class QuasnoozeCompanion {
             var m = Json.Deserialize<Dictionary<string, object>>(line); string op = Value(m, "op");
             switch (op) {
                 case "init":
+                    WantWake = false; FollowUps = false; Working = false; Approval = ""; ApprovalText = "";
+                    Allow.Visible = Deny.Visible = false; StopSpeech(); StopRecognition();
+                    Wake.Text = "Enable local wake"; Connected = true;
+                    Phase("muted", "Reconnected. Microphone off; enable it explicitly. Interrupted actions are not replayed.");
                     Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "QUASNOOZE  /  " + Value(m, "owner");
                     try {
                         using (var art = Image.FromFile(Path.Combine(Root, "public", "brand", "voice-engine-native.png"))) {
@@ -330,7 +335,7 @@ public static class QuasnoozeCompanion {
         b.FlatAppearance.BorderColor = Color.FromArgb(50, 78, 99); b.Click += (s, e) => click(); Window.Controls.Add(b); return b;
     }
     static void Submit() {
-        string text = Input.Text.Trim(); if (Working || text.Length == 0 || text.Length > 2000) return;
+        string text = Input.Text.Trim(); if (!Connected || Working || text.Length == 0 || text.Length > 2000) return;
         Input.Clear(); Working = true; StopRecognition(); StopSpeech(); Phase("working", text); Emit(new { type = "command", text = text });
     }
     public static string SelfTest() {

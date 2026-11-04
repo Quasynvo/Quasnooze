@@ -173,3 +173,47 @@ consent: after a spoken response it listens for another instruction for up to 12
 seconds without repeating the name. Silence returns to wake mode. It is still
 half-duplex; spoken output starts after the final answer, and there is no promise
 of simultaneous speaking/listening or measured real-model latency.
+
+## Bounded host recovery
+
+The resident Node process waits up to **15 seconds** for the Windows child UI's
+`ready` event. A crash, pipe error/EOF, oversized pipe buffer or missing-ready
+signal invalidates that host generation, clears pending native actions, denies
+pending desktop approvals and marks the companion unavailable. The command deck
+reports `starting`, `recovering` or `unavailable` rather than claiming readiness.
+The task 012 readiness schema remains unchanged: these phases map to
+`companion-unavailable`, with no transcript or command copied to diagnostics.
+
+A recovery episode allows **three automatic restart attempts**, with a one-second
+pause between attempts. A successful ready event does not replenish the budget:
+repeated ready/crash loops still stop after three restarts. After exhaustion,
+choose **Retry companion** in the command deck to explicitly start a new episode.
+Quit cancels scheduled retries. Recovery waits for confirmed child exit before
+spawning a replacement; if exit is not confirmed within two seconds of the kill
+request, the UI reports unavailable and microphone state unknown. Retry cannot
+launch an overlapping child; terminate the old process first. This controller
+recovers the child companion, not a crashed Node parent or model backend.
+
+Every replacement starts **muted**, without wake/follow-up consent or retained
+approvals. Native input is gated until initialization. Old pipe events and late
+model callbacks cannot control the replacement, display stale replies, or approve
+work. No command, action or reply is queued for replay. Pending side-effect
+outcomes are **unknown**, not automatically failed or safely cancelled: a tool or
+OS action may already have begun. Inspect the outcome before issuing it again.
+An in-flight model/tool request retains the single-request gate until it settles;
+reconnection does not start another turn alongside it. Stop voice still does not
+cancel an already running tool. Approval policy and local-only inference rules
+are unchanged; there is no browser/cloud microphone fallback.
+
+### Validation boundary
+
+Automated tests inject child crashes, spawn/pipe errors, a non-exiting child,
+missing-ready deadlines, stale events and a deterministic clock. They exercise
+muted reconnects, retry exhaustion, quit, stale approvals and readiness derivation.
+These tests **do not validate physical Windows behavior**. Native PowerShell/C#
+compilation, speech permissions, crash/kill microphone release, sleep/wake,
+tray/hotkey cleanup and real-device recovery need separate, consented Windows
+checks. Record OS/build, Node version, speech pack/input device, precise failure
+injection, observed states/microphone release, attempt count and retry/quit
+results before claiming those checks passed. No such hardware/manual checks were
+performed by this Linux-based change. Independent maintainer review is required.
