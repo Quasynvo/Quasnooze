@@ -71,7 +71,7 @@
       >
       <nav aria-label="Main navigation">
         <a href="#capabilities">What it does</a><a href="#how">How it works</a
-        ><a href="#start">Get started</a>
+        ><a href="#start">Get started</a><a href="demo/">Live preview</a>
       </nav>
       <a class="github" href="https://github.com/Quasynvo/Quasnooze"
         >View on GitHub ↗</a
@@ -87,15 +87,19 @@
             tangled ideas and getting things done—with you in control.
           </p>
           <div class="cta">
-            <a class="primary" href="#start"
-              >Meet your assistant <span>↗</span></a
-            ><a class="secondary" href="#how">See how it works ↓</a>
+            <a class="primary" href="demo/"
+              >Try the preview in your browser <span>↗</span></a
+            ><a class="secondary" href="#start">Get started ↓</a>
           </div>
           <div class="truth">
             <span>Local by default</span><span>Open source</span
             ><span>Permission-first</span>
           </div>
-          <p class="hero-note">A calm personality. Not an artificial delay.</p>
+          <p class="hero-note">
+            A calm personality. Not an artificial delay.
+            <a href="demo/">Open the scripted preview ↗</a> — no install, no
+            model, no microphone.
+          </p>
         </div>
         <div class="voice-engine" data-phase="idle" id="voiceEngine">
           <div class="visualizer is-static">
@@ -279,6 +283,7 @@
           </div>
           <pre><code id="commands">git clone https://github.com/Quasynvo/Quasnooze.git
 cd Quasnooze
+npm run demo     # look first: canned brain, no model, no keys
 npm run setup
 npm run doctor
 npm run brain

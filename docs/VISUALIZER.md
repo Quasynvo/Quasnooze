@@ -280,6 +280,15 @@ Developer requirements: Python 3 and Pillow. The script builds the static mark, 
 
 The GIF is silent and deterministic. Do not caption it as live microphone input, model inference, a speed comparison or phoneme synchronization. Keep `assets/demo.gif` identical to `assets/quasnooze-showcase.gif` for the existing demo URL.
 
+The published preview at `/demo/` is generated, not hand-edited:
+
+```sh
+node scripts/build-demo-site.js          # regenerate site/demo/ from public/
+node scripts/build-demo-site.js --check  # CI: fail if the committed copy drifted
+```
+
+It copies only the files named in `ASSETS` and refuses to finish when a page references something it did not copy — an absolute `/visualizer.css` is a 404 under `/Quasnooze/demo/`, not an asset. The conversation copy carries `<html data-preview="true">` instead of `?demo=1`, so a shared or redirected link cannot address a backend by accident. Backend-coupled pages (`index.html`, `desktop.html`) are deliberately not published.
+
 Retired character-image URLs are intentionally removed, not redirected to a character wrapper. Custom clients should use `/brand/voice-engine.svg` or the canvas component. The organization mark remains separate.
 
 ## 10. Verification checklist

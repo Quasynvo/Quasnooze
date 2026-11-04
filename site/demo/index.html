@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en" data-preview="true">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Quasnooze — static conversation preview</title>
+    <link rel="icon" href="brand/voice-engine.svg" />
+    <link rel="stylesheet" href="visualizer.css" />
+    <link rel="stylesheet" href="cosmic.css" />
+      <meta name="description" content="A scripted, no-install preview of the Quasnooze conversation surface and its Fluid Motion voice signal. No model, no tools, no microphone, no account." />
+    <link rel="canonical" href="https://quasynvo.github.io/Quasnooze/demo/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Quasnooze — static conversation preview" />
+    <meta property="og:description" content="A scripted, no-install preview of the Quasnooze conversation surface and its Fluid Motion voice signal. No model, no tools, no microphone, no account." />
+    <meta property="og:image" content="https://quasynvo.github.io/Quasnooze/og-image.png" />
+  </head>
+  <body data-state="idle"><div role="note" style="position:relative;z-index:60;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;padding:10px 16px;font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.08em;color:#c8d8ea;background:#0a1220;border-bottom:1px solid #ffffff24"><span>STATIC PREVIEW · NO MODEL, NO TOOLS, NO ACCOUNT</span><span style="font:11px/1.7 ui-monospace,Consolas,monospace;color:#8ea3b8;letter-spacing:.02em">Everything on this page is scripted. A running Quasnooze answers with a local model and asks before it acts; this copy cannot.</span><a style="color:#6ee7f9;text-decoration:none;border-bottom:1px solid #6ee7f955" href="../index.html">About Quasnooze ↗</a><a style="color:#6ee7f9;text-decoration:none;border-bottom:1px solid #6ee7f955" href="https://github.com/Quasynvo/Quasnooze">Source ↗</a></div>
+    <div class="cosmos" aria-hidden="true">
+      <div class="nebula n1"></div>
+      <div class="nebula n2"></div>
+      <div class="stars"></div>
+      <div class="orbital o1"></div>
+      <div class="orbital o2"></div>
+    </div>
+    <header class="topbar">
+      <a class="brand" href="./index.html" aria-label="Quasnooze conversation home"><img src="brand/voice-engine.svg" width="42" height="42" alt=""><span>quasnooze<small>BY QUASYNVO</small></span></a>
+      <div class="toplinks">
+        <span class="concept">FLUID MOTION / 01</span
+        ><span id="connection" class="connection">Checking service…</span
+        ><span id="micLabel" class="mic-status">MIC: NOT CHECKED</span
+        ><button
+          id="settings"
+          class="icon-button"
+          aria-label="Connection and voice settings"
+        >
+          ⚙
+        </button>
+      </div>
+    </header>
+    <main>
+      <section class="presence" aria-labelledby="heroTitle">
+        <div class="hero">
+          <div class="eyebrow"><i></i> LOCAL INTELLIGENCE. VISIBLE SIGNAL.</div>
+          <h1 id="heroTitle">
+            Your voice.<br />In <em>fluid motion.</em>
+          </h1>
+          <p>A luminous signal for listening, thinking and speaking.</p>
+        </div>
+        <div class="voice-stage" id="voiceStage">
+          <div class="visualizer is-static">
+            <canvas id="voiceCanvas" width="640" height="640" aria-hidden="true"></canvas>
+            <img class="visualizer-fallback" src="brand/voice-engine.svg" alt="">
+          </div>
+          <div class="orbit-label" aria-hidden="true"><span>∿</span> FLUID MOTION VOICE ENGINE</div>
+        </div>
+        <div class="presence-footer">
+          <div class="signal-source" id="signalSource">STATE-DRIVEN MOTION · NO AUDIO SAMPLES</div>
+          <div
+            class="state-title"
+            id="stateTitle"
+            role="status"
+            aria-live="polite"
+          >
+            Here, with you.
+          </div>
+          <p id="stateDetail">
+            This page never captures audio or enables background listening.
+          </p>
+          <div class="stage-actions">
+            <button id="talk" class="talk-button">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="vertical-align:-2px"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg> Talk locally</button
+            ><button id="stopVoice" class="quiet-button">Stop voice</button
+            ><button id="animate" class="quiet-button">
+              Preview animation ↗
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="conversation" aria-labelledby="conversationTitle">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">YOUR CONVERSATION, IN FOCUS</div>
+            <h2 id="conversationTitle">Let’s untangle it.</h2>
+          </div>
+          <button
+            id="newChat"
+            class="icon-button"
+            aria-label="Start a new conversation"
+          >
+            ＋
+          </button>
+        </div>
+        <div class="mode-notice" id="modeNotice">
+          Concept UI · Quasnooze remains unchanged. Checking your configured
+          backend.
+        </div>
+        <div
+          id="messages"
+          class="messages"
+          role="log"
+          aria-label="Conversation"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
+          <article class="message assistant welcome">
+            <div class="speaker">
+              <span class="mini-star">✧</span> QUASNOOZE
+            </div>
+            <h3>
+              Big thought?<br />Small question?<br /><span>Let’s find the signal.</span>
+            </h3>
+            <p>
+              Bring the question. We’ll find the thread—with visible progress and
+              your permission at every sensitive step.
+            </p>
+            <div class="suggestions">
+              <button data-prompt="Help me plan my next focused work session.">
+                Find my focus <span>↗</span></button
+              ><button
+                data-prompt="Explain a tricky idea in plain language. Ask me what I am learning."
+              >
+                Make it make sense <span>↗</span></button
+              ><button
+                data-prompt="Help me break a project into three small steps."
+              >
+                Start something good <span>↗</span>
+              </button>
+            </div>
+          </article>
+        </div>
+        <div id="approval" class="approval" hidden>
+          <div class="eyebrow">YOUR PERMISSION, FIRST</div>
+          <p id="approvalText"></p>
+          <div>
+            <button id="deny" class="quiet-button">Deny</button
+            ><button id="allow" class="talk-button">Allow once</button>
+          </div>
+        </div>
+        <form id="composer" class="composer">
+          <label class="sr-only" for="prompt">Your message</label
+          ><textarea
+            id="prompt"
+            maxlength="12000"
+            rows="1"
+            placeholder="What’s on your mind?"
+            required
+          ></textarea
+          ><button id="send" type="submit" aria-label="Send message">↑</button>
+        </form>
+        <div class="composer-meta">
+          <span id="backendLabel"
+            >Text connects to your configured Quasnooze backend.</span
+          ><span>↵ SEND · SHIFT ↵ NEW LINE</span>
+        </div>
+        <div class="panel-footer">
+          <span><i></i> YOUR CHOICES STAY YOURS</span
+          ><button id="demoToggle">Try scripted preview</button>
+        </div>
+      </section>
+    </main>
+    <footer class="bottom">
+      <span>CLEAR SIGNAL. VISIBLE CONTROL.</span
+      ><span>Fluid Motion · state-driven, not lip sync</span
+      ><a href="../index.html">About Quasnooze ↗</a>
+    </footer>
+    <dialog id="settingsDialog">
+      <form method="dialog">
+        <button class="dialog-close" aria-label="Close settings">×</button>
+      </form>
+      <div class="eyebrow">A CLEARER CONNECTION</div>
+      <h2>Your assistant.<br />Your control.</h2>
+      <p>
+        The Fluid Motion Voice Engine visualizes conversation state. It is
+        not phoneme-accurate lip sync. Real text uses Quasnooze’s existing API and
+        permissions.
+      </p>
+      <label for="accessKey">Instance key (kept in memory for this tab)</label
+      ><input
+        id="accessKey"
+        type="password"
+        autocomplete="off"
+        placeholder="Only if your Quasnooze instance requires one"
+      /><button id="connect" class="talk-button">Connect to Quasnooze</button>
+      <hr />
+      <h3>Voice is opt-in, local and visible.</h3>
+      <p>
+        On Windows, run <code>npm run desktop</code>. “Talk locally” asks the
+        native companion to listen. This page never uses browser speech
+        recognition, records audio, or silently enables wake listening. Use the
+        native tray to verify or mute the microphone if disconnected.
+      </p>
+      <p>
+        “Stop voice” stops native speech/listening; it is
+        <strong>not task cancellation</strong>. Speaking animation follows
+        reported native state; its spectrum is decorative because native
+        speech has no output-frequency feed. Use the labelled silent preview without a native host.
+      </p>
+      <label class="check"
+        ><input id="reduceMotion" type="checkbox" /> Reduce motion</label
+      >
+      <p class="fine">
+        Quasnooze may store real conversations on your machine. Scripted previews
+        are not AI responses, do not call tools, and are not saved by this page.
+      </p>
+    </dialog>
+    <script src="approval-preview.js"></script>
+    <script type="module" src="cosmic.js"></script>
+  </body>
+</html>

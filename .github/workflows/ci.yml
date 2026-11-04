@@ -31,6 +31,12 @@ jobs:
       - name: Unit and agent tests
         run: npm test
 
+      # site/demo/ is generated FROM public/ and committed, the same way the
+      # brand assets are. Drift means the preview people land on from the
+      # README is no longer the interface the renderer actually produces.
+      - name: Published preview matches public/
+        run: node scripts/build-demo-site.js --check
+
       # These two files are the regression suite for docs/AUDIT.md. They run as
       # part of `npm test` too; naming them separately means a failure points
       # straight at the finding it protects.
