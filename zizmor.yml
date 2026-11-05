@@ -16,3 +16,10 @@ rules:
       # scripts/roadmap-bots.js with an issues:write token, and never
       # checks out or executes the triggering run's tree.
       - roadmap-status-bot.yml
+  artipacked:
+    ignore:
+      # roadmap-reconcile pushes its bot branch with the job token
+      # (git push --force at the end of the job), so checkout must
+      # persist credentials for that one workflow. Job token is
+      # contents-scoped; reviewed 2026-11-06.
+      - roadmap-reconcile.yml
