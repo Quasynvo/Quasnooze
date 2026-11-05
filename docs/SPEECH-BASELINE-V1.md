@@ -1,7 +1,7 @@
 # Speech accuracy evaluation — corpus v1
 
 **Corpus:** `speech-command-accuracy` v1, 48 utterances, licence CC0-1.0. **Hypotheses from:** `hand-authored-synthetic`.
-**Headline:** word error rate 9.7% and command accuracy 77.1% over 48 utterances.
+**Headline:** word error rate 9.7% and command accuracy 79.2% over 48 utterances.
 
 - Word error rate = (substitutions + deletions + insertions) / reference words, corpus-level per condition after lowercasing and stripping punctuation.
 - Command accuracy = the heard transcript routes to the expected tool with the expected arguments, compared after normalising number words and plurals, so a cosmetic word error is not scored as a broken command. `intent: null` means no tool was correct. Measured on the hypotheses.
@@ -13,7 +13,7 @@
 | clean | 14 | 0.0% | 100.0% | 100.0% |
 | accented | 12 | 13.9% | 75.0% | 100.0% |
 | noisy | 12 | 15.2% | 66.7% | 100.0% |
-| numbers-names | 10 | 10.1% | 60.0% | 100.0% |
+| numbers-names | 10 | 10.1% | 70.0% | 100.0% |
 
 ## What was measured, and what was not
 
@@ -34,7 +34,6 @@
 | numbers-remind-01 | numbers-names | remind text="call priya" when="in 15 minutes" | remind text="call priya" when="in 50 minutes" | remind me to call priya in 50 minutes |
 | numbers-remind-03 | numbers-names | remind text="renew the domain" when="in 30 minutes" | remind text="renew the domain" when="in 13 minutes" | remind me to renew the domain in 13 minutes |
 | numbers-task-01 | numbers-names | add_task title="call 4417" | add_task title="call 4471" | add a task to call 4471 |
-| numbers-remember-02 | numbers-names | remember fact="the wifi password is 8842" | remember fact="the wifi password is 88 42" | remember that the wifi password is 88 42 |
 
 ## Corpus expectations
 

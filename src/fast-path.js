@@ -45,6 +45,12 @@ function stripTrailingSentencePunct(str) {
 const normalize = (text) =>
   stripTrailingSentencePunct(
     String(text ?? "")
+      // Speech recognisers routinely split digit groups ("88 42" for the
+      // PIN 8842, "four four one seven" handled downstream as words). Join
+      // adjacent digit groups so the remembered fact is the number the
+      // user said, not the spacing the recogniser chose. Only digit-digit
+      // boundaries are joined; "in 20 minutes" is untouched.
+      .replace(/\b(\d+(?:\s\d+)+)\b/g, (group) => group.replace(/\s/g, ""))
       .replace(/\s+/g, " ")
       .trim(),
   ).trim();

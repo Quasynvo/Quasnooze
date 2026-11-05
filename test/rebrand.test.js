@@ -37,7 +37,7 @@ test("real config precedence works across prefixes and native residency ignores 
   try {
     mkdirSync(join(dir, "src"));
     mkdirSync(join(dir, ".git"));
-    for (const f of ["config.js", "brand-config.js", "state-paths.js"])
+    for (const f of ["config.js", "brand-config.js", "state-paths.js", "providers.js"])
       copyFileSync(join(root, "src", f), join(dir, "src", f));
     writeFileSync(join(dir, "package.json"), '{"type":"module"}');
     const base = Object.fromEntries(

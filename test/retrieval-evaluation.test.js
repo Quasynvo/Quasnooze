@@ -39,9 +39,13 @@ test('versioned labels and measured ranks include distractors and multiple relev
   assert.equal(multiple.metrics[5].recall, 1);
 });
 
-test('no-answer false positives remain visible, not silently counted as recall successes', () => {
-  assert.deepEqual(report.noAnswer, { queries: 3, emptyResults: 2, falsePositives: 1 });
-  assert.deepEqual(report.failures, [{ kind: 'no-answer-false-positive', query: 'overlap-no-answer', returned: ['travel', 'meals'] }]);
+test('no-answer queries return empty under the coverage gate, and would still be reported if one slipped through', () => {
+  // The coverage gate in searchDocuments refuses passages matching a
+  // minority of the query terms, so the overlap case that used to return
+  // travel/meals now returns nothing. The failure machinery stays: any
+  // future false positive lands in report.failures, never in recall.
+  assert.deepEqual(report.noAnswer, { queries: 3, emptyResults: 3, falsePositives: 0 });
+  assert.deepEqual(report.failures, []);
   for (const query of report.queries.filter(q => !q.relevant.length)) {
     assert.equal(query.metrics[5].recall, null);
     assert.equal(query.metrics[5].reciprocalRank, null);

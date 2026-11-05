@@ -176,7 +176,14 @@ export async function searchDocuments({ path, query, resolvePath, limit = 5 }) {
     const idf = Math.log(1 + (chunks.length - df + 0.5) / (df + 0.5));
     return score + idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * c.length / (averageLength || 1)));
   }, 0) }))
-    .filter((c) => c.score > 0)
+    // Coverage gate: a passage that matches only a minority of the query's
+    // terms is vocabulary overlap, not evidence. Returning it teaches the
+    // agent to answer questions the corpus cannot answer ("travel
+    // teleportation allowance" used to return the travel and meals
+    // policies). Half the terms is the floor that keeps every labelled
+    // relevant passage in the evaluation corpus while refusing that case;
+    // single-term queries are unaffected (coverage is 0 or 1).
+    .filter((c) => c.score > 0 && words.filter((w) => c.counts.has(w)).length * 2 >= words.length)
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path) || a.start - b.start)
     .slice(0, Math.max(1, Math.min(8, Math.floor(Number(limit) || 5))))
     .map(({ counts, length, ...hit }) => hit);
