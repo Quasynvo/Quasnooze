@@ -92,6 +92,68 @@ fallback and the suite goes red.
 
 ---
 
+## Latency budget
+
+`telemetry.js` used to record one duration per turn, which is enough to notice a
+regression and useless for locating one: a 2.4 s turn looks identical whether the
+model was slow, the transcript took a second to settle, or audio started late.
+Each record now carries a `stages` object — five numbers, each a duration in
+milliseconds, each with a target.
+
+| Stage | Target | Measured from → to | Why it is here |
+|---|---:|---|---|
+| `captureEndMs` | no target | microphone opened → speaker stopped | the utterance length; it is the anchor the browser stages are measured from, not a latency, so a long sentence is not mistaken for a slow turn |
+| `endpointMs` | 300 ms | speaker stopped → endpoint decided (utterance closed, final transcript accepted) | the first half of "listen → text": the browser deciding you finished |
+| `transcriptMs` | 300 ms | endpoint decided → request written to the server | the hand-off: debounce, serialisation, `fetch` |
+| `firstTokenMs` | 700 ms | request reached the server → first assistant text ready to write | everything the server owns: routing, prompt assembly, the model turn, the first delta |
+| `firstAudioMs` | 1200 ms | speaker stopped → first local audio started | the number a person actually experiences |
+
+Read it with:
+
+```bash
+npm run health -- --json | jq .latency
+```
+
+```json
+{
+  "source": "data/telemetry.ndjson (in-memory ring of the last 200 records)",
+  "scope": "local measurements from this machine; not a cross-device benchmark",
+  "stages": {
+    "firstTokenMs": { "samples": 12, "p50": 410, "p95": 690, "targetMs": 700, "overTarget": 1 },
+    "firstAudioMs": { "samples": 0, "p50": null, "p95": null, "targetMs": 1200, "overTarget": 0 }
+  }
+}
+```
+
+The sample count sits next to every percentile on purpose: a p95 over four turns
+is four turns, and a reader who cannot see that will believe the number.
+`overTarget` is how often the budget was missed — a target nobody counts against
+is a slogan.
+
+### What the numbers are, and what they are not
+
+- **Two anchors, stated.** The browser stages are offsets from its own turn start
+  (the microphone opening). `firstTokenMs` is offset from the moment the request
+  reached this server. A browser and a server do not share a clock; pretending
+  they do would produce a number nobody could defend, so the two anchors are
+  named in the code, in the docs and in the JSON.
+- **A missing mark is `null`, never `0`.** A fabricated zero is a perfect score,
+  and a perfect score is the number a reader believes.
+- **`firstAudioMs` is null in the browser, deliberately.** The mark lands after
+  the reply has started, so getting it onto the turn would mean either a second
+  request — which this change is not allowed to add — or attributing one turn's
+  audio to another. The row exists so the number has a home when a caller can
+  supply it (a native voice host, or a test), and so the gap is visible rather
+  than quietly assumed to be fine.
+- **Nothing but numbers is recorded.** A `timing` payload is whitelisted to the
+  five stage keys before it reaches the log: a transcript, a prompt or an object
+  sent alongside them is dropped, not stored. There is a test that sends a
+  sentence as a "transcript" and greps the log for it.
+- **Local, one machine.** These are measurements of this install. They are not a
+  cross-device benchmark, not a comparison with another product, and not a
+  promise about your hardware — the model, the CPU and the operating system's
+  voices all move them.
+
 ## Risk, read against [AUDIT.md](AUDIT.md)
 
 | Audit finding | Why this change does not reopen it |
@@ -145,3 +207,5 @@ flattering direction, and a reader who can open the code, run the test and hear 
   local voice, gets a visible explanation and silence — not a hidden cloud call.
 - Not a hardware voice-quality or latency benchmark. The test proves *that* the shipped code
   calls a local voice with the right text; it does not prove how good that voice sounds.
+- Not a cross-device latency benchmark. The budget table above is measured on one machine, and
+  `firstAudioMs` is recorded only when a caller can supply it — in the browser it is null, never 0.

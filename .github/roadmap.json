@@ -1505,7 +1505,7 @@
     {
       "id": "voice-01-latency-budget",
       "title": "feat(voice): measure and hold an end-to-end voice latency budget",
-      "status": "ready",
+      "status": "shipped",
       "difficulty": "medium",
       "labels": [
         "help wanted",
@@ -1515,11 +1515,18 @@
       "files": [
         "src/telemetry.js",
         "src/server.js",
-        "public/cosmic.js"
+        "src/agent.js",
+        "public/index.html",
+        "src/doctor.js",
+        "scripts/doctor.js",
+        "docs/VOICE.md",
+        "test/voice-latency.test.js"
       ],
       "verify": "node --test test/audio-input.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~4-6 hours",
-      "body": "## Context\n\n`src/telemetry.js` already records a per-turn duration and reports p50/p95, but it cannot say *where* a slow turn was slow. A voice request has five stages — capture end → endpoint decision → final transcript → first token → first audio — and only the total is recorded. \"It feels laggy\" is therefore unactionable, and any speed claim in the README would be unprovable today.\n\nThe budget this item exists to enforce: endpoint ≤300 ms after the speaker stops, final transcript ≤300 ms after endpoint, first token ≤700 ms on a local 7B model, first audio ≤1.2 s from end of speech.\n\n## What to change\n\n- `src/telemetry.js`: add a `stages` object to each record — `captureEndMs`, `endpointMs`, `transcriptMs`, `firstTokenMs`, `firstAudioMs` — relative to one turn start. Never record transcript text, prompts or audio.\n- `src/server.js`: emit the stage marks it owns (request received, first SSE delta written) on the existing stream; do not add a second endpoint.\n- `public/cosmic.js`: mark the browser-owned stages (capture stop, recognition final) and POST them with the turn, best-effort — a missing mark is `null`, never `0`, because a fabricated zero reads as a perfect score.\n- `quasnooze health --json`: include per-stage p50/p95 over the telemetry ring, with the sample count next to each so a p95 of four turns is visibly weak evidence.\n- `docs/VOICE.md`: a budget table naming each stage, its target, and the fact that these are local measurements on one machine — not a cross-device benchmark.\n\n**Safety:** measurement only. It must not add a network call, a timer that keeps a process alive, or a second audio stream.\n\n## Acceptance criteria\n\n- [ ] A turn with no browser stages still records its server stages; missing stages are `null`, not `0`\n- [ ] No message text, transcript, prompt, or audio bytes appear in `telemetry.ndjson` (asserted, not reviewed)\n- [ ] `quasnooze health --json` reports p50/p95 per stage with sample counts\n- [ ] The docs table lists a target for every stage it reports\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js\ngrep -c 'transcript\\\"' data/telemetry.ndjson  # must be 0\nnode scripts/doctor.js --json | head -40\n```\n\n## Time estimate\n\n~4-6 hours"
+      "body": "## Context\n\n`src/telemetry.js` already records a per-turn duration and reports p50/p95, but it cannot say *where* a slow turn was slow. A voice request has five stages — capture end → endpoint decision → final transcript → first token → first audio — and only the total is recorded. \"It feels laggy\" is therefore unactionable, and any speed claim in the README would be unprovable today.\n\nThe budget this item exists to enforce: endpoint ≤300 ms after the speaker stops, final transcript ≤300 ms after endpoint, first token ≤700 ms on a local 7B model, first audio ≤1.2 s from end of speech.\n\n## What to change\n\n- `src/telemetry.js`: add a `stages` object to each record — `captureEndMs`, `endpointMs`, `transcriptMs`, `firstTokenMs`, `firstAudioMs` — relative to one turn start. Never record transcript text, prompts or audio.\n- `src/server.js`: emit the stage marks it owns (request received, first SSE delta written) on the existing stream; do not add a second endpoint.\n- `public/cosmic.js`: mark the browser-owned stages (capture stop, recognition final) and POST them with the turn, best-effort — a missing mark is `null`, never `0`, because a fabricated zero reads as a perfect score.\n- `quasnooze health --json`: include per-stage p50/p95 over the telemetry ring, with the sample count next to each so a p95 of four turns is visibly weak evidence.\n- `docs/VOICE.md`: a budget table naming each stage, its target, and the fact that these are local measurements on one machine — not a cross-device benchmark.\n\n**Safety:** measurement only. It must not add a network call, a timer that keeps a process alive, or a second audio stream.\n\n## Acceptance criteria\n\n- [ ] A turn with no browser stages still records its server stages; missing stages are `null`, not `0`\n- [ ] No message text, transcript, prompt, or audio bytes appear in `telemetry.ndjson` (asserted, not reviewed)\n- [ ] `quasnooze health --json` reports p50/p95 per stage with sample counts\n- [ ] The docs table lists a target for every stage it reports\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js\ngrep -c 'transcript\\\"' data/telemetry.ndjson  # must be 0\nnode scripts/doctor.js --json | head -40\n```\n\n## Time estimate\n\n~4-6 hours",
+      "issue": 123,
+      "shipped_at": "2026-11-05"
     },
     {
       "id": "voice-02-endpointing-partials",

@@ -21,7 +21,7 @@ import {
   loadReminders, pendingReminders, removeReminder,
 } from "./store.js";
 import { registerSender } from "./outbound.js";
-import { stats as turnStats } from "./telemetry.js";
+import { normalizeStages, stats as turnStats } from "./telemetry.js";
 import { costSummary } from "./cost.js";
 import { ctx as ctxWindow } from "./budget.js";
 
@@ -407,10 +407,20 @@ async function handleApi(req, res, url) {
   }
 
   if (path === "/api/chat" && req.method === "POST") {
+    // The one instant the browser and the server can both name: arrival here.
+    const arrivedAt = Date.now();
     const body = await readBody(req);
     const text = String(body.text || "").trim();
     if (!text) return json(res, 400, { error: "text required" });
     const sessionId = String(body.sessionId || "web-main").replace(/[^a-zA-Z0-9._-]/g, "_");
+
+    // The browser's marks, whitelisted to five numbers. Whatever else a client
+    // sends — a transcript, a prompt, an object — is dropped here rather than in
+    // the log, and a missing mark stays null instead of becoming a perfect zero.
+    const stages = normalizeStages(body.timing);
+    const markFirstTextWritten = () => {
+      if (stages.firstTokenMs === null) stages.firstTokenMs = Math.max(0, Date.now() - arrivedAt);
+    };
 
     const stream = sse(res);
 
@@ -442,7 +452,14 @@ async function handleApi(req, res, url) {
         attachments,
         channel: "web",
         target: sessionId,
-        onEvent: (event) => stream.send("step", event),
+        stages,
+        stageAnchor: arrivedAt,
+        onEvent: (event) => {
+          // First assistant text on the wire. The agent marks this too, for
+          // turns that produce their answer in one piece; first real mark wins.
+          if (event?.type === "delta") markFirstTextWritten();
+          stream.send("step", event);
+        },
       });
       stream.send("final", {
         text: result.text,

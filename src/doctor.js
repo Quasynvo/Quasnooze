@@ -326,6 +326,7 @@ const PAINT = {
   [STATUS.SKIP]: (s) => `\x1b[2m${s}\x1b[0m`,
 };
 const MARK = { ok: "✔", warn: "▲", fail: "✖", skip: "·" };
+const fmt = (value) => (value === null || value === undefined ? "—" : `${value}`);
 
 /** Human output: one line per check, status first, hint underneath. */
 export function renderDoctor(report) {
@@ -337,6 +338,23 @@ export function renderDoctor(report) {
     const mark = PAINT[row.status](MARK[row.status]);
     lines.push(`  ${mark} ${row.id.padEnd(17)} ${row.detail}${row.regressed ? "  ← regressed" : ""}`);
     if (row.hint && row.status !== STATUS.OK) lines.push(`      ${"\x1b[2m"}${row.hint}\x1b[0m`);
+  }
+  // Per-stage voice latency, when the caller collected it (scripts/doctor.js
+  // does). The sample count is printed next to every percentile: a p95 over four
+  // turns is four turns, and a reader who cannot see that will believe it.
+  if (report.latency?.stages) {
+    const rows = Object.entries(report.latency.stages).filter(([, row]) => row.samples > 0);
+    lines.push("");
+    if (!rows.length) {
+      lines.push(`  voice latency  no turns recorded yet — run something, then re-run`);
+    } else {
+      lines.push(`  voice latency  ${rows.map(([stage, row]) => `${stage.replace(/Ms$/, "")} ${fmt(row.p50)}/${fmt(row.p95)}`).join(" · ")}  (p50/p95 ms)`);
+      for (const [stage, row] of rows) {
+        const target = row.targetMs === null ? "no target" : `target ${row.targetMs} ms`;
+        const missed = row.overTarget ? ` — ${row.overTarget}/${row.samples} over` : "";
+        lines.push(`      ${"\x1b[2m"}${stage.padEnd(14)} n=${row.samples}  p50 ${fmt(row.p50)}  p95 ${fmt(row.p95)}  ${target}${missed}\x1b[0m`);
+      }
+    }
   }
   if (report.readiness) {
     const { text, voice } = report.readiness.surfaces;
