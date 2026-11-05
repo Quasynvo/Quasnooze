@@ -3,341 +3,280 @@
 </p>
 
 <h1 align="center">Quasnooze</h1>
-<p align="center"><strong>Your voice. In fluid motion.</strong><br>A local-first personal AI assistant by <a href="https://github.com/Quasynvo">Quasynvo</a>.<br>Responsive audio visuals. Everyday tools. Your permission, first.</p>
+
+<p align="center">
+  <strong>Your voice. In fluid motion. On your machine.</strong><br>
+  A local-first personal AI assistant by <a href="https://github.com/Quasynvo">Quasynvo</a> — Ollama + MCP tools,<br>
+  permission-first actions, verified results, and a voice interface you can watch think.
+</p>
 
 <p align="center">
   <a href="https://github.com/Quasynvo/Quasnooze/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/Quasynvo/Quasnooze/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&amp;labelColor=080d19" /></a>
-  <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&amp;labelColor=080d19" />
-  <a href="docs/VISUALIZER.md"><img alt="Fluid Motion voice visualizer" src="https://img.shields.io/badge/%E2%88%BF-Fluid_Motion-6ee7f9?style=flat-square&amp;labelColor=080d19" /></a>
-  <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&amp;labelColor=080d19" /></a>
-</p>
-
-<p align="center"><a href="#start-in-three-steps">Start here</a> · <a href="#the-fluid-motion-voice-engine">See the motion</a> · <a href="#voice-and-microphone-setup">Voice setup</a> · <a href="docs/VISUALIZER.md">Integration guide</a> · <a href="docs/GUIDE.md">Full guide</a></p>
-
-<p align="center">
-  <a href="https://quasynvo.github.io/Quasnooze/demo/"><strong>▶ Open the live preview</strong></a>
-  — the conversation surface, scripted, in your browser.<br>
-  <sub>No install. No model. No tools. No microphone. <a href="https://quasynvo.github.io/Quasnooze/demo/visualizer.html">Try the five motion states ↗</a></sub>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&labelColor=080d19" /></a>
+  <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&labelColor=080d19" />
+  <img alt="Zero runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-34d399?style=flat-square&labelColor=080d19" />
+  <img alt="810 tests passing" src="https://img.shields.io/badge/tests-810%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
+  <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&labelColor=080d19" /></a>
 </p>
 
 <p align="center">
-  <sub>Already have a checkout? <code>npm run demo</code> boots the real panel with a canned brain in about two seconds — no keys, no Ollama, no network.</sub>
+  <a href="#try-it-in-30-seconds-no-install">▶ Live demo</a> ·
+  <a href="#start-in-three-steps">Quick start</a> ·
+  <a href="#measured-results">Results</a> ·
+  <a href="#how-it-compares">Compare</a> ·
+  <a href="docs/GUIDE.md">Guide</a> ·
+  <a href="docs/RESULTS.md">Reproduce the numbers</a>
 </p>
 
-> **Preview provenance:** the header is a silent, scripted walkthrough—not live AI, recorded microphone input or a performance benchmark. Prefer less motion? Use the [static SVG](assets/banner.svg) or open the interface with your OS reduced-motion preference enabled.
->
-> **Existing installations:** the product name, saved data, configuration aliases and `pinch` CLI remain supported. This identity refresh does not move data or enable a microphone. [Compatibility details →](docs/REBRANDING.md)
+**Quasnooze** is a personal AI assistant that runs on **your own computer**. Ask a question, plan your day, search your documents, set a reminder, or run tools — through the web, Windows voice, Telegram, Discord, Slack, or WhatsApp. Local reasoning comes from [Ollama](https://ollama.com); nothing needs a cloud account, and every action that changes your machine asks first.
 
-## Local intelligence. A visible signal.
+Its deterministic fast path answers everyday intents — *“what time is it”, “remind me to call Priya in 15 minutes”* — in **4.3 ms p50 end-to-end instead of a ≥700 ms model round-trip**, with **31/31 labelled intents matched and 0 of 28 look-alike phrasings wrongly acted on** ([measured results](#measured-results)). And when an action claims success, Quasnooze reads the result back: **20/20 injected faults caught, 0 silent wrong-successes**.
 
-Quasnooze runs on **your own computer**. Ask a question, plan your day, find a document, set a reminder or use supported tools. Its **Fluid Motion Voice Engine** gives the interface a clear, responsive presence without turning the assistant into a character.
+```bash
+git clone https://github.com/Quasynvo/Quasnooze.git && cd Quasnooze
+npm run demo        # real panel, canned brain — no keys, no Ollama, ~2 seconds
+```
 
-- **Local by default.** Ollama provides local reasoning. Optional cloud providers, browser speech, network tools and messaging channels have separate, explicit data boundaries.
-- **Audio-reactive when connected.** The standalone visualizer can analyze opt-in microphone input through the Web Audio API. The conversation view follows existing backend/native states; it does not secretly open a second audio stream.
-- **Permission-aware.** See microphone status, real tool activity and requests for approval. Animation never approves an action.
-- **Motion with restraint.** A dark glass interface, cyan–violet–magenta ribbons, bounded glows and reduced-motion alternatives.
+- **Local by default** — Ollama reasoning on your machine; cloud providers, browser speech, and messaging channels are each opt-in with separate, explicit data boundaries
+- **Permission-first** — read-only work runs instantly; anything that changes state shows a bounded preview and waits for **Allow once / Deny**
+- **Verified, not just “done”** — file writes, tasks, reminders, and calculations are read back and marked `verified`, `contradicted`, or honestly `unverified`
+- **Zero runtime dependencies** — plain Node.js 22+, no mandatory packages, no CDN, no browser bundle for basic use
+- **Surfaces** — web panel, Windows tray/voice host, CLI, Telegram, Discord, Slack, WhatsApp
+- **License** — [MIT](LICENSE), open source
 
-**Status:** the Windows voice host and browser conversation experience are previews. Physical Windows microphone, wake-word, startup and accessibility acceptance still need testing. The new visualizer is a **2D canvas signal**, not a 3D avatar, lip-sync system or measurement of model progress.
+Repository: [github.com/Quasynvo/Quasnooze](https://github.com/Quasynvo/Quasnooze) · Live preview: [quasynvo.github.io/Quasnooze/demo](https://quasynvo.github.io/Quasnooze/demo/) · Full guide: [docs/GUIDE.md](docs/GUIDE.md)
 
-## The Fluid Motion Voice Engine
+> **Preview provenance:** the header is a silent, scripted walkthrough — not live AI, recorded microphone input, or a performance benchmark. Prefer less motion? Use the [static SVG](assets/banner.svg), or open the interface with your OS reduced-motion preference enabled. Existing installations: the product name, saved data, configuration aliases, and `pinch` CLI remain supported — this identity refresh does not move data or enable a microphone. [Compatibility details →](docs/REBRANDING.md)
 
-**Signature:** three phase-offset interference ribbons surrounding a dark glass core, with a compact dual-wave mark. Each state changes geometry, rhythm and color—not just a status label.
+---
 
-| State | Signature motion | Color | What the signal means |
-|---|---|---|---|
-| **Idle** | Slow-breathing core; gentle, drifting ribbons | Ion cyan / violet | Ready or inactive. No claim that a microphone is on. |
-| **Listening** | Expanding plasma ring; frequency-shaped ripples when an analyser is connected | Cyan / magenta | Live microphone analysis in the playground, or listening reported by the native host. |
-| **Processing / thinking** | Accelerating orbital trails; a fourth interference ribbon | Violet / amber | Text generation, tool work or native computation. Not a percentage-complete indicator. |
-| **Speaking / output** | High-contrast radial spectrum with luminous trails | Bright cyan / magenta | Native speech state, or a clearly labelled silent preview. Output-frequency reactivity requires an output analyser. |
-| **Error / interrupted** | One brief, damped shake; warm glow that settles | Crimson / amber | A failed request, denied permission or interrupted stream. Read the accompanying explanation. |
+## Try it in 30 seconds (no install)
 
-**Approval is separate from these five audio states:** it uses a calm amber presentation plus explicit **Allow once / Deny** controls. A spoken “yes” or an animation cannot approve a sensitive action. [Structured approval previews](docs/ACTION-PREVIEWS.md) show bounded targets, risks, expected effects and redaction notices without changing the approval gate.
+**[▶ Open the live preview](https://quasynvo.github.io/Quasnooze/demo/)** — the conversation surface, scripted, in your browser. No install, no model, no tools, no microphone. Or explore the five Fluid Motion states directly: [visualizer playground ↗](https://quasynvo.github.io/Quasnooze/demo/visualizer.html).
 
-### Signal honesty
-
-The interface distinguishes **live FFT bands**, a **native scalar input level**, **synthetic demo data**, and **state-only motion**.
-
-- The native Windows API currently exposes amplitude, not FFT bands or TTS output samples. Listening can follow that amplitude; native speaking uses decorative spectrum motion.
-- Text deltas map to **thinking**, never speaking.
-- Missing or stale audio falls back to state-driven motion. It is not presented as a live spectrum.
-- The static website and `?demo=1` conversation mode make no AI, tool or audio-capture requests. A preview does not mute a separately running native host.
-
-### Try the visualizer
-
-After starting Quasnooze, open **`/visualizer.html`** from the launcher’s panel URL.
-
-1. Explore the five state buttons. They start as **silent synthetic previews**.
-2. Select **Enable microphone** to use real, local frequency analysis. Permission is requested only after that click.
-3. Select **Turn microphone off** when finished. Hiding or leaving the page releases the microphone.
-4. Enable **Reduce motion** for a static core and state colors. The OS preference is respected by default.
-
-The playground analyzes audio; it **does not transcribe speech or call a model**. For actual voice commands, use the existing surfaces below.
+Already have a checkout? `npm run demo` boots the real panel with a canned brain in about two seconds — no keys, no Ollama, no network.
 
 ## Start in three steps
 
-**Requirements:** Node.js **22+**. Windows 10/11 is required for the native voice host; the web/channel assistant also runs on Linux and macOS. Basic local/web use needs no browser bundle, CDN or mandatory runtime package. WhatsApp/QR support uses optional packages.
+**Requirements:** Node.js **22+**. Windows 10/11 for the native voice host; the web/channel assistant also runs on Linux and macOS.
 
 ### 1 · Get the code
 
-```sh
+```bash
 git clone https://github.com/Quasynvo/Quasnooze.git
 cd Quasnooze
 ```
 
 ### 2 · Configure and check
 
-```sh
-npm run setup
-npm run doctor
-npm run brain
+```bash
+npm run setup     # guides model, workspace, access-key and optional-channel setup
+npm run doctor    # verify the configuration
+npm run brain     # probe the configured model and tools
 ```
 
-Install/start **Ollama** and select an installed model for real local reasoning. Setup guides model, workspace, access-key and optional-channel configuration. It does not download a model, install a speech pack or grant microphone permission automatically.
+Install/start **Ollama** and select an installed model for real local reasoning. Setup does not download a model, install a speech pack, or grant microphone permission automatically.
 
 ### 3 · Start your interface
 
-```sh
-# Cross-platform web and configured-channel assistant
-npm start
-
-# OR: Windows native tray/widget and local voice host
-npm run desktop
+```bash
+npm start         # cross-platform web + configured-channel assistant (panel on port 7777)
+# OR, on Windows:
+npm run desktop   # native tray/widget + local voice host (starts muted)
 ```
 
-Open the panel URL printed by the launcher. The default port is `7777`; a keyless default server stays on loopback. **Do not expose an unauthenticated assistant or forward its port.** Native launch starts with the microphone muted.
+Open the panel URL printed by the launcher. A keyless default server stays on loopback — **do not expose an unauthenticated assistant or forward its port**.
 
 <details>
-<summary><strong>Try a canned assistant demo</strong></summary>
+<summary><strong>Just want to look around first? Canned demo</strong></summary>
 
-```sh
+```bash
 npm run demo
 ```
 
-This uses a **canned brain**, not real model reasoning. It disables the panel key and is **not a security sandbox**. Keep it local and treat tool permissions seriously.
-
-For a motion-only conversation preview, open `/cosmic.html?demo=1`. For the five-state motion playground and optional microphone analysis, open `/visualizer.html`.
+This uses a **canned brain**, not real model reasoning. It disables the panel key and is **not a security sandbox** — keep it local and treat tool permissions seriously. For a motion-only conversation preview open `/cosmic.html?demo=1`; for the five-state motion playground and optional microphone analysis open `/visualizer.html`.
 
 </details>
 
+---
+
+## Measured results
+
+Every number below ships with its sample size, its method, and a one-command reproduction. The full audit trail — including the failures — lives in **[docs/RESULTS.md](docs/RESULTS.md)**.
+
+<p align="center">
+  <img src="assets/results.svg" width="100%" alt="Bar chart of measured results: fast-path routing 31 of 31, conversation bench 60 of 60, verified execution 20 of 20, retrieval Recall@5 100%, speech command accuracy 100% clean, 75% accented, 66.7% noisy, 60% numbers-and-names (synthetic text, no microphone)" />
+</p>
+
+| Result | Value | n | Reproduce |
+|---|---|---:|---|
+| Fast-path routing — deterministic intents matched | **31/31 (100%)** | 59 labelled utterances | `node scripts/fast-path-eval.js` |
+| Look-alike phrasings wrongly acted on | **0/28** | 28 negatives | `node scripts/fast-path-eval.js` |
+| Fast turn end-to-end (replaces a ≥700 ms model round-trip) | **p50 4.3 ms · p95 7.9 ms** | 50 turns | [docs/FAST-PATH-EVAL.md](docs/FAST-PATH-EVAL.md) |
+| Conversation bench — deterministically gated turns | **60/60 (100%)** | 60 turns (16 live-loop, 44 recorded) | `node scripts/evaluate-conversation.js` |
+| Verified execution — fault-injection verdicts | **20/20 · 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` |
+| Retrieval — Recall@1 / Recall@5 · MRR@5 | **0.93 / 1.00 · 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` |
+| Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 60.0%** | 48 synthetic text utterances | `npm run speech` |
+| Full regression suite | **810/810 passed** | 66 test files, ~26 s | `node --test --test-concurrency=4` |
+
+### Where Quasnooze loses — kept in the README on purpose
+
+- **Speech on numbers-and-names: 60.0%.** A substituted digit is one word of error and a completely different reminder. This is the weakest measured result and the next thing to fix.
+- **Retrieval no-answer: 1 false positive in 3** no-answer queries.
+- **Voice latency:** ~1.5 s+ to first sound, silence-only turn-taking — far behind ~200 ms full-duplex research systems. Scored honestly in [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md).
+- **Not measured at all:** physical-microphone accuracy, real-user phrasing, and any named model's intelligence (the conversation bench's live tier uses an in-process mock brain). The speech figures are hand-authored *text* hypotheses scored by the shipped router — no microphone, no acoustic model, no recordings.
+
+> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), measured 5 November 2026. The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
+
+## How it compares
+
+| | **Quasnooze** | Cloud voice assistants | Chat-channel assistant harnesses | Local LLM chat UIs |
+|---|---|---|---|---|
+| Runs fully on your machine | ✅ local model (Ollama) | ❌ cloud | ◐ optional | ✅ |
+| No account / API key needed | ✅ | ❌ | ◐ | ✅ |
+| Permission gate before state-changing actions | ✅ risk tiers + bounded previews | ❌ | ◐ varies | ❌ (no actions) |
+| Actions verified by independent read-back | ✅ `verified / contradicted / unverified` | ❌ | ❌ | ❌ |
+| Voice interface | ◐ Windows native + browser analysis | ✅ | ❌ text-first | ❌ |
+| Chat channels (Telegram/Discord/Slack/WhatsApp) | ✅ | ❌ | ✅ | ❌ |
+| Everyday tools (files, shell, reminders, tasks, docs) | ✅ 24 built-in + MCP | ◐ closed ecosystem | ✅ | ❌ chat only |
+| Runtime dependencies to audit | **0** | n/a (hosted) | hundreds (typical) | varies |
+| License | MIT | proprietary | varies | varies |
+
+*Feature-level snapshot, November 2026, compiled from [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md) — which also scores Quasnooze **behind** the field on latency, turn-taking, and OS-control breadth. Something out of date or wrong? Please [open an issue](https://github.com/Quasynvo/Quasnooze/issues/new/choose).*
+
+---
+
+## What it can do
+
+| Ask it to… | What happens |
+|---|---|
+| *“What time is it?”* / *“What's 18% of 250?”* | Answered deterministically in ~4 ms — no model call ([fast path](docs/FAST-PATH-EVAL.md)) |
+| *“Remind me to call Priya in 15 minutes”* | Reminder stored, then read back and marked verified |
+| *“Find the travel policy in my documents”* | Bounded local BM25 search over your workspace, with citable sources |
+| *“Add a task to renew the domain”* | Task created, verified against the task list |
+| *“Remember the parking bay is 12”* | Stored in local memory; recall/forget any time |
+| *“Run the tests”* / edit a file | Risk-classified: read-only runs instantly, state-changing asks first |
+| Anything ambiguous | Falls through to the local model — the fast path never guesses |
+
+**24 built-in tools** — `shell`, `read_file`, `write_file`, `list_dir`, `grep`, `scan_project`, `calculator`, `time_now`, `remember`, `recall`, `forget`, `search_history`, `search_documents`, `search_web`, `add_task`, `list_tasks`, `complete_task`, `remind`, `list_reminders`, `cancel_reminder`, `schedule`, `open_url`, `screenshot`, `system_control` — plus custom tools and MCP servers. Inspect them without executing anything: `quasnooze tools` ([docs/TOOL-INVENTORY.md](docs/TOOL-INVENTORY.md)).
+
+### The permission gate
+
+Read-only commands — `ls`, `cat`, `grep`, `git status` and friends run straight through. Anything that can change state is classified **act** (bounded preview, then **Allow once / Deny**) or **blocked**. An animation or a spoken “yes” can never approve an action. Details: [docs/ACTION-PREVIEWS.md](docs/ACTION-PREVIEWS.md) and the risk-tier table in [docs/GUIDE.md](docs/GUIDE.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+  U[You — web · Windows voice · Telegram · Discord · Slack · WhatsApp · CLI] --> S[Local server · Node.js, 0 runtime deps]
+  S --> F{Fast path?<br/>5 deterministic intents}
+  F -- match --> T[Tools — same permission<br/>gate & honesty checks]
+  F -- no match --> B[Ollama local model<br/>optional cloud, opt-in]
+  B --> T
+  T --> V[Read-back verifier<br/>verified · contradicted · unverified]
+  V --> U
+```
+
+1. **Fast path first.** Five closed intents (`time_now`, `calculator`, `remember`, `add_task`, `remind`) match in microseconds and skip the model entirely — but never skip the permission classification, honesty guard, or telemetry. Unsure? It falls through to the model, 100% of the time. `QUASNOOZE_FAST_PATH=off` disables it exactly.
+2. **Model second.** Ollama locally by default; an OpenAI-compatible cloud provider only if you configure one.
+3. **Verification last.** Tool results are read back where a trustworthy read-back exists; contradictions are surfaced to you, not paraphrased away.
+
+## The Fluid Motion Voice Engine
+
+Three phase-offset interference ribbons around a dark glass core. Each state changes geometry, rhythm, and colour — not just a label:
+
+| State | Signature motion | Colour | What the signal means |
+|---|---|---|---|
+| **Idle** | Slow-breathing core, drifting ribbons | Ion cyan / violet | Ready or inactive — no claim a microphone is on |
+| **Listening** | Expanding plasma ring, frequency-shaped ripples (when an analyser is connected) | Cyan / magenta | Live mic analysis in the playground, or listening reported by the native host |
+| **Processing** | Accelerating orbital trails, a fourth ribbon | Violet / amber | Model or tool work — not a percentage-complete indicator |
+| **Speaking** | High-contrast radial spectrum, luminous trails | Bright cyan / magenta | Native speech state, or a clearly labelled silent preview |
+| **Error / interrupted** | One brief damped shake, warm glow that settles | Crimson / amber | Failed request, denied permission, interrupted stream |
+
+**Signal honesty is a feature:** the UI distinguishes live FFT bands, a native scalar level, synthetic demo data, and state-only motion — and never presents one as another. Text deltas map to *thinking*, never *speaking*. Reduced-motion preferences (OS or in-app) are respected. Full contract: [docs/VISUALIZER.md](docs/VISUALIZER.md).
+
+**Try it:** after starting Quasnooze, open `/visualizer.html` → explore the five states as silent synthetic previews → optionally **Enable microphone** for real, local frequency analysis (permission is requested only after that click; hiding the page releases it). The playground analyses audio — it does not transcribe speech or call a model.
+
+> **Status:** the Windows voice host and browser conversation experience are previews. Physical Windows microphone, wake-word, startup, and accessibility acceptance still need hardware testing. The visualizer is a 2D canvas signal — not a 3D avatar, lip-sync system, or measurement of model progress.
+
 ## Voice and microphone setup
 
-### Native Windows speech
+### Native Windows speech (`npm run desktop`)
 
-Use `npm run desktop` with Windows PowerShell 5.1, .NET Framework 4.8, WinForms/System.Speech, a microphone and a compatible **English desktop speech recognizer**. Modern Windows voice-access support alone does not establish that the classic recognizer is installed.
+Requires Windows PowerShell 5.1, .NET Framework 4.8, WinForms/System.Speech, and a compatible **English desktop speech recognizer** (modern Windows Voice Access alone does not establish that the classic recognizer is installed).
 
-- Select **Talk locally**, or explicitly enable **Hey Quasnooze** in the native widget.
-- Wait for **LISTENING** before giving one instruction.
-- **Mute** releases recognition. **Stop voice** stops speech/listening behavior as documented; it is **not task cancellation**.
-- The native host uses local recognition and synthesis. There is no silent cloud speech fallback.
+- Launch starts **muted**. Select **Talk locally**, or explicitly enable **Hey Quasnooze**, and wait for **LISTENING** before one instruction.
+- **Mute** releases recognition. **Stop voice** stops speech/listening behaviour — it is not task cancellation.
+- Recognition and synthesis are local. There is no silent cloud speech fallback.
 
-[Windows setup and limitations →](docs/DESKTOP.md)
+[Windows setup and limitations →](docs/DESKTOP.md) · [Voice boundaries →](docs/VOICE.md)
 
-### Browser microphone analysis
+### Browser microphone analysis (`/visualizer.html`)
 
-The visualizer playground uses `navigator.mediaDevices.getUserMedia()` and an `AnalyserNode`.
+Uses `getUserMedia()` + `AnalyserNode`; analysis stays in the page — no recording, no upload, no transcription. Needs HTTPS or a trustworthy loopback origin (e.g. `http://localhost:7777`); permission is never inferred from an `.env` setting. Denial, a missing device, and a busy device produce actionable messages; text controls remain usable.
 
-- Use **HTTPS** or a trustworthy **loopback HTTP** origin such as `http://localhost:7777`. An arbitrary HTTP LAN address generally cannot access the microphone.
-- Allow microphone access in the browser and OS. Permission is never inferred from an `.env` setting.
-- If embedded in an iframe, the parent must permit microphone access and the server must allow it with Permissions Policy.
-- Audio analysis stays in the page: no recording, audio upload or analyser-to-speaker connection.
-- Denial, a missing device and a busy device produce actionable messages. Text controls remain usable.
+## Surfaces and CLI
 
-**Important:** browser `SpeechRecognition`, used by the advanced history panel, is a separate path and **may send audio to the browser vendor**. Local FFT analysis does not make browser recognition local. [Exact voice boundaries →](docs/VOICE.md)
-
-No new environment variable is required for the visualizer. `WHISPER_URL` remains optional and applies to recorded voice-note transcription—not canvas animation.
-
-## Three connected surfaces
-
-| Surface | Route | Purpose |
-|---|---|---|
-| **Command deck** | `/` or `/desktop.html` | Everyday actions, native/microphone status, results and approvals. |
-| **Voice conversation** | `/cosmic.html` | Fluid Motion visuals, real text streaming, existing approvals and optional native voice. Existing route retained. |
-| **Conversation history** | `/index.html` | History, attachments, memory and advanced chat controls. |
-| **Motion playground** | `/visualizer.html` | Five-state previews and explicitly opt-in local microphone analysis. |
-
-![Quasnooze voice conversation with the Fluid Motion engine; scripted preview, no active AI or microphone](docs/images/cosmic-conversation.png)
-
-## Architecture and module map
-
-![Request and visualizer architecture: text or opt-in audio enters existing speech/model paths; policy gates actions; state and separately sourced audio signals drive the visualizer](assets/architecture.svg)
-
-| Module | Implementation | Responsibility |
-|---|---|---|
-| **Audio Stream Handler** | [`public/audio-input.js`](public/audio-input.js) | Explicit capture, permission errors, cancellation and track/context cleanup. |
-| **Frequency Analyzer** | `startAudioAnalysis()` in the same module | FFT bands, RMS-derived level and local-only analyser graph. |
-| **Reactive Motion Engine** | [`public/visualizer.js`](public/visualizer.js) | Canvas ribbons, spring smoothing, state transitions, fallback and reduced motion. |
-| **Native Voice Bridge** | [`src/windows-companion.js`](src/windows-companion.js), [`desktop/Companion.cs`](desktop/Companion.cs) | Existing Windows recognition, synthesis, mute controls and scalar input telemetry. |
-| **Speech-to-text paths** | Browser recognition, Windows System.Speech, [`src/voice.js`](src/voice.js) | Existing browser/native dictation and optional Whisper-compatible voice-note transcription. |
-| **Conversation / tool pipeline** | [`src/server.js`](src/server.js), [`src/agent.js`](src/agent.js) | Streaming text, typed failures, tools and approval boundaries. |
-| **Provider routing** | [`src/router.js`](src/router.js), [`src/brain.js`](src/brain.js) | Configured model calls and explicitly enabled fallback. |
-
-The visualizer is a **presentation layer**, not a replacement speech recognizer. Native source filenames remain stable for compatibility. The module names above describe responsibilities; they do not imply a new backend service.
-
-### Integrate the renderer
-
-Serve the files from `public/`; there is no build step or runtime package to install.
-
-```html
-<link rel="stylesheet" href="/visualizer.css">
-<div class="visualizer is-static" style="width:320px">
-  <canvas id="voiceCanvas" aria-hidden="true"></canvas>
-  <img class="visualizer-fallback" src="/brand/voice-engine.svg" alt="">
-</div>
-<p id="voiceState" role="status" aria-live="polite">Idle</p>
-```
-
-```js
-import { createVisualizer } from "/visualizer.js";
-
-const canvas = document.getElementById("voiceCanvas");
-const motion = createVisualizer(canvas);
-
-// Call from your actual application state, not from a decorative timer.
-motion.setState("thinking");
-document.getElementById("voiceState").textContent = "Processing your request";
-
-// On permanent unmount:
-// motion.destroy();
-```
-
-For real input, call `startAudioAnalysis()` **inside a click handler**, pass its `sample()` function as the engine’s `signalProvider`, and call `stop()` on mute/unmount. Keep permission handling and capture ownership outside the renderer.
-
-The [integration guide](docs/VISUALIZER.md) includes the complete capture example, API reference, state mappings, design tokens, output-audio limitations and accessibility checklist.
-
-## What Quasnooze can do
-
-| Need | Available capability | Boundary |
-|---|---|---|
-| Ask, draft or plan | Conversation, local model selection, personas and remembered facts | Answers can be wrong; style/memory cannot grant permissions. |
-| Everyday Windows actions | Time/system status, bounded filename search and allowlisted app launches | Requires the native host for native actions; not arbitrary desktop automation. |
-| Work with documents | Workspace search, supported attachments and source/citation handling | Bounded access; citations do not guarantee correctness. |
-| Use engineering tools | File operations, command tools, calculations and optional MCP/custom tools | Workspace policy and approvals apply; plugins are not OS-sandboxed. |
-| Remember and schedule | Reminders, schedules, local history and personal-data export | Delivery needs a running, awake host; validated restore is separate work. |
-| Know whether it actually happened | Every file write, calculation, task, reminder and remembered fact is read back from the world and marked verified, contradicted or unverified — never a bare "done" | Read-backs exist for five tools; everything else is reported as unverified, and verification does not prevent an action. |
-| Ask the clock, a sum, or a reminder | Deterministic turns answer without a model: time, arithmetic, remembered facts, tasks and reminders | Five closed sentence shapes only; anything ambiguous goes to the model, and `QUASNOOZE_FAST_PATH=off` restores the previous behaviour. |
-| Use your chat apps | Telegram, Discord, Slack, WhatsApp and web | Optional setup; external services receive messages sent through them. |
-
-Read-only shell commands such as `ls`, `cat`, `grep`, `git status` and friends
-run straight through when they satisfy the risk classifier. Other commands ask; blocked commands remain blocked. [Exact policy and examples →](docs/GUIDE.md#commands-it-runs-without-asking)
-
-See the [capability inventory](docs/CAPABILITIES.json) for implementation evidence and limitations.
-
-## Privacy, permissions and failure handling
-
-- Personal state lives on the machine running Quasnooze. Local does **not** automatically mean encrypted or sandboxed.
-- Native microphone use is opt-in and starts muted. A wake phrase is **not authentication**.
-- Microphone analysis is local to the playground. Browser recognition, cloud models, network tools and messaging services have different data flows.
-- JavaScript plugins run with the process’s privileges. Install only code you trust.
-- Disconnecting a page does not establish that a backend task stopped. The playground releases its own capture on hide/unmount; it cannot control the native microphone.
-
-Failed turns use typed results such as `RATE_LIMITED`, `NEED_AUTH`, `UNREACHABLE`, `TIMEOUT`, `CONTEXT_LIMIT` and `STREAM_CUT`. The interface shows an actionable explanation rather than inventing a successful response.
-
-```sh
-quasnooze health
-```
-
-Provider fallback is **opt-in**. Enabling a cloud fallback can send conversation history to that endpoint. A reply already streaming to the user is not silently restarted elsewhere. [Routing and diagnostics →](docs/ROUTING.md)
-
-Read the [audit](docs/AUDIT.md), [security policy](SECURITY.md), [voice review](docs/VOICE-REVIEW.md) and [desktop guide](docs/DESKTOP.md) before enabling powerful integrations.
-
-## Commands and configuration
-
-From a checkout, use `node bin/quasnooze.js help`. The `pinch` entry remains a compatibility alias.
+| Surface | Start |
+|---|---|
+| Web panel + channels | `npm start` |
+| Windows native voice host | `npm run desktop` |
+| Canned demo (no model) | `npm run demo` |
+| Terminal | `quasnooze chat` / `quasnooze ask "…"` |
 
 | Command | Purpose |
 |---|---|
-| `quasnooze setup` / `quasnooze doctor` | Guided configuration / readiness checks |
-| `quasnooze health` | Provider matrix, routing verdict and structured readiness; `--json` for scripts, `--baseline` for the content-free latency artifact ([diagnostics](docs/DIAGNOSTICS.md)) |
-| `quasnooze tools` | Read-only static capability and trust inventory across built-in, manifest, plugin and MCP sources without plugin execution ([tool inventory](docs/TOOL-INVENTORY.md)) |
 | `quasnooze desktop` | Windows native voice host |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
 | `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model and tool probe |
+| `quasnooze tools` | Read-only capability & trust inventory (no plugin execution) |
 | `quasnooze export` / `quasnooze cost` | Personal-data export / recorded token-cost estimate |
 | `quasnooze audit` / `quasnooze radar` | Local guardrails / runtime and repository drift |
+| `quasnooze support-bundle` | Preview an allowlisted diagnostic artifact (saving needs `--out FILE --write` + confirmation; never uploaded) |
+| `quasnooze retention-plan --json` | Bounded, metadata-only retention inventory — preview only, deletes nothing |
 
-Use `.env` or process environment. Prefer `QUASNOOZE_*`; corresponding `PINCH_*` names remain accepted. Real environment overrides `.env`. Data paths are not moved by this refresh. [Migration rules →](docs/REBRANDING.md)
+Configuration uses `.env` or the process environment — prefer `QUASNOOZE_*` names; corresponding `PINCH_*` names remain accepted, and real environment variables override `.env`. Packaged installs keep `.env` and personal data in a stable per-user location, never in the npm/npx cache (`quasnooze migrate-state` previews any move). See [docs/USER-STATE.md](docs/USER-STATE.md) and [docs/RETENTION.md](docs/RETENTION.md).
 
-**npm status:** metadata uses `@quasynvo/quasnooze`; publication and scope ownership are not established by this repository change. Use the Git checkout until maintainers publish and verify a release.
+**npm status:** metadata uses `@quasynvo/quasnooze`; publication and scope ownership are not established by this repository. Use the Git checkout until maintainers publish and verify a release.
+
+## Privacy and data boundaries
+
+- **Local by default:** reasoning (Ollama), memory, tasks, reminders, and documents stay on your machine.
+- **Each network feature is separately opt-in:** cloud model provider, browser speech, web search, and each messaging channel — each with its own documented boundary in [docs/VOICE.md](docs/VOICE.md) and [docs/CHANNELS.md](docs/CHANNELS.md).
+- **Microphone is opt-in,** starts muted, and is released when you mute, stop, hide, or leave the page.
+- **No silent uploads:** the support bundle is allowlisted, previewed, and written only on explicit confirmation.
 
 ## Build and verify
 
-```sh
-# Runtime regression suite and local audit
-node --test --test-concurrency=4
-node scripts/audit.js
-node scripts/validate-roadmap.js
+```bash
+node --test --test-concurrency=4   # 810 tests across 66 files
+node scripts/audit.js               # local audit
+npm run health                      # environment, baselines, speech-corpus freshness
+npm run verify                      # tests + audit together
 ```
 
-The visualizer has focused tests for state mapping, signal freshness, microphone cleanup and reduced motion. Browser checks use disposable fixtures; they are not native-hardware or audio-quality evidence.
+Every claim in this README is either linked to its evidence or tested: documentation examples are executed against the real risk classifier, CLI commands named here are asserted to exist, and measured baselines fail the build when stale. To rebuild README/brand assets, install Python 3 + Pillow as developer tools and run `python3 scripts/build-brand-assets.py`. The [validation record](docs/brand/VALIDATION.md) separates checks actually run from pending platform acceptance.
 
-To rebuild README/brand assets, install **Python 3 + Pillow** as developer tools, then run:
+## Documentation
 
-```sh
-python3 scripts/build-brand-assets.py
-```
-
-This also synchronizes the shared renderer into the static website. The [validation record](docs/brand/VALIDATION.md) separates checks actually run from pending platform acceptance.
+[User guide](docs/GUIDE.md) · [Results & reproduction](docs/RESULTS.md) · [Voice boundaries](docs/VOICE.md) · [Visualizer contract](docs/VISUALIZER.md) · [Channels](docs/CHANNELS.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Conversation bench](docs/CONVERSATION-BENCH.md) · [Retrieval evaluation](docs/RETRIEVAL-EVALUATION.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Product roadmap](docs/ROADMAP-PROPOSED.md) · [Runtime support](docs/SUPPORT.md) · [Tool inventory](docs/TOOL-INVENTORY.md)
 
 ## Contribute
 
 1. Choose an [open contributor task](https://github.com/Quasynvo/Quasnooze/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
-2. Comment before starting to coordinate ownership.
-3. Add focused regressions, run the checks and open a small PR.
+2. Comment before starting, to coordinate ownership.
+3. Add focused regressions, run `npm run verify`, and open a small PR.
 
-Motion changes must preserve signal honesty, keyboard access and reduced-motion behavior. See [CONTRIBUTING.md](CONTRIBUTING.md), the [visualizer contract](docs/VISUALIZER.md) and the [product roadmap](docs/ROADMAP-PROPOSED.md).
+Motion changes must preserve signal honesty, keyboard access, and reduced-motion behaviour. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-[User guide](docs/GUIDE.md) · [Voice boundaries](docs/VOICE.md) · [Voice control roadmap](docs/VOICE-CONTROL-ROADMAP.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Channels](docs/CHANNELS.md) · [Conversation behavior](docs/CONVERSATION.md) · [Runtime support](docs/SUPPORT.md)
+## FAQ
+
+- **Does it work without internet?** Yes — local model, tools, memory, and the deterministic fast path are fully offline. Channels, web search, and cloud providers obviously need their networks.
+- **Do I need a cloud API key?** No. Ollama locally is the default; a cloud provider is optional and configured by you.
+- **Is my microphone always listening?** No. It starts muted, is enabled only by an explicit action, and is released on mute/stop/page-hide.
+- **Can it act without asking me?** Read-only work (listing, reading, searching, checking the time) runs straight through. Anything that changes state needs **Allow once** — an animation or a spoken “yes” cannot approve it.
+- **What does “verified” mean in a reply?** An independent read-back agreed with the claim. `Contradicted` means the world disagrees — you'll see a warning. `Unverified` means no trustworthy read-back exists, and it is labelled as such instead of being dressed up as success.
+
+---
 
 Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [open-source contributors](https://github.com/Quasynvo/Quasnooze/graphs/contributors), under **[Quasynvo](https://github.com/Quasynvo)**. Previous attribution is preserved. [MIT license](LICENSE).
-
-### Durable configuration for packaged installs
-
-Packaged installs keep `.env` and personal data in a stable per-user location,
-not in the npm installation or npx cache. Git checkouts retain their existing
-local paths; explicit `PINCH_DATA` / `QUASNOOZE_DATA` overrides are preserved.
-Use `quasnooze migrate-state` to preview copying legacy package state, then
-`quasnooze migrate-state --apply` for interactive confirmation. See
-[storage locations, migration and uninstall guidance](docs/USER-STATE.md).
-
-### Retention preview (no deletion)
-
-Run `quasnooze retention-plan --json` for a bounded, metadata-only inventory of
-sessions, memory, reminders, schedules and telemetry. Policies default off;
-optional age thresholds are preview-only and are never saved or applied. See
-[retention categories, safety and platform limitations](docs/RETENTION.md).
-
-### Synthetic conversation quality bench
-
-Run `node scripts/evaluate-conversation.js` from a source checkout to score
-[60 labelled turns](docs/CONVERSATION-BENCH.md) — factual answers with citations,
-unanswerable documents, follow-ups, tool turns, refusals and social turns. Sixteen
-of them exercise the real agent loop against the in-process mock brain; the rest
-are recorded prose fixtures whose provenance the report states. Every turn is
-gated by deterministic checks, a failing turn is named by id, and the bench runs
-offline in well under a minute. No model, no network, no user conversation.
-
-### Synthetic retrieval evaluation
-
-Run `node scripts/evaluate-retrieval.js` from a source checkout to reproduce the
-[labelled offline retrieval baseline](docs/RETRIEVAL-EVALUATION.md). It reports
-recall/rank metrics, cold/warm index counters, stale-update checks and known
-no-answer failures. Citation provenance is tested separately; model-answer
-faithfulness is explicitly not run. No private corpus, model or network is used.
-
-### Local support diagnostics
-
-`quasnooze support-bundle` previews a separate, allowlisted diagnostic artifact.
-Saving requires `--out FILE --write` and interactive confirmation; there is no
-upload or automatic personal-data export. See
-[support-bundle fields, limits and privacy caveats](docs/SUPPORT-BUNDLE.md).
-
-### Static tool capability and trust inventory
-
-`quasnooze tools` (`--json`, `--strict`) inspects built-in tools,
-`QUASNOOZE_TOOLS` manifests, `QUASNOOZE_TOOLS_DIR` plugin candidates and
-`QUASNOOZE_MCP` servers without importing plugins, running manifest commands or
-spawning MCP servers. Dynamic module/server details stay unknown until enabled
-through existing consent paths, and listed entries are never marked sandboxed or
-trusted by default. See
-[tool trust models, bounds and redaction rules](docs/TOOL-INVENTORY.md).
