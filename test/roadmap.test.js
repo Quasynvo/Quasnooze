@@ -206,18 +206,20 @@ test('medium candidates use the reviewed total cap, not easy-cap plus one',()=>{
  const {path,cleanup}=fixture({meta:{open_easy_cap:3,open_curated_cap:10},items:Array.from({length:10},(_,i)=>item({id:`medium-${i}`,difficulty:'medium'}))});
  try {assert.equal(run(path).code,0);} finally {cleanup();}
 });
-test('a cap beyond the authorized ten-issue ceiling is rejected',()=>{
- const {path,cleanup}=fixture({meta:{open_easy_cap:3,open_curated_cap:11},items:[]});
- try {const result=run(path);assert.equal(result.code,1);assert.match(result.out,/1 to 10/);} finally {cleanup();}
+test('a cap beyond the authorized ceiling is rejected',()=>{
+ const {path,cleanup}=fixture({meta:{open_easy_cap:3,open_curated_cap:21},items:[]});
+ try {const result=run(path);assert.equal(result.code,1);assert.match(result.out,/1 to 20/);} finally {cleanup();}
 });
 test('both automated issue publishers share a serialization group',async()=>{
  const {readFileSync}=await import('node:fs');
  for (const name of ['growth','contributor-queue']) assert.match(readFileSync(`.github/workflows/${name}.yml`,'utf8'),/group: contributor-issue-publishing/);
 });
 
-test('rollout dates and dependency references are validated before publishing', () => {
+test('dependency references are validated, and a date is refused rather than ignored', () => {
   for (const [items, pattern] of [
-    [[item({not_before:'2026-02-30'})], /not_before/],
+    // Ordering is dependency. A date the queue does not read is a schedule that
+    // lies to whoever reads the manifest, so the validator refuses it outright.
+    [[item({not_before:'2026-11-10'})], /not_before is not supported/],
     [[item({depends_on:['missing']})], /unknown dependency/],
     [[item({depends_on:'other'})], /depends_on/],
     [[item({id:'a',depends_on:['b']}),item({id:'b',depends_on:['a']})], /dependency cycle/],
@@ -226,6 +228,6 @@ test('rollout dates and dependency references are validated before publishing', 
     try { const result=run(path); assert.equal(result.code,1); assert.match(result.out,pattern); }
     finally { cleanup(); }
   }
-  const {path,cleanup}=fixture({meta:{open_easy_cap:3},items:[item({id:'a',depends_on:['b'],not_before:'2026-11-03'}),item({id:'b',status:'shipped'})]});
+  const {path,cleanup}=fixture({meta:{open_easy_cap:3},items:[item({id:'a',depends_on:['b']}),item({id:'b',status:'shipped'})]});
   try { const result=run(path); assert.equal(result.code,0,result.out); } finally { cleanup(); }
 });

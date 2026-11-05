@@ -10,7 +10,8 @@ name: Contributor queue
 #      Before creating, we check `--state all` so an issue closed by a merged PR is NEVER re-filed.
 #   3. IMMEDIATE REPLENISHMENT ON SOLVE. Runs on `issues: [closed]` and `push` to `.github/roadmap.json`
 #      (as well as hourly check + manual dispatch), so closing an issue immediately opens the next
-#      fully-specified task while respecting `open_easy_cap` and `open_curated_cap`.
+#      fully-specified task while respecting `open_easy_cap` and `open_curated_cap`. There are no
+#      dates anywhere: an item opens when the work it depends on is closed, never on a calendar.
 #   4. IT NEVER TOUCHES HUMAN WORK. Close is only allowed on issues it created itself, only
 #      when the manifest says shipped, and the comment must name a release.
 #   5. IT REFUSES INCOMPLETE ISSUES. scripts/validate-roadmap.js runs first; backlog fallback only
@@ -35,10 +36,6 @@ on:
         description: "Report decisions without filing, commenting or closing"
         type: boolean
         default: true
-      as_of:
-        description: "Optional YYYY-MM-DD. File against this date instead of today — a deliberate early drain of a staged item. Empty means today."
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -179,7 +176,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EASY_COUNT: ${{ steps.queue.outputs.easy }}
           CURATED_COUNT: ${{ steps.queue.outputs.curated }}
-          AS_OF_INPUT: ${{ inputs.as_of }}
         run: |
           set -euo pipefail
           EASY_CAP="$(jq -r '.meta.open_easy_cap // 3' .github/roadmap.json)"
@@ -193,34 +189,26 @@ jobs:
             exit 0
           fi
 
-          # Optional early drain. A staged item carries a `not_before` date so the
-          # board paces itself; this lets a maintainer pull one cohort forward
-          # without editing the manifest. It cannot skip `auto_file: false` or a
-          # dependency, because selection still runs every other gate.
-          AS_OF="${AS_OF_INPUT:-}"
-          if [ -n "$AS_OF" ] && ! printf '%s' "$AS_OF" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
-            echo "::error::as_of must be YYYY-MM-DD, got '${AS_OF}'"
-            exit 1
-          fi
-
-          # Select through the tested helper. auto_file:false is an explicit
-          # maintainer gate, even for fully specified ready/backlog tasks.
-          node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json "$AS_OF" > /tmp/picked.json
+          # Select through the tested helper. There is no date to pass: the queue
+          # reads dependencies, and auto_file:false is an explicit maintainer
+          # gate, even for fully specified ready/backlog tasks.
+          node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json > /tmp/picked.json
 
           COUNT="$(jq 'length' /tmp/picked.json)"
           if [ "$COUNT" -eq 0 ]; then
-            REPORT="$(node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json "$AS_OF" --report)"
-            NEXT="$(printf '%s' "$REPORT" | jq -r '.nextGate // "none"')"
+            REPORT="$(node scripts/roadmap-queue.js .github/roadmap.json /tmp/all.json --report)"
+            BOTTLENECK="$(printf '%s' "$REPORT" | jq -r 'if (.waitingOn | length) > 0 then (.waitingOn[0].id + " unlocks " + (.waitingOn[0].unlocks | tostring)) else "nothing" end')"
             BLOCKED="$(printf '%s' "$REPORT" | jq -r '(.blocked | length)')"
             echo "decision=skip" >> "$GITHUB_OUTPUT"
-            echo "reason=no unfiled eligible item within caps (open=${CURATED}/${TOTAL_CAP}, easy=${EASY}/${EASY_CAP}); next gate ${NEXT}; ${BLOCKED} item(s) wait on a gate" >> "$GITHUB_OUTPUT"
+            echo "reason=no unfiled eligible item within caps (open=${CURATED}/${TOTAL_CAP}, easy=${EASY}/${EASY_CAP}); bottleneck ${BOTTLENECK}; ${BLOCKED} item(s) wait on a gate" >> "$GITHUB_OUTPUT"
             {
               echo "**queue is quiet, and why:**"
               printf '%s' "$REPORT" | jq -r '
                 "- eligible now: \(.fileable | length) · slots \(.openContributorIssues)/\(.totalCap)",
-                "- next filing date: \(.nextGate // "none") (\(.nextGateCount // 0) item(s))",
+                "- bottleneck: \(if (.waitingOn | length) > 0 then (.waitingOn[0].id + " unlocks " + (.waitingOn[0].unlocks | tostring) + " item(s)") else "nothing — the board is empty" end)",
                 "- waiting on maintainers: \(.blockedByKind.manual // 0)",
-                "- waiting on other items: \(.blockedByKind.dependency // 0)"'
+                "- waiting on other items: \(.blockedByKind.dependency // 0)",
+                "- incomplete bodies: \(.blockedByKind.incomplete // 0)"'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi

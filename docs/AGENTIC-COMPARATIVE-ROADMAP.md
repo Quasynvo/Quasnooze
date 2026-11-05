@@ -1,5 +1,11 @@
 # Comparative audit and 30-day agentic workflow roadmap
 
+> **Scheduling note (2026-11-05).** The `not_before` dates quoted throughout this
+> document were removed from the manifest and are now refused by
+> `scripts/validate-roadmap.js`. Ordering is `depends_on` alone: an item opens
+> when the work it needs is closed, not on a calendar. Read every "Earliest:"
+> below as "as soon as its prerequisites are shipped", and the weeks as sequencing.
+
 **Snapshot:** 2026-11-03; [Superpowers `2ce8aa15d05b`](https://github.com/obra/superpowers/blob/2ce8aa15d05bd57213e6f746f953aafb7ded7a8b/README.md) and [Quasnooze `c33bd55e0474`](https://github.com/Quasynvo/Quasnooze/blob/c33bd55e04744e010d4584e29a9f6f1219984e72/README.md). These are repository snapshots, not runtime performance measurements. Inspection covered skills, hooks and plugin integration on the reference side; agent loop, model routing, tools, prompts, approvals, storage, capability inventory, tests, growth and GitHub workflows on the target side. Findings are architectural comparisons, not evidence that every prompt instruction is enforced by code. No reference code or prompts are copied.
 
 ## Executive assessment

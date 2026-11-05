@@ -93,8 +93,9 @@ possible at the same time.
 
 ## 4. The frontier set
 
-Twelve items, all `not_before: 2026-12-01` so they queue behind the control floor
-in [VOICE-CONTROL-ROADMAP.md](VOICE-CONTROL-ROADMAP.md). Each carries a
+Twelve items, each naming the control-floor work it builds on in the
+[voice-control roadmap](VOICE-CONTROL-ROADMAP.md) as a dependency. No dates: an
+item opens when its prerequisite closes, and the queue runs hourly. Each carries a
 **Performance contract** — baseline, target, and the thing it is forbidden to
 make worse.
 
@@ -177,8 +178,10 @@ channel hub has no per-action discipline.
 
 ### The lead set
 
-Nine items, scheduled from 2027-01-15, behind the frontier they depend on. Every
-one carries a Performance contract like the rest of the roadmap.
+Nine items, each waiting on the frontier item it builds on — a CPU duplex loop
+needs local STT, an accessibility resolver needs a grounding bench, a portable
+skill file needs a compiler that verifies. Every one carries a Performance
+contract like the rest of the roadmap.
 
 | Item | The lead, in one line | Worst-case contract |
 |---|---|---|
@@ -265,12 +268,12 @@ reason this product can make claims the rest of the field cannot.
    this matters.
 2. **Judgement** — `reason-*`, `voice-04/05`. Without verification, capability is a
    liability.
-3. **Frontier** — `duplex-*`, `ear-*`, `skill-*`, `mind-*` (2026-12-01 onward),
-   each behind the dependency that makes it buildable.
-4. **Leadership** — `lead-*` (2027-01-15 onward). These are only buildable on top
-   of the frontier: a CPU duplex loop needs local STT, an accessibility resolver
-   needs a grounding bench, and a portable skill file needs a compiler that
-   verifies.
+3. **Frontier** — `duplex-*`, `ear-*`, `skill-*`, `mind-*`, each behind the
+   dependency that makes it buildable.
+4. **Leadership** — `lead-*`, only buildable on top of the frontier above.
+
+There are no dates in this list. Items file when their prerequisites close and a
+slot is free; the ordering lives in `depends_on`, where the queue can enforce it.
 
 The queue files these automatically; `skill-01` will not appear until `reason-01`
 and `laptop-05` are closed, because a skill compiler that cannot verify a trace or

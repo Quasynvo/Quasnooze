@@ -41,7 +41,7 @@ const sectionOf = (body, heading) => {
   return next === -1 ? rest : rest.slice(0, next);
 };
 
-test("the frontier set exists and is staged behind the control floor", () => {
+test("the frontier set exists and is gated by dependencies, not dates", () => {
   assert.ok(
     frontier.length >= 12,
     `expected at least 12 frontier items, found ${frontier.length}`,
@@ -63,9 +63,14 @@ test("the frontier set exists and is staged behind the control floor", () => {
       "backlog",
       `${item.id} must start in backlog, not ${item.status}`,
     );
-    assert.ok(
-      item.not_before,
-      `${item.id} must be scheduled with not_before so it queues behind the control floor`,
+    // No calendar. An item opens when the work it depends on is closed, which
+    // is the only ordering this project has — a date made a specified backlog
+    // look finished, and made "when does this start?" a question about a
+    // schedule instead of about the prerequisite.
+    assert.equal(
+      "not_before" in item,
+      false,
+      `${item.id} carries a date; order work with depends_on instead`,
     );
     assert.ok(
       item.depends_on && item.depends_on.length > 0,

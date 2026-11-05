@@ -16,12 +16,15 @@
  *      record of what happened. When they disagree, the record wins.
  *   2. REFUSALS EXPLAIN THEMSELVES. Every item the queue skips can name the one
  *      gate holding it. `queueReport()` exists so the status issue and the run
- *      summary can say "next item opens 2026-11-10" instead of "no eligible
- *      item", which reads like the project is finished.
+ *      summary can say "waiting on reason-01-plan-verify" instead of "no
+ *      eligible item", which reads like the project is finished.
  *
- * The selection order, caps and gates are unchanged: ready before backlog,
- * `auto_file: false` is a maintainer veto, `not_before` is a UTC calendar date,
- * and an item whose issue was ever opened is never filed twice.
+ * There are no dates in this file, on purpose. An item opens when the work it
+ * depends on is closed, not when a calendar says it may be discussed — a date
+ * gate made the board look finished while it held sixty specified tasks, and
+ * made "when does this start?" a question about a schedule rather than about
+ * the project. Ordering is `depends_on`; refusal is `auto_file: false`; and an
+ * item whose issue was ever opened is never filed twice.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -65,33 +68,16 @@ export function closedEvidence(issues) {
   return closed;
 }
 
-/** Valid, today-or-earlier UTC calendar date. Anything else fails closed. */
-function isOpenDate(value, today) {
-  return (
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    Number.isFinite(Date.parse(value)) &&
-    new Date(value).toISOString().slice(0, 10) === value &&
-    value <= today
-  );
-}
-
 /**
- * Why this item cannot be filed today, or null if it can.
+ * Why this item cannot be filed, or null if it can.
  * Returned strings are shown to humans, so they name the gate rather than a code.
+ *
+ * A `not_before` date is deliberately not consulted. The field is rejected by
+ * scripts/validate-roadmap.js so the manifest cannot carry an ordering rule the
+ * queue ignores; an item waits for work, never for a day.
  */
-function gateReason(item, { today, shipped, todayOf }) {
+function gateReason(item, { shipped }) {
   if (item.auto_file === false) return { reason: "maintainer approval required", kind: "manual" };
-
-  if (item.not_before !== undefined) {
-    if (!isOpenDate(item.not_before, today)) {
-      return {
-        reason: `opens ${String(item.not_before).slice(0, 10)}`,
-        kind: "schedule",
-        date: typeof item.not_before === "string" ? item.not_before.slice(0, 10) : null,
-      };
-    }
-  }
 
   if (item.depends_on !== undefined) {
     if (
@@ -117,7 +103,7 @@ function gateReason(item, { today, shipped, todayOf }) {
   return null;
 }
 
-export function selectQueue(roadmap, issues, today = new Date().toISOString().slice(0, 10)) {
+export function selectQueue(roadmap, issues) {
   const history = issues.filter((issue) => !issue.pull_request);
   const seen = new Set(history.flatMap((issue) => marker(issue.body)));
   const open = history.filter((issue) => stateOf(issue) === "open" && marker(issue.body).length);
@@ -141,7 +127,7 @@ export function selectQueue(roadmap, issues, today = new Date().toISOString().sl
   for (const status of ["ready", "backlog"]) {
     for (const item of items) {
       if (item.status !== status || item.auto_file === false || seen.has(item.id)) continue;
-      if (gateReason(item, { today, shipped }) !== null) continue;
+      if (gateReason(item, { shipped }) !== null) continue;
       if (count >= totalCap || (item.difficulty === "easy" && easy >= easyCap)) continue;
       picked.push(item);
       seen.add(item.id);
@@ -153,18 +139,14 @@ export function selectQueue(roadmap, issues, today = new Date().toISOString().sl
 }
 
 /**
- * The queue's own account of itself: what would file now, what each refused item
- * is waiting for, and the soonest date any of them opens.
+ * The queue's own account of itself: what would file now and what each refused
+ * item is waiting for.
  *
  * `blocked` is the part that matters. A board with four open issues and no
  * explanation looks identical to a board with nothing left to do; this makes the
  * difference visible in one line per reason.
  */
-export function queueReport(
-  roadmap,
-  issues,
-  today = new Date().toISOString().slice(0, 10),
-) {
+export function queueReport(roadmap, issues) {
   const history = issues.filter((issue) => !issue.pull_request);
   const seen = new Set(history.flatMap((issue) => marker(issue.body)));
   const items = roadmap.items || [];
@@ -177,21 +159,26 @@ export function queueReport(
   const totalCap = roadmap.meta?.open_curated_cap ?? 4;
   const easyCap = roadmap.meta?.open_easy_cap ?? 3;
 
-  const fileable = selectQueue(roadmap, issues, today);
+  const fileable = selectQueue(roadmap, issues);
   const blocked = [];
-  const dates = [];
   for (const item of items) {
     if (item.status === "shipped" || seen.has(item.id)) continue;
     if (item.status !== "ready" && item.status !== "backlog") continue;
-    const gate = gateReason(item, { today, shipped });
+    const gate = gateReason(item, { shipped });
     if (!gate) continue;
     blocked.push({ id: item.id, kind: gate.kind, reason: gate.reason });
-    if (gate.date && gate.date > today) dates.push(gate.date);
   }
-  dates.sort();
+  // Nothing is waiting for a date, so the only thing that can explain a quiet
+  // board is a dependency or a veto — and both name the item responsible.
+  const waitingOn = {};
+  for (const item of items) {
+    if (item.status === "shipped" || seen.has(item.id)) continue;
+    for (const id of Array.isArray(item.depends_on) ? item.depends_on : []) {
+      if (!shipped.has(id)) waitingOn[id] = (waitingOn[id] || 0) + 1;
+    }
+  }
 
   return {
-    today,
     openContributorIssues: openContributor,
     totalCap,
     easyCap,
@@ -202,26 +189,26 @@ export function queueReport(
       acc[b.kind] = (acc[b.kind] || 0) + 1;
       return acc;
     }, {}),
-    nextGate: dates[0] || null,
-    nextGateCount: dates.filter((date) => date === dates[0]).length,
+    // The bottleneck, not a schedule: which unbuilt items the queue is waiting on.
+    waitingOn: Object.entries(waitingOn)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 5)
+      .map(([id, count]) => ({ id, unlocks: count })),
   };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
-  const [manifest, history, today] = args;
+  const [manifest, history] = args;
   if (!manifest || !history) {
-    console.error(
-      "usage: node scripts/roadmap-queue.js MANIFEST HISTORY.json [YYYY-MM-DD] [--report]",
-    );
+    console.error("usage: node scripts/roadmap-queue.js MANIFEST HISTORY.json [--report]");
     process.exit(2);
   }
   const roadmap = JSON.parse(readFileSync(manifest, "utf8"));
   const issues = JSON.parse(readFileSync(history, "utf8"));
-  const stamp = today || undefined;
   if (process.argv.includes("--report")) {
-    console.log(JSON.stringify(queueReport(roadmap, issues, stamp), null, 2));
+    console.log(JSON.stringify(queueReport(roadmap, issues), null, 2));
   } else {
-    console.log(JSON.stringify(selectQueue(roadmap, issues, stamp)));
+    console.log(JSON.stringify(selectQueue(roadmap, issues)));
   }
 }
