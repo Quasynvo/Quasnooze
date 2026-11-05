@@ -3,11 +3,32 @@ export const AUDIO_MAX_BYTES = 10_000_000;
 export const WHISPER_TIMEOUT_MS = 5_000;
 export const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac"]);
 
-export async function transcribeAudio(bytes, mime, url) {
+/**
+ * How much of the previous chunk's transcript may condition the next request.
+ * Whisper's `prompt` is decoder context, not a channel: the tail is what matters
+ * for continuity, so the tail is what is sent. Bounded because an unbounded
+ * "context" is a way to push arbitrary text through a transcription endpoint.
+ */
+export const PROMPT_MAX_CHARS = 400;
+
+/** One line, no control characters, tail-first. Undefined when there is nothing to say. */
+export function cleanPrompt(value) {
+  const text = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text ? text.slice(-PROMPT_MAX_CHARS) : "";
+}
+
+export async function transcribeAudio(bytes, mime, url, { prompt } = {}) {
   const signal = AbortSignal.timeout(WHISPER_TIMEOUT_MS);
   const form = new FormData();
   form.append("file", new Blob([bytes], { type: mime }), "voice." + ({ "audio/webm": "webm", "audio/ogg": "ogg", "audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/flac": "flac" }[mime]));
   form.append("model", "whisper-1");
+  // Streaming a long utterance in chunks loses the words that fell on a chunk
+  // boundary; the previous chunk's text is what puts them back.
+  const context = cleanPrompt(prompt);
+  if (context) form.append("prompt", context);
   const response = await fetch(url, { method: "POST", body: form, signal });
   if (!response.ok) { await response.body?.cancel(); throw new Error(`Whisper returned HTTP ${response.status}; check WHISPER_URL and its server logs.`); }
   // Bound a malicious/misconfigured upstream response too.

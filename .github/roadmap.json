@@ -1531,7 +1531,7 @@
     {
       "id": "voice-02-endpointing-partials",
       "title": "feat(voice): endpointing and streaming partial transcripts without a cloud STT",
-      "status": "ready",
+      "status": "shipped",
       "difficulty": "hard",
       "labels": [
         "help wanted",
@@ -1540,12 +1540,18 @@
       ],
       "files": [
         "public/audio-input.js",
-        "public/cosmic.js",
-        "src/voice.js"
+        "public/index.html",
+        "src/voice.js",
+        "src/server.js",
+        "docs/VOICE.md",
+        "test/audio-input.test.js",
+        "test/voice.test.js"
       ],
       "verify": "node --test test/audio-input.test.js test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~2-3 days",
-      "body": "## Context\n\nToday the only local speech path is a whole-clip POST: `src/voice.js` sends a finished file to a Whisper-compatible endpoint with a 5 s deadline and gets text back once. Browser `SpeechRecognition` produces partials, but it is a separate path that **may send audio to the browser vendor** (`docs/VOICE.md` says so explicitly), so \"fast\" and \"local\" are currently different products.\n\nNothing decides when the user has finished speaking. Without that, every turn waits for a silence timer in the UI, which is what makes a local assistant feel slower than it measures.\n\n## What to change\n\n- `public/audio-input.js`: add a VAD/endpointing stage over the existing `AnalyserNode` graph — speech onset, trailing silence, and a maximum utterance cap. No new dependency, no ML model.\n- Stream partial transcripts from the local path: chunked uploads to the Whisper-compatible endpoint (or a local streaming server if configured), with the previous chunk's context passed as `prompt`.\n- `public/cosmic.js`: render partials as provisional text and mark them clearly as partial in the `role=\"status\"` live region; never let a partial enter conversation history.\n- `docs/VOICE.md`: state which path is local, which may leave the device, and what endpointing does and does not guarantee.\n\n**Safety:** audio analysis stays in the page; no recording is persisted, and the cloud-recognition path stays opt-in and labelled.\n\n## Acceptance criteria\n\n- [ ] Endpoint fires within the configured window on synthetic silence, tested with a fixture, not a microphone\n- [ ] A partial transcript never becomes a stored message; only the final one does\n- [ ] Denial, missing device and busy device still produce actionable messages\n- [ ] Disabling streaming falls back to the current whole-clip path with no behavioural difference\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js test/voice.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~2-3 days"
+      "body": "## Context\n\nToday the only local speech path is a whole-clip POST: `src/voice.js` sends a finished file to a Whisper-compatible endpoint with a 5 s deadline and gets text back once. Browser `SpeechRecognition` produces partials, but it is a separate path that **may send audio to the browser vendor** (`docs/VOICE.md` says so explicitly), so \"fast\" and \"local\" are currently different products.\n\nNothing decides when the user has finished speaking. Without that, every turn waits for a silence timer in the UI, which is what makes a local assistant feel slower than it measures.\n\n## What to change\n\n- `public/audio-input.js`: add a VAD/endpointing stage over the existing `AnalyserNode` graph — speech onset, trailing silence, and a maximum utterance cap. No new dependency, no ML model.\n- Stream partial transcripts from the local path: chunked uploads to the Whisper-compatible endpoint (or a local streaming server if configured), with the previous chunk's context passed as `prompt`.\n- `public/cosmic.js`: render partials as provisional text and mark them clearly as partial in the `role=\"status\"` live region; never let a partial enter conversation history.\n- `docs/VOICE.md`: state which path is local, which may leave the device, and what endpointing does and does not guarantee.\n\n**Safety:** audio analysis stays in the page; no recording is persisted, and the cloud-recognition path stays opt-in and labelled.\n\n## Acceptance criteria\n\n- [ ] Endpoint fires within the configured window on synthetic silence, tested with a fixture, not a microphone\n- [ ] A partial transcript never becomes a stored message; only the final one does\n- [ ] Denial, missing device and busy device still produce actionable messages\n- [ ] Disabling streaming falls back to the current whole-clip path with no behavioural difference\n\n## How to verify\n\n```bash\nnode --test test/audio-input.test.js test/voice.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~2-3 days",
+      "issue": 124,
+      "shipped_at": "2026-11-05"
     },
     {
       "id": "voice-03-barge-in",

@@ -427,9 +427,19 @@ function toast(text, ms = 4000) {
 }
 
 if (!SR) {
-  // The hint is rendered by showVoiceStatus(), which also reports output voices.
-  $("mic").style.opacity = ".45";
+  // No browser recognition — which used to mean a dead microphone button. If this
+  // browser can record, the button becomes local dictation instead: the audio
+  // goes to this machine's Whisper-compatible endpoint through /api/transcribe
+  // and never to a browser vendor. The wake word needs a recogniser, so it dims.
   $("wakeToggle").style.opacity = ".4";
+  if (window.MediaRecorder && navigator.mediaDevices?.getUserMedia) {
+    $("mic").title = "Talk to Quasnooze — local transcription, nothing leaves this machine";
+    $("mic").onclick = () => toggleLocalDictation();
+  } else {
+    $("mic").style.opacity = ".45";
+    $("mic").onclick = () =>
+      alert("This browser cannot record audio. Type your message, or use a browser with speech input.");
+  }
 } else {
   recognition = new SR();
   recognition.lang = micLang.value;
@@ -462,7 +472,7 @@ if (!SR) {
   };
 }
 
-$("mic").onclick = () => {
+if (SR) $("mic").onclick = () => {
   if (!recognition) return alert("This browser does not support speech input. Try Safari (iOS) or Chrome (Android/desktop).");
   if (listening) { recognition.stop(); return; }
   listening = true;
@@ -470,6 +480,113 @@ $("mic").onclick = () => {
   openTurnClock();
   try { recognition.start(); } catch {}
 };
+
+/* ── local dictation: endpointing and partials without a cloud recogniser ────
+   The analyser decides when you stopped speaking; the recorder's chunks go to
+   this machine's transcription endpoint, each carrying the previous chunk's
+   transcript as decoder context. Partials are shown in the box and marked
+   provisional — they never reach the conversation, because the only thing that
+   calls send() is a final transcript. */
+let localDictation = null;
+
+/** Analyser samples as an async stream, one per animation frame. */
+function frameStream(session) {
+  let finished = false;
+  const queue = [];
+  let wake = null;
+  const tick = () => {
+    if (finished) return;
+    const sample = session.sample();
+    if (sample) queue.push({ level: sample.level, at: sample.timestamp });
+    const resume = wake; wake = null; resume?.();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return {
+    finish() { finished = true; const resume = wake; wake = null; resume?.(); },
+    async *[Symbol.asyncIterator]() {
+      while (!finished) {
+        if (!queue.length) { await new Promise((resolve) => { wake = resolve; }); continue; }
+        yield queue.shift();
+      }
+    },
+  };
+}
+
+/** One chunk of audio to this machine's Whisper-compatible endpoint. */
+async function transcribeChunk(blob, { prompt } = {}) {
+  // A header cannot carry a newline, and the server bounds it again anyway.
+  const context = String(prompt || "").replace(/\s+/g, " ").trim().slice(-400);
+  const response = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: {
+      "content-type": blob.type || "audio/webm",
+      ...(store.key ? { "x-quasnooze-key": store.key } : {}),
+      ...(context ? { "x-quasnooze-prompt": context } : {}),
+    },
+    body: blob,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Transcription failed (HTTP ${response.status}).`);
+  return { text: String(data.text || "") };
+}
+
+async function toggleLocalDictation() {
+  if (localDictation) { localDictation.abort.abort(); return; }
+  const input = $("input");
+  const abort = new AbortController();
+  const chunks = [];
+  let session, recorder;
+  // Imported on demand: a missing audio module must not take the chat panel down.
+  const { startAudioAnalysis, startLocalDictation } = await import("/audio-input.js");
+  try {
+    session = await startAudioAnalysis({ onEnded: () => toast("The microphone stopped. Check the OS input device.", 7000) });
+    recorder = new MediaRecorder(session.stream, { mimeType: "audio/webm" });
+  } catch (error) {
+    toast(String(error?.message || error), 7000);
+    return;
+  }
+  const stream = frameStream(session);
+  const current = { abort, session, stream };
+  localDictation = current;
+  recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+  recorder.start(1000);
+  $("mic").classList.add("listening");
+
+  try {
+    const result = await startLocalDictation({
+      frames: stream,
+      takeAudio: () => new Blob(chunks.splice(0), { type: "audio/webm" }),
+      post: transcribeChunk,
+      streaming: true,
+      chunkMs: 1200,
+      signal: abort.signal,
+      onPartial: ({ text }) => {
+        input.value = text;
+        input.setAttribute("aria-busy", "true");
+        $("voiceHint").textContent = "partial transcript — nothing is sent until you stop speaking";
+      },
+      onFinal: ({ text }) => { input.value = text; input.removeAttribute("aria-busy"); },
+      onStatus: (status) => {
+        if (status.state === "endpoint") $("voiceHint").textContent = `stopped speaking (${status.endpointMs} ms) · transcribing`;
+        if (status.state === "discarded") { input.value = ""; toast("That was too short to send.", 2500); }
+        if (status.state === "failed") toast(status.message, 7000);
+      },
+    });
+    // Only a final transcript reaches the conversation. A partial is a preview.
+    if (result.text) send();
+  } catch (error) {
+    if (error?.name !== "AbortError") toast(String(error?.message || error), 7000);
+  } finally {
+    stream.finish();
+    try { recorder.stop(); } catch {}
+    session.stop();
+    chunks.length = 0;
+    $("mic").classList.remove("listening");
+    input.removeAttribute("aria-busy");
+    if (localDictation === current) localDictation = null;
+  }
+}
 
 /* ── "Hey Quasnooze" wake word: opt-in, page must stay open ───────────────────
    Runs the browser's own recogniser in continuous mode and matches the
