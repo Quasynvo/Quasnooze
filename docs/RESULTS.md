@@ -6,7 +6,7 @@
 > test fails — the speech and retrieval baselines are compared byte-for-byte
 > against their runners.
 
-Measured 5 November 2026. Test-suite count verified in a clean checkout of
+Measured 5 November 2026; re-verified 6 November 2026 (full suite and every evaluator re-run). Test-suite count verified in a clean checkout of
 `main` (commit `2071723`): **817 tests, 817 passed, 0 failed**
 (`node --test --test-concurrency=4`, ~26 s, Node 20 in the measuring sandbox;
 the project requires Node ≥ 22 — see `package.json`).

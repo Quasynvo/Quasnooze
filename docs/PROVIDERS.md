@@ -25,7 +25,7 @@ quasnooze providers --json
 | `LLM_PROVIDER` | Key variable | Starter model |
 |---|---|---|
 | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` (via Anthropic's OpenAI-compatible endpoint) |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` (via Anthropic's OpenAI-compatible endpoint — Anthropic documents this layer for testing/comparison, not as its production API; see [their docs](https://docs.anthropic.com/en/api/openai-sdk)) |
 | `gemini` | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | `gemini-2.5-flash` (via Google's OpenAI-compatible endpoint) |
 | `groq` | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
 | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o-mini` |

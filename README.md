@@ -28,7 +28,7 @@
   <a href="docs/RESULTS.md">Reproduce the numbers</a>
 </p>
 
-**Quasnooze** is a personal AI assistant that runs on **your own computer**. Ask a question, plan your day, search your documents, set a reminder, or run tools — through the web, Windows voice, Telegram, Discord, Slack, or WhatsApp. Local reasoning comes from [Ollama](https://ollama.com); nothing needs a cloud account, and every action that changes your machine asks first.
+**Quasnooze** is a personal AI assistant that runs on **your own computer**. Ask a question, plan your day, search your documents, set a reminder, or run tools — through the web, Windows voice, Telegram, Discord, Slack, or WhatsApp. Local reasoning comes from [Ollama](https://ollama.com); nothing needs a cloud account. Every tool is risk-classified: read-only work runs immediately, low-risk personal actions (memory, tasks, reminders) run through the same verified path, and sensitive actions — shell, files, system control — ask first.
 
 Its deterministic fast path answers everyday intents — *“what time is it”, “remind me to call Priya in 15 minutes”* — in **4.3 ms p50 end-to-end instead of a ≥700 ms model round-trip**, with **31/31 labelled intents matched and 0 of 28 look-alike phrasings wrongly acted on** ([measured results](#measured-results)). And when an action claims success, Quasnooze reads the result back: **20/20 injected faults caught, 0 silent wrong-successes**.
 
@@ -38,7 +38,7 @@ npm run demo        # real panel, canned brain — no keys, no Ollama, ~2 second
 ```
 
 - **Local by default** — Ollama reasoning on your machine; cloud providers, browser speech, and messaging channels are each opt-in with separate, explicit data boundaries
-- **Permission-first** — read-only work runs instantly; anything that changes state shows a bounded preview and waits for **Allow once / Deny**
+- **Permission-first** — read-only work runs instantly; sensitive, state-changing actions show a bounded preview and wait for **Allow once / Deny**; low-risk personal actions are verified after they run, never silently
 - **Verified, not just “done”** — file writes, tasks, reminders, and calculations are read back and marked `verified`, `contradicted`, or honestly `unverified`
 - **Zero runtime dependencies** — plain Node.js 22+, no mandatory packages, no CDN, no browser bundle for basic use
 - **Surfaces** — web panel, Windows tray/voice host, CLI, Telegram, Discord, Slack, WhatsApp
@@ -105,7 +105,7 @@ This uses a **canned brain**, not real model reasoning. It disables the panel ke
 Every number below ships with its sample size, its method, and a one-command reproduction. The full audit trail — including the failures — lives in **[docs/RESULTS.md](docs/RESULTS.md)**.
 
 <p align="center">
-  <img src="assets/results.svg" width="100%" alt="Bar chart of measured results: fast-path routing 31 of 31, conversation bench 60 of 60, verified execution 20 of 20, retrieval Recall@5 100%, speech command accuracy 100% clean, 75% accented, 66.7% noisy, 60% numbers-and-names (synthetic text, no microphone)" />
+  <img src="assets/results.svg" width="100%" alt="Bar chart of measured results: fast-path routing 31 of 31, conversation bench 60 of 60, verified execution 20 of 20, retrieval Recall@5 100%, speech command accuracy 100% clean, 75% accented, 66.7% noisy, 70.0% numbers-and-names (synthetic text, no microphone)" />
 </p>
 
 | Result | Value | n | Reproduce |
@@ -126,16 +126,16 @@ Every number below ships with its sample size, its method, and a one-command rep
 - **Voice latency:** ~1.5 s+ to first sound, silence-only turn-taking — far behind ~200 ms full-duplex research systems. Scored honestly in [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md).
 - **Not measured at all:** physical-microphone accuracy, real-user phrasing, and any named model's intelligence (the conversation bench's live tier uses an in-process mock brain). The speech figures are hand-authored *text* hypotheses scored by the shipped router — no microphone, no acoustic model, no recordings.
 
-> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), measured 5 November 2026. The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
+> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), first measured 5 November 2026 and re-verified 6 November 2026 (`817/817` tests and every evaluator below re-run). The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
 
 ## How it compares
 
 | | **Quasnooze** | Cloud voice assistants | Chat-channel assistant harnesses | Local LLM chat UIs |
 |---|---|---|---|---|
 | Runs fully on your machine | ✅ Ollama / LM Studio / llama.cpp / vLLM | ❌ cloud | ◐ optional | ✅ |
-| Any major API key you already have | ✅ OpenAI · Anthropic · Gemini · Groq · OpenRouter · Mistral · DeepSeek · Together · xAI (`quasnooze providers`) | ◐ own ecosystem | ◐ varies | ✅ |
+| Any major API key you already have | ✅ OpenAI · Anthropic · Gemini · Groq · OpenRouter · Mistral · DeepSeek · Together · xAI (`quasnooze providers`) | ◐ own ecosystem | ◐ varies | ◐ depends on the app |
 | No account / API key needed | ✅ | ❌ | ◐ | ✅ |
-| Permission gate before state-changing actions | ✅ risk tiers + bounded previews | ❌ | ◐ varies | ❌ (no actions) |
+| Permission gate before state-changing actions | ✅ risk tiers + bounded previews | ◐ confirmations for some actions | ◐ varies by harness | ❌ (no actions) |
 | Actions verified by independent read-back | ✅ `verified / contradicted / unverified` | ❌ | ❌ | ❌ |
 | Voice interface | ◐ Windows native + browser analysis | ✅ | ❌ text-first | ❌ |
 | Chat channels (Telegram/Discord/Slack/WhatsApp) | ✅ | ❌ | ✅ | ❌ |
@@ -172,14 +172,14 @@ flowchart LR
   U[You — web · Windows voice · Telegram · Discord · Slack · WhatsApp · CLI] --> S[Local server · Node.js, 0 runtime deps]
   S --> F{Fast path?<br/>5 deterministic intents}
   F -- match --> T[Tools — same permission<br/>gate & honesty checks]
-  F -- no match --> B[Ollama local model<br/>optional cloud, opt-in]
+  F -- no match --> B[Ollama by default<br/>LM Studio / llama.cpp / vLLM local<br/>or an opt-in cloud preset]
   B --> T
   T --> V[Read-back verifier<br/>verified · contradicted · unverified]
   V --> U
 ```
 
 1. **Fast path first.** Five closed intents (`time_now`, `calculator`, `remember`, `add_task`, `remind`) match in microseconds and skip the model entirely — but never skip the permission classification, honesty guard, or telemetry. Unsure? It falls through to the model, 100% of the time. `QUASNOOZE_FAST_PATH=off` disables it exactly.
-2. **Model second.** Ollama locally by default; an OpenAI-compatible cloud provider only if you configure one.
+2. **Model second.** Ollama locally by default; LM Studio, llama.cpp, and vLLM locally, or one of nine cloud presets (OpenAI, Anthropic, Gemini, Groq, OpenRouter, Mistral, DeepSeek, Together, xAI) only if you select and key one — see [docs/PROVIDERS.md](docs/PROVIDERS.md). An unknown provider name falls back to local Ollama, never to a cloud.
 3. **Verification last.** Tool results are read back where a trustworthy read-back exists; contradictions are surfaced to you, not paraphrased away.
 
 ## The Fluid Motion Voice Engine
@@ -228,6 +228,7 @@ Uses `getUserMedia()` + `AnalyserNode`; analysis stays in the page — no record
 | Command | Purpose |
 |---|---|
 | `quasnooze desktop` | Windows native voice host |
+| `quasnooze providers` | Every brain preset — local and cloud — what each needs, and whether it is configured (never prints a key) |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
 | `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model and tool probe |
 | `quasnooze tools` | Read-only capability & trust inventory (no plugin execution) |
@@ -275,7 +276,7 @@ Motion changes must preserve signal honesty, keyboard access, and reduced-motion
 - **Does it work without internet?** Yes — local model, tools, memory, and the deterministic fast path are fully offline. Channels, web search, and cloud providers obviously need their networks.
 - **Do I need a cloud API key?** No. Ollama locally is the default; a cloud provider is optional and configured by you.
 - **Is my microphone always listening?** No. It starts muted, is enabled only by an explicit action, and is released on mute/stop/page-hide.
-- **Can it act without asking me?** Read-only work (listing, reading, searching, checking the time) runs straight through. Anything that changes state needs **Allow once** — an animation or a spoken “yes” cannot approve it.
+- **Can it act without asking me?** Read-only work (listing, reading, searching, checking the time) runs straight through. Low-risk personal actions (remember a fact, add a task, set a reminder) also run — and are read back and verified. Anything sensitive (shell commands, file writes, system control) needs **Allow once** first — an animation or a spoken “yes” can never approve it.
 - **What does “verified” mean in a reply?** An independent read-back agreed with the claim. `Contradicted` means the world disagrees — you'll see a warning. `Unverified` means no trustworthy read-back exists, and it is labelled as such instead of being dressed up as success.
 
 ---

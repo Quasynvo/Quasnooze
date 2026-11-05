@@ -53,7 +53,7 @@ export const PROVIDER_PRESETS = Object.freeze({
   anthropic: Object.freeze({
     label: "Anthropic (Claude)", transport: "openai", local: false,
     baseUrl: "https://api.anthropic.com/v1", keyEnv: "ANTHROPIC_API_KEY", defaultModel: "claude-sonnet-4-5",
-    note: "Via Anthropic's OpenAI-compatible endpoint; native-only features are not exposed.",
+    note: "Via Anthropic's OpenAI-compatible endpoint, which Anthropic documents for testing/comparison rather than as its production API; native-only features are not exposed.",
   }),
   gemini: Object.freeze({
     label: "Google Gemini", transport: "openai", local: false,
