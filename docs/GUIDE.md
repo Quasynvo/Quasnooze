@@ -33,6 +33,7 @@ from zero to a running assistant.
 - [What Quasnooze did](#what-pinch-did)
 - [Third-party tools (MCP)](#third-party-tools-mcp)
 - [Your own tools (no code required)](#your-own-tools-no-code-required)
+- [Plan, approve, then act (opt-in)](#plan-approve-then-act-opt-in)
 - [Configuration](#configuration)
 - [Extending it](#extending-it)
 - [This repo maintains itself (a little)](#this-repo-maintains-itself-a-little)
@@ -596,6 +597,26 @@ output at 12,000, timeouts at 120 seconds, and a manifest at 32 tools.
 A bad entry is logged with its reason and skipped; the rest still load. An
 assistant that refuses to boot because of a typo in one optional file is worse
 than one that boots with 3 of 4 tools and says so.
+
+## Plan, approve, then act (opt-in)
+
+Off by default. Set `QUASNOOZE_WORKFLOW=on` and three commands appear:
+
+| Command | What it does |
+|---|---|
+| `/plan <goal>` | Drafts a bounded plan — goal, scope, at most 8 steps, at least one success check — and shows it to you. **Nothing runs.** |
+| `/approve` | Approves *this session's* design and starts it. |
+| `/cancel` | Stops it; a cancelled plan cannot be resumed. |
+
+Approving a design is **not** approving an action. It authorises starting the
+plan; every tool inside still meets the risk tier and asks exactly the way it does
+today. Deny that prompt and the plan stops, is marked `blocked`, and says which
+step was refused.
+
+Malformed or oversized plans are refused rather than trimmed, the design can ask
+exactly one clarifying question, an approval is single-use and expires after ten
+minutes, and a plan that was running when the process stopped is blocked on the
+next read instead of resuming. Full detail: [WORKFLOW.md](WORKFLOW.md).
 
 ## Configuration
 
