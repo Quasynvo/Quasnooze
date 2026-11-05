@@ -378,3 +378,72 @@ test("document search reaches the model and the real agent validates and guards 
     assert.ok(request, "model must actually receive the citable passage");
   } finally { brain.resetModel(); }
 });
+
+test("one disclosed approval covers volume/media for the session; lock, denials and other sessions still ask", async () => {
+  const { brain } = await import("../src/brain.js");
+  brain.resetModel();
+  await brain.setModel({ provider: "ollama", model: "fast:latest" });
+  try {
+    // The override keeps pressing volume_up every round, which is exactly the
+    // repeated-press shape the session grant exists for.
+    replyOverride = { content: "", tool_calls: [{ function: { name: "system_control", arguments: { action: "volume_up" } } }] };
+
+    const approvals = [], autos = [];
+    const first = await runAgent({
+      sessionId: "grant-session",
+      text: "please turn my computer volume up a few steps",
+      onEvent: (e) => {
+        if (e.type === "approval") { approvals.push(e); answerApproval(e.id, true); }
+        if (e.type === "auto" && e.name === "system_control") autos.push(e);
+      },
+    });
+    const presses = first.trace.filter((t) => t.tool === "system_control");
+    assert.ok(presses.length >= 2, `expected repeated presses, got ${presses.length}`);
+    assert.equal(approvals.length, 1, "only the first press may prompt");
+    assert.match(approvals[0].description, /session/i, "the prompt must disclose the session-wide scope before the user says yes");
+    assert.equal(autos.length, presses.length - 1, "every grant-covered press surfaces as an auto event, never silently");
+    assert.equal(presses.filter((t) => t.sessionGrant).length, presses.length - 1, "grant-covered presses are marked in the trace");
+    assert.equal(presses[0].sessionGrant, undefined, "the explicitly approved press is not mislabelled as granted");
+
+    // Next turn, same session: the grant still holds.
+    let askedAgain = 0;
+    const second = await runAgent({
+      sessionId: "grant-session",
+      text: "volume up once more",
+      onEvent: (e) => { if (e.type === "approval") { askedAgain++; answerApproval(e.id, true); } },
+    });
+    assert.equal(askedAgain, 0, "the grant survives across turns within one session");
+    assert.ok(second.trace.some((t) => t.tool === "system_control" && t.sessionGrant));
+
+    // A different session starts cold: the grant never leaks across sessions.
+    let freshAsked = 0;
+    await runAgent({
+      sessionId: "grant-session-other",
+      text: "please turn my computer volume up a few steps",
+      onEvent: (e) => { if (e.type === "approval") { freshAsked++; answerApproval(e.id, true); } },
+    });
+    assert.equal(freshAsked, 1, "a new session must be asked before its first volume press");
+
+    // Denial grants nothing: every subsequent press asks again.
+    const denied = [];
+    const deniedRun = await runAgent({
+      sessionId: "grant-session-denied",
+      text: "please turn my computer volume up a few steps",
+      onEvent: (e) => { if (e.type === "approval") { denied.push(e); answerApproval(e.id, false); } },
+    });
+    const deniedPresses = deniedRun.trace.filter((t) => t.tool === "system_control");
+    assert.ok(deniedPresses.every((t) => t.denied && !t.sessionGrant), "denied presses never run and never grant");
+    assert.equal(denied.length, deniedPresses.length, "after a denial, each new press must prompt again");
+
+    // Lock is never covered by the volume/media grant, even in a granted session.
+    replyOverride = { content: "", tool_calls: [{ function: { name: "system_control", arguments: { action: "lock" } } }] };
+    let lockAsked = 0;
+    const lockRun = await runAgent({
+      sessionId: "grant-session",
+      text: "lock my machine now",
+      onEvent: (e) => { if (e.type === "approval") { lockAsked++; answerApproval(e.id, false); } },
+    });
+    assert.ok(lockAsked >= 1, "lock must still ask in a session that granted volume/media");
+    assert.ok(lockRun.trace.filter((t) => t.tool === "system_control").every((t) => t.denied), "denied lock must not run");
+  } finally { replyOverride = null; brain.resetModel(); }
+});

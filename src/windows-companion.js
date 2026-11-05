@@ -69,7 +69,10 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         const id = randomUUID(), deadline = Date.now() + 30_000;
         const timer = later(() => { context.pending.delete(id); reject(new Error("Desktop confirmation expired; outcome unknown. Inspect before requesting again.")); }, 30_000);
         context.pending.set(id, { resolve, reject, timer });
-        send({ op: "action", id, action: intent.action, url: intent.url, deadline });
+        // media/level carry the volume/media-key subset: an enum name and an
+        // integer. JSON.stringify drops them when undefined, so the wire shape
+        // for clipboard/url/app actions is unchanged.
+        send({ op: "action", id, action: intent.action, url: intent.url, media: intent.media, level: intent.level, deadline });
       });
     } };
     try {

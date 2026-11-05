@@ -42,12 +42,13 @@ a short list of *techniques*, and those are what the roadmap borrows.
 | Memory / retrieval | Session store, remembered facts, zero-dependency BM25 document index with citations | `src/store.js`, `src/documents.js`, `src/citations.js` |
 | Channels | Web, Telegram, Discord, Slack, WhatsApp | `src/channels/` |
 | Diagnostics | Local readiness, latency baseline, **per-turn p50/p95 already recorded** | `src/telemetry.js`, `src/readiness.js` |
-| Laptop control | Lock and sleep. That is the entire OS surface. | `src/tools.js:system_control` |
+| Laptop control | Lock, sleep, volume, mute, and media transport (play/pause, next, previous) via the Windows companion. | `src/tools.js:system_control`, `desktop/Companion.cs` |
 
-Read that last row twice. The product is called a personal assistant that runs on
-your computer, and the only thing it can do to the computer is lock it. Every
-"control my laptop with AI" promise currently resolves to a shell command, which
-is where both accuracy and safety are worst.
+Read that last row twice. Until `laptop-01` shipped, the only thing this
+"personal assistant that runs on your computer" could do to the computer was
+lock it. Volume and media transport now go through typed native APIs; every
+remaining "control my laptop with AI" promise still resolves to a shell
+command, which is where both accuracy and safety are worst.
 
 ---
 
@@ -75,7 +76,7 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 
 | # | Requirement | Today | Item |
 |---|---|---|---|
-| 11 | Volume, mute, play/pause, next/previous | **missing** | `laptop-01` |
+| 11 | Volume, mute, play/pause, next/previous | have (Windows companion; reversible, session-grantable approval) | `laptop-01` |
 | 12 | Launch an app, switch to a window, minimise it | partial (fixed allowlist, no focus) | `laptop-02` |
 | 13 | Read and write the clipboard safely | **missing** | `laptop-03` |
 | 14 | Type dictated text into the focused app | **missing** | `laptop-04` |
@@ -102,9 +103,10 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | 30 | The typed path is as fast as the spoken one | partial (SSE, no budget) | `voice-01` |
 | 31 | Tool arguments are shaped by the schema at sampling time, not repaired after the fact | **missing** | `reason-03-constrained-tool-arguments` |
 
-**Result:** 8 have, 4 partial, 19 missing. Eighteen roadmap entries address
-twenty of the missing/partial rows; the ones that are not covered are named
-explicitly in §6 rather than left to look forgotten.
+**Result:** 9 have, 4 partial, 18 missing (row 11 has since shipped as
+`laptop-01`). Eighteen roadmap entries address twenty of the missing/partial
+rows; the ones that are not covered are named explicitly in §6 rather than
+left to look forgotten.
 
 ---
 

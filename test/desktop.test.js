@@ -304,3 +304,38 @@ test('desktop never reports COMPLETED/ready or speaks aloud when guard flags, de
   assert.equal(runtime.snapshot().acted, true);
 });
 
+
+/* ── media / volume transport (laptop-01) ─────────────────────────────── */
+
+test("media() without a companion rejects with a typed 503 so callers can degrade honestly", async () => {
+  const runtime = new DesktopRuntime();
+  await assert.rejects(
+    () => runtime.media("mute"),
+    (err) => err.status === 503 && /companion is not running/i.test(err.message),
+  );
+});
+
+test("media() forwards only an enum and an integer over the bridge, omitting level when absent", async () => {
+  const runtime = new DesktopRuntime();
+  const b = bridge();
+  runtime.attach(b);
+  await runtime.media("volume_up");
+  await runtime.media("set_volume", 30);
+  assert.deepEqual(b.actions, [
+    { action: "media", media: "volume_up" },
+    { action: "media", media: "set_volume", level: 30 },
+  ]);
+});
+
+test("Companion.cs implements the media allowlist natively, matching the JS wire protocol", () => {
+  const cs = readFileSync(new URL("../desktop/Companion.cs", import.meta.url), "utf8");
+  for (const action of ["volume_up", "volume_down", "set_volume", "mute", "unmute", "media_play_pause", "media_next", "media_previous"]) {
+    assert.ok(cs.includes(`"${action}"`), `Companion.cs must allowlist ${action}`);
+  }
+  assert.ok(cs.includes("5CDF2C82-841E-4546-9722-0CF74078229A"), "IAudioEndpointVolume interop must be present");
+  assert.ok(cs.includes('action == "media"'), "the action dispatcher must route media requests");
+  assert.match(cs, /QuasnoozeAudio\.Control\(Value\(m, "media"\), Value\(m, "level"\)\)/);
+  assert.match(cs, /never clamp/i);
+  const companion = readFileSync(new URL("../src/windows-companion.js", import.meta.url), "utf8");
+  assert.match(companion, /media: intent\.media, level: intent\.level/, "the bridge must forward the media fields");
+});

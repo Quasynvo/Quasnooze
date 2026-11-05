@@ -265,3 +265,22 @@ test("structural commit detection catches direct, chained, wrapped, and tool-bas
 });
 
 process.on("exit", () => rmSync(dataDir, { recursive: true, force: true }));
+
+/* ── system_control classification (laptop-01) ────────────────────────── */
+
+test("volume/media system_control actions are act-tier and session-grantable; lock and sleep never are", async () => {
+  const { classifySystemControl, SESSION_GRANTABLE_SYSTEM_CONTROL, SYSTEM_CONTROL_GRANT } = await import("../src/risk.js");
+  assert.equal(SESSION_GRANTABLE_SYSTEM_CONTROL.length, 8);
+  for (const action of SESSION_GRANTABLE_SYSTEM_CONTROL) {
+    const result = classifySystemControl(action);
+    assert.equal(result.tier, ACT, `${action} still needs a human yes`);
+    assert.equal(result.sessionGrantable, true, `${action} approval may be remembered for the session`);
+    assert.equal(result.grantKey, SYSTEM_CONTROL_GRANT);
+  }
+  for (const action of ["lock", "sleep", "shutdown", "", undefined, "volume_up; rm -rf /"]) {
+    const result = classifySystemControl(action);
+    assert.equal(result.tier, ACT);
+    assert.equal(result.sessionGrantable, false, `${String(action)} must ask every single time`);
+    assert.equal(result.grantKey, null);
+  }
+});

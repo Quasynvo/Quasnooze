@@ -64,10 +64,20 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
     case 'screenshot':
       preview.target = args.path || 'generated screenshot path (not yet resolved)';
       preview.effectSummary = 'Capture the screen and save an image. Visible personal information may be included.'; break;
-    case 'system_control':
-      preview.action = ['lock', 'sleep'].includes(args.action) ? args.action : 'unknown';
+    case 'system_control': {
+      const machine = ['lock', 'sleep'];
+      const media = ['volume_up', 'volume_down', 'set_volume', 'mute', 'unmute', 'media_play_pause', 'media_next', 'media_previous'];
+      preview.action = [...machine, ...media].includes(args.action) ? args.action : 'unknown';
       preview.target = 'local computer';
-      preview.effectSummary = preview.action === 'unknown' ? 'unknown' : `Request ${preview.action} from the operating system. Running work may be interrupted.`; break;
+      if (preview.action === 'unknown') preview.effectSummary = 'unknown';
+      else if (machine.includes(preview.action)) preview.effectSummary = `Request ${preview.action} from the operating system. Running work may be interrupted.`;
+      else if (preview.action === 'set_volume') {
+        const bounded = Number.isInteger(args.level) && args.level >= 0 && args.level <= 100;
+        preview.effectSummary = `Set system volume to ${bounded ? `${args.level}%` : 'an invalid level (will be rejected)'} via the Windows companion. Reversible; touches no files.`;
+      }
+      else preview.effectSummary = `Send ${preview.action.replace(/_/g, ' ')} to the Windows companion (Core Audio / media key). Reversible; touches no files.`;
+      break;
+    }
     default:
       preview.status = 'unknown'; preview.redactions.push('unsupported-arguments-withheld');
   }

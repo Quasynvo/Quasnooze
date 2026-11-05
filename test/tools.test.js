@@ -197,3 +197,91 @@ test('server boot registers local plugins before opening the web panel', async (
     rmSync(dir,{recursive:true,force:true});
   }
 });
+
+/* ── system_control: volume & media transport (laptop-01) ─────────────────
+ * The contract under test: explicit params, typed results, bounded errors
+ * (never clamped), no shell for audio, and honest degradation without the
+ * Windows companion. */
+
+const SYS_MEDIA_ACTIONS = ["volume_up","volume_down","set_volume","mute","unmute","media_play_pause","media_next","media_previous"];
+
+test("system_control schema exposes lock/sleep plus the volume/media actions with a bounded integer level", () => {
+  const schema = toolSchemas().find((s) => s.function.name === "system_control").function.parameters;
+  for (const action of ["lock", "sleep", ...SYS_MEDIA_ACTIONS]) {
+    assert.ok(schema.properties.action.enum.includes(action), `schema must offer ${action}`);
+  }
+  assert.ok(!schema.properties.action.enum.includes("shutdown"), "shutdown stays deliberately absent");
+  assert.equal(schema.properties.level.type, "integer");
+  assert.equal(schema.properties.level.minimum, 0);
+  assert.equal(schema.properties.level.maximum, 100);
+});
+
+test("set_volume rejects out-of-range and non-integer levels with the bound named — never clamps", async () => {
+  const sys = TOOL_MAP.get("system_control");
+  for (const level of [500, -1, 101, 50.5, "50", undefined]) {
+    const res = await sys.run({ action: "set_volume", level });
+    assert.equal(res.ok, false, `level ${String(level)} must be rejected`);
+    assert.match(res.output, /between 0 and 100/);
+    assert.match(res.output, /Nothing was changed/);
+    assert.equal(res.state, undefined, "a rejected call must not fabricate a resulting state");
+  }
+});
+
+test("level is rejected on any action other than set_volume — including lock, where no shell may run", async () => {
+  const sys = TOOL_MAP.get("system_control");
+  for (const action of ["volume_up", "mute", "lock"]) {
+    const res = await sys.run({ action, level: 10 });
+    assert.equal(res.ok, false);
+    assert.match(res.output, /only accepted with set_volume/);
+    assert.match(res.output, /Nothing was changed/);
+  }
+});
+
+test("volume/media degrade with an actionable typed failure when no companion is attached", async () => {
+  const { desktop } = await import("../src/desktop.js");
+  assert.ok(!desktop.bridge, "precondition: no companion in this test process");
+  const res = await TOOL_MAP.get("system_control").run({ action: "volume_up" });
+  assert.equal(res.ok, false);
+  assert.match(res.output, /Windows companion/);
+  assert.match(res.output, /npm run desktop/);
+  assert.match(res.output, /Nothing was changed/);
+});
+
+test("volume actions route through the companion bridge as enum + integer and report resulting state", async () => {
+  const { desktop } = await import("../src/desktop.js");
+  const sent = [];
+  desktop.attach({ send() {}, action: async (a) => { sent.push(a); return JSON.stringify({ level: 40, muted: false, transport: "none" }); } });
+  try {
+    const res = await TOOL_MAP.get("system_control").run({ action: "set_volume", level: 40 });
+    assert.deepEqual(sent, [{ action: "media", media: "set_volume", level: 40 }], "wire payload is an enum and an integer — no shell text");
+    assert.equal(res.ok, true);
+    assert.deepEqual(res.state, { level: 40, muted: false });
+    assert.match(res.output, /40%/);
+    assert.match(res.output, /not muted/);
+  } finally { desktop.detach(); }
+});
+
+test("media transport reports the key send as unverified while stating the audio state it could verify", async () => {
+  const { desktop } = await import("../src/desktop.js");
+  const sent = [];
+  desktop.attach({ send() {}, action: async (a) => { sent.push(a); return JSON.stringify({ level: 25, muted: true, transport: "key-sent-unverified" }); } });
+  try {
+    const res = await TOOL_MAP.get("system_control").run({ action: "media_play_pause" });
+    assert.deepEqual(sent, [{ action: "media", media: "media_play_pause" }], "no level is sent when none applies");
+    assert.equal(res.ok, true);
+    assert.equal(res.state.transport, "key-sent-unverified");
+    assert.match(res.output, /not verifiable/);
+    assert.match(res.output, /25%/);
+  } finally { desktop.detach(); }
+});
+
+test("a companion reply without typed state is reported as unknown, not dressed up as success", async () => {
+  const { desktop } = await import("../src/desktop.js");
+  desktop.attach({ send() {}, action: async () => "Action confirmed by native host." });
+  try {
+    const res = await TOOL_MAP.get("system_control").run({ action: "mute" });
+    assert.equal(res.ok, false);
+    assert.match(res.output, /unknown/);
+    assert.match(res.output, /check the device/);
+  } finally { desktop.detach(); }
+});

@@ -707,3 +707,55 @@ export function describeTier(result) {
   if (result.tier === READ) return `read-only, no prompt`;
   return `needs approval — ${result.why}`;
 }
+
+/* ─────────────────────── system_control classification ────────────────────
+ *
+ * Volume and media-transport actions are the one place where "ask every
+ * single time" recreates the exact approval fatigue this file exists to
+ * prevent: "volume up" pressed five times is five identical prompts for an
+ * action that is bounded, idempotent and reversible from the keyboard.
+ *
+ * So these actions stay `act` — they never run without a human having said
+ * yes — but the yes may be remembered for the rest of the session. Lock and
+ * sleep are NOT in this list on purpose: they interrupt the whole machine,
+ * so they keep costing one prompt per press.
+ */
+export const SESSION_GRANTABLE_SYSTEM_CONTROL = Object.freeze([
+  "volume_up",
+  "volume_down",
+  "set_volume",
+  "mute",
+  "unmute",
+  "media_play_pause",
+  "media_next",
+  "media_previous",
+]);
+
+/** The single grant key: one approval covers volume + media for a session. */
+export const SYSTEM_CONTROL_GRANT = "system_control:volume-media";
+
+/**
+ * Classify a system_control action. Everything is `act` (a human approves);
+ * `sessionGrantable` marks the reversible, non-destructive audio/media subset
+ * whose approval may be remembered for the rest of the session.
+ *
+ * @param {string} action
+ * @returns {{tier: "act", why: string, sessionGrantable: boolean, grantKey: string|null}}
+ */
+export function classifySystemControl(action) {
+  const name = String(action || "");
+  if (SESSION_GRANTABLE_SYSTEM_CONTROL.includes(name)) {
+    return {
+      tier: ACT,
+      why: `${name} is reversible volume/media control — approval can be remembered for this session`,
+      sessionGrantable: true,
+      grantKey: SYSTEM_CONTROL_GRANT,
+    };
+  }
+  return {
+    tier: ACT,
+    why: `${name || "an unknown system action"} interrupts the whole machine, so every press asks`,
+    sessionGrantable: false,
+    grantKey: null,
+  };
+}
