@@ -15,7 +15,8 @@ import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
 import { QuasError, classify } from "./failure.js";
 import { assistantText } from "./assistant-text.js";
-import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaMessage } from "./prompt.js";
+import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaMessage,
+  buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, describeTier, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
@@ -26,6 +27,8 @@ import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
 import { record } from "./telemetry.js";
 import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
+import { parseWorkflowCommand, createWorkflow, submitDesign, approveDesign, beginExecution, finishExecution,
+  cancelWorkflow, activeWorkflowFor, loadWorkflow, renderPlan, WorkflowStoreError, LIMITS as WORKFLOW_LIMITS } from "./agent/workflow.js";
 import { verifyAction, describeVerification, CONTRADICTED as VERIFY_CONTRADICTED } from "./verify.js";
 
 const MAX_ROUNDS = 8;
@@ -205,6 +208,118 @@ export function explainBrainFailure(err, model) {
   );
 }
 
+/* ──────────────────────── design workflow commands ────────────────────── */
+
+const WORKFLOW_HELP =
+  "Design workflow (opt-in):\n" +
+  "  /plan <goal>   draft a bounded plan — nothing runs\n" +
+  "  /approve       approve this session's design and start it\n" +
+  "  /cancel        stop it; a cancelled design cannot be resumed\n" +
+  "Approving a design authorises starting the plan and nothing else: every tool inside still asks the way it always did.";
+
+/**
+ * Handle `/plan`, `/approve`, `/cancel`.
+ *
+ * Returns `{ reply }` for a turn that ends here, or `{ execute }` for `/approve`,
+ * which hands control back to the ordinary tool loop. Nothing in this function
+ * runs a tool, and nothing in it can approve one.
+ */
+async function handleWorkflowCommand({ command, sessionId, channel, onEvent, activeModel }) {
+  const active = activeWorkflowFor(sessionId);
+  const emit = (workflow) => onEvent({ type: "workflow", id: workflow.id, state: workflow.state });
+
+  if (command.verb === "cancel") {
+    if (!active) return { reply: "There is no workflow to cancel in this session." };
+    const cancelled = cancelWorkflow({ id: active.id, sessionId });
+    if (!cancelled.ok) return { reply: `Nothing was cancelled: ${cancelled.reason}.` };
+    emit(cancelled.workflow);
+    return {
+      reply: `Cancelled ${active.id}. It is blocked and cannot be resumed; nothing further will run. Start a new design with /plan <goal>.`,
+    };
+  }
+
+  // A design that is waiting for the one permitted clarification takes the next
+  // `/plan <answer>` as its answer rather than starting a second workflow.
+  const answering = active && active.state === "design" && active.clarifications >= 1 ? active : null;
+  const continuing = active && ["awaiting-design-approval", "planned", "executing"].includes(active.state) ? active : null;
+
+  if (command.verb === "plan") {
+    if (continuing) {
+      return {
+        reply:
+          `This session already has an open design (${continuing.id}, ${continuing.state}).\n` +
+          `Run it with /approve, drop it with /cancel, or read it again with /plan.`,
+      };
+    }
+    if (!command.arg && !answering) return { reply: WORKFLOW_HELP };
+
+    let workflow = active;
+    if (!answering) {
+      if (!String(command.arg).trim()) return { reply: WORKFLOW_HELP };
+      workflow = createWorkflow({ sessionId, goal: command.arg, channel });
+      onEvent({ type: "workflow", id: workflow.id, state: workflow.state });
+    }
+
+    const design = await brain
+      .chat(
+        buildWorkflowDesignMessages({
+          request: workflow.request,
+          ...(answering ? { clarification: answering.question, answer: command.arg } : {}),
+        }),
+        { selection: activeModel, tools: [], maxTokens: 900, think: false },
+      )
+      .then((out) => ({ content: out?.content ?? "" }))
+      .catch((err) => ({ error: err }));
+
+    if (design.error) {
+      // No design exists, so there is nothing to approve and nothing to run.
+      // Block the workflow so a later /approve cannot resurrect a half-turn.
+      submitDesign(workflow, "");
+      return {
+        reply: `∿ Could not draft a design, so nothing was executed.\n\n${explainBrainFailure(design.error, activeModel)}`,
+      };
+    }
+
+    const submitted = submitDesign(loadWorkflow(workflow.id) || workflow, design.content);
+    const stored = submitted.workflow || loadWorkflow(workflow.id);
+    if (stored) emit(stored);
+
+    if (!submitted.ok) return { reply: submitted.error };
+    if (submitted.clarify) {
+      return {
+        reply: `${submitted.clarify}\n\nAnswer with /plan <answer> and I will draft the plan. One question only.`,
+      };
+    }
+    return {
+      reply:
+        `Design ${workflow.id} — nothing has run yet.\n\n${renderPlan(submitted.plan)}\n\n` +
+        `Approve it with /approve, or drop it with /cancel. Approving authorises starting the plan; ` +
+        `each tool inside still asks for permission exactly as it does today. ` +
+        `Limits: ${WORKFLOW_LIMITS.steps} steps, ${WORKFLOW_LIMITS.stepChars} characters per step.`,
+    };
+  }
+
+  // verb === "approve"
+  if (!active) {
+    return { reply: "No design is waiting for approval in this session. Start one with /plan <goal>." };
+  }
+  if (active.state !== "awaiting-design-approval") {
+    return {
+      reply: `This session's workflow is ${active.state}, so there is nothing to approve. Start one with /plan <goal>.`,
+    };
+  }
+
+  const approved = approveDesign({ id: active.id, sessionId });
+  if (!approved.ok) return { reply: `Not approved: ${approved.reason}. Nothing was executed.` };
+  emit(approved.workflow);
+
+  const began = beginExecution({ id: active.id, sessionId });
+  if (!began.ok) return { reply: `Not started: ${began.reason}. Nothing was executed.` };
+  emit(began.workflow);
+
+  return { execute: { id: active.id, plan: began.plan } };
+}
+
 export async function runAgent({
   sessionId,
   text,
@@ -224,10 +339,46 @@ export async function runAgent({
   }
   const command = attachments.length ? null : personaCommand(text, sessionId);
   if (command !== null) return {text:command,sessionId,trace:[],guard:[],sources:[],ms:0,firstTextMs:null,error:null};
-  const social = isSocialTurn(text, attachments);
   const activeModel = brain.active; // Pin provider/model for the entire tool loop.
-  const unattended = autonomy === "unattended";
   const startedAt = Date.now();
+  const unattended = autonomy === "unattended";
+  const simpleTurn = (reply) => ({
+    text: reply,
+    firstTextMs: Date.now() - startedAt,
+    error: null,
+    trace: [],
+    sessionId,
+    guard: [],
+    sources: [],
+    ms: Date.now() - startedAt,
+  });
+
+  // ── the opt-in design workflow (issue #108) ─────────────────────────────
+  // Intercepted here, before the loop, so `/plan` costs one model call and runs
+  // nothing. `/approve` does not return: it starts the plan and then falls
+  // through into the loop below, unchanged, which is the point — the design
+  // approval is a separate gate, not a bypass of the tool gates.
+  const wfCommand = attachments.length ? null : parseWorkflowCommand(text, { enabled: config.workflow });
+  let workflowRun = null;
+  if (wfCommand) {
+    if (unattended) {
+      return simpleTurn("A scheduled run cannot start a design workflow: approving a plan needs a person who is here. Nothing was designed and nothing ran.");
+    }
+    if (wfCommand.error) return simpleTurn(wfCommand.error);
+    let outcome;
+    try {
+      outcome = await handleWorkflowCommand({ command: wfCommand, sessionId, channel, onEvent, activeModel });
+    } catch (err) {
+      // A corrupt store, a refused transition, a model that vanished: all of them
+      // end the turn with a sentence, never with a half-started plan.
+      const why = err instanceof WorkflowStoreError ? err.message : `the workflow could not continue (${err.message})`;
+      return simpleTurn(`∿ Nothing was executed. ${why}`);
+    }
+    if (outcome.reply !== undefined) return simpleTurn(outcome.reply);
+    workflowRun = outcome.execute || null;
+  }
+
+  const social = workflowRun ? false : isSocialTurn(text, attachments);
   const session = loadSession(sessionId);
   // A transport failure is UI/runtime evidence, not the assistant's persona.
   // Do not prime a recovered model to keep claiming it is offline.
@@ -275,7 +426,7 @@ export async function runAgent({
   // while a false match is an action nobody asked for — so ambiguity falls
   // through unchanged, and a tool that fails falls through too, because the
   // model can ask a better question than an error string.
-  if (config.fastPath && !unattended && !social && !attachments.length) {
+  if (config.fastPath && !unattended && !social && !attachments.length && !workflowRun) {
     const fast = matchFastIntent(text);
     const tool = fast ? TOOL_MAP.get(fast.name) : null;
     if (tool && FAST_TOOLS.has(fast.name) && !DANGEROUS.has(fast.name) && !validateArgs(tool, fast.args)) {
@@ -353,6 +504,7 @@ export async function runAgent({
     { role: "system", content: social ? buildConversationPrompt({ channel }) : buildSystemPrompt({ channel }) },
     ...history,
     ...(persona ? [persona] : []),
+    ...(workflowRun ? [buildWorkflowPlanMessage(workflowRun)] : []),
     userTurn,
   ];
 
@@ -600,6 +752,30 @@ export async function runAgent({
   // The footer is evidence, so it appears only when the reply cites something.
   // An answer from memory must not wear a "Sources" heading: the heading itself
   // implies research, and a heading with nothing under it is a small lie.
+  // A plan that met a denial or a contradiction did not finish, and the state on
+  // disk says so — otherwise the next turn would believe the work was done.
+  if (workflowRun) {
+    const stoppedBy = trace.filter((t) => t.denied || t.verification?.status === VERIFY_CONTRADICTED);
+    const finished = finishExecution({
+      id: workflowRun.id,
+      ok: !brainFailed && !modelOutputFailed && stoppedBy.length === 0,
+      detail: brainFailed
+        ? "the model became unavailable while the plan was running"
+        : modelOutputFailed
+          ? "the model returned no usable answer while the plan was running"
+          : stoppedBy.length
+            ? `${stoppedBy.length} step${stoppedBy.length === 1 ? " was" : "s were"} denied or contradicted`
+            : "",
+    });
+    if (finished.ok) {
+      onEvent({ type: "workflow", id: workflowRun.id, state: finished.state });
+      finalText +=
+        `\n\n⌁ Plan ${workflowRun.id}: ${finished.state === "done" ? "complete" : "stopped"}` +
+        ` — ${trace.length} step${trace.length === 1 ? "" : "s"} attempted` +
+        `${finished.state === "done" ? ", nothing contradicted." : `; ${finished.workflow.blockedReason}.`}`;
+    }
+  }
+
   const sourceBlock = renderSourceBlock(citations);
   if (sourceBlock) finalText += sourceBlock;
 
