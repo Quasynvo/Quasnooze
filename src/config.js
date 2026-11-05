@@ -111,6 +111,9 @@ export const config = Object.freeze({
   // Read-only shell commands run without a prompt; everything else still asks.
   // Off restores "ask for every shell command", which is the old behaviour.
   riskTiers: !["0", "false", "off", "no"].includes(String(env.PINCH_RISK_TIERS || "").toLowerCase()),
+  // Deterministic action lifecycle policy pipeline (off | standard | strict).
+  // Default-off so ordinary turns stay unchanged until explicitly enabled.
+  harnessEvents: String(env.PINCH_HARNESS_EVENTS || "off").trim().toLowerCase(),
   // Extra hostnames the panel may be reached on (reverse proxy, tailnet).
   allowedHosts: list(env.PINCH_ALLOWED_HOSTS),
   // Credential-looking env vars a build may legitimately need.

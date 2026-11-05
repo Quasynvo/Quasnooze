@@ -12,7 +12,7 @@ process.env.PINCH_DATA = dataDir;
 process.env.LLM_PROVIDER = "mock";
 process.env.PINCH_GUARD = "off";
 
-import { classifyCommand, READ, ACT, BLOCKED } from "../src/risk.js";
+import { classifyCommand, detectCommitProposal, READ, ACT, BLOCKED } from "../src/risk.js";
 
 /**
  * The tier classifier decides what runs without a prompt, so every test here is
@@ -209,6 +209,59 @@ test("the kill switch restores 'ask for every shell command'", async () => {
 
   assert.equal(run("0"), "ASKED", "PINCH_RISK_TIERS=0 must restore asking for every shell command");
   assert.equal(run("1"), "DID-NOT-ASK", "and with tiers on, ls runs unprompted");
+});
+
+test("structural commit detection catches direct, chained, wrapped, and tool-based commits without false positives", () => {
+  const commitCommands = [
+    "git commit -m 'fix: gate commits'",
+    "git -C sub/repo -c user.name=bot commit -am 'ship'",
+    "git commit-tree abc123",
+    "git status && GIT_AUTHOR_NAME=bot env -i /usr/bin/git commit --amend --no-verify -m 'msg'",
+    "sh -lc 'git add . && git commit -n -m \"nested\"'",
+    "echo $(git commit -m 'subshell')",
+    "hg ci -m 'mercurial commit'",
+    "svn commit -m 'subversion commit'",
+    "jj commit -m 'jujutsu commit'",
+  ];
+
+  for (const command of commitCommands) {
+    const proposal = detectCommitProposal("shell", { command });
+    assert.equal(proposal.isCommit, true, `expected commit proposal for: ${command}`);
+    const classified = classifyCommand(command, { workspaceRoots: [dataDir] });
+    assert.equal(classified.tier, ACT, `commit command must be ACT tier: ${command}`);
+    assert.equal(classified.commit, true, `classifyCommand should mark commit: ${command}`);
+  }
+
+  const hookBypass = detectCommitProposal("shell", {
+    command: "sh -c 'git commit --no-verify --amend -m \"secret message\"'",
+  });
+  assert.equal(hookBypass.bypassesHooks, true);
+  assert.equal(hookBypass.amendsHistory, true);
+  assert.ok(!JSON.stringify(hookBypass).includes("secret message"));
+
+  assert.equal(detectCommitProposal("git_commit", { message: "x" }).isCommit, true);
+  assert.equal(detectCommitProposal("mcp__git__create_commit", { noVerify: true }).bypassesHooks, true);
+  assert.equal(detectCommitProposal("repo_action", { action: "commit" }).isCommit, true);
+  assert.equal(
+    detectCommitProposal("custom_ship", {}, { tool: { name: "custom_ship", commit: true } }).isCommit,
+    true,
+  );
+
+  const nonCommits = [
+    ["shell", { command: "grep commit README.md" }],
+    ["shell", { command: "git log --grep=commit -n 5" }],
+    ["shell", { command: "echo 'git commit -m not-run'" }],
+    ["shell", { command: "command -v git" }],
+    ["shell", { command: "git --version" }],
+    ["list_commits", { limit: 10 }],
+    ["get_commit", { sha: "HEAD" }],
+    ["mcp__github__search_commits", { query: "fix" }],
+  ];
+
+  for (const [toolName, args] of nonCommits) {
+    const proposal = detectCommitProposal(toolName, args);
+    assert.equal(proposal.isCommit, false, `unexpected commit match for ${toolName}: ${JSON.stringify(args)}`);
+  }
 });
 
 process.on("exit", () => rmSync(dataDir, { recursive: true, force: true }));
