@@ -1251,6 +1251,74 @@ export function toolSchemas() {
 
 export const DANGEROUS = new Set(TOOLS.filter((t) => t.dangerous).map((t) => t.name));
 
+const BUILTIN_BOUNDARIES = Object.freeze({
+  shell: "Scrubbed child shell; allowlisted workspace reads skip prompt when riskTiers=true, command screen blocks catastrophes, other commands ask.",
+  read_file: "Reads workspace text files after canonical path and protected-credential checks; not OS-sandboxed.",
+  write_file: "Creates or overwrites workspace files after canonical path and protected-credential checks.",
+  list_dir: "Lists workspace directory entries (omitting .env*); confined by workspace path checks.",
+  grep: "Regex workspace content search inside a 3s worker thread; confined by workspace path checks.",
+  scan_project: "Summarises workspace project tree and README header; confined by workspace path checks.",
+  calculator: "In-process arithmetic parser with no eval or dynamic code execution.",
+  time_now: "Reads local system clock in configured timezone.",
+  remember: "Writes durable fact to local data/memory.json without prompt.",
+  search_history: "Searches saved local session JSON in data/sessions/ with untrusted-source wrapping.",
+  recall: "Reads remembered facts from local data/memory.json.",
+  forget: "Removes matching remembered facts from local data/memory.json without prompt.",
+  search_documents: "Offline BM25 passage search over bounded workspace files; untrusted-source wrapped.",
+  search_web: "Sends search query over HTTPS to DuckDuckGo; outbound network request without prompt.",
+  add_task: "Appends task to local data/tasks.json without prompt.",
+  list_tasks: "Reads tasks from local data/tasks.json.",
+  complete_task: "Marks matching task done in local data/tasks.json without prompt.",
+  remind: "Stores timer/reminder in local data/reminders.json without prompt.",
+  list_reminders: "Reads pending reminders from local data/reminders.json.",
+  cancel_reminder: "Removes matching pending reminders from local data/reminders.json without prompt.",
+  schedule: "Manages recurring unattended agent runs in data/schedules.json; unattended runs cannot add schedules.",
+  open_url: "Asks OS default browser opener to open an http(s) URL without prompt.",
+  screenshot: "Captures screen via argv binary (shell:false) to workspace image file.",
+  system_control: "Requests OS display lock or system sleep; shutdown is not implemented.",
+});
+
+/**
+ * Return static, execution-free capability and trust metadata for shipped
+ * built-in tools. Reads the immutable TOOLS table rather than runtime TOOL_MAP
+ * so inspecting built-in tools does not depend on or trigger plugin loading.
+ */
+export function describeBuiltinTools({
+  riskTiers = config.riskTiers,
+  autoApprove = config.autoApprove,
+} = {}) {
+  return TOOLS.map((tool) => {
+    const dangerous = Boolean(tool.dangerous);
+    const approvalPolicy = !dangerous
+      ? "no-prompt"
+      : tool.name === "shell" && riskTiers
+        ? "conditional-shell-risk-tiers"
+        : "approval-required";
+    const effectiveInteractivePolicy = !dangerous
+      ? "no-prompt"
+      : autoApprove
+        ? "auto-approved-by-config"
+        : approvalPolicy;
+    const unattendedPolicy = dangerous ? "refused" : "allowed";
+    const parameters = Object.freeze(Object.keys(tool.parameters?.properties || {}));
+    return Object.freeze({
+      name: tool.name,
+      source: "builtin",
+      dangerous,
+      approvalPolicy,
+      effectiveInteractivePolicy,
+      unattendedPolicy,
+      sandboxed: false,
+      parameters,
+      boundary:
+        BUILTIN_BOUNDARIES[tool.name] ||
+        (dangerous
+          ? "Built-in in-process tool behind the interactive approval gate; not OS-sandboxed."
+          : "Built-in in-process tool; runs without an approval prompt and is not OS-sandboxed."),
+    });
+  });
+}
+
 /**
  * Add a tool at runtime.
  *

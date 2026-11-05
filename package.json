@@ -23,6 +23,7 @@
     "service": "node scripts/service.js",
     "supervise": "node scripts/supervise.js",
     "audit": "node scripts/audit.js",
+    "tools": "node src/cli.js tools",
     "radar": "node scripts/tech-radar.js",
     "growth": "node scripts/growth.js",
     "verify": "node --test && node scripts/audit.js",

@@ -301,3 +301,251 @@ export function mcpClients() {
 }
 
 export { RESTART_BACKOFF_MS };
+
+export const MCP_INVENTORY_LIMITS = Object.freeze({
+  maxServers: 32,
+});
+
+const BARE_MCP_COMMAND_RE = /^[A-Za-z0-9._+-]{1,64}$/;
+const PATH_LIKE_MCP_COMMAND_RE =
+  /(?:[\\/]|^~(?=$|[\\/])|^\$(?:\{?HOME\}?|USERPROFILE)\b|^%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%|^[A-Za-z]:)/i;
+
+/**
+ * Static, execution-free inspection of configured MCP stdio servers.
+ *
+ * Never spawns server processes or sends JSON-RPC `initialize` / `tools/list`
+ * requests. Remote tool names and schemas therefore stay `"unknown"` until the
+ * user starts Quasnooze with MCP enabled through the normal consent path.
+ */
+export function inspectMcpConfig({
+  spec = config.mcpSpec,
+  trusted = config.mcpTrusted,
+  servers = config.mcpServers,
+  autoApprove = false,
+  maxServers = MCP_INVENTORY_LIMITS.maxServers,
+  sanitizeText = (v) => ({ text: String(v ?? ""), redactions: [] }),
+  isCredentialKey = () => false,
+} = {}) {
+  const sourceRedactions = new Set();
+  const trustedNames = new Set(
+    String(trusted || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  for (const item of trustedNames) {
+    for (const kind of sanitizeText(item).redactions) sourceRedactions.add(kind);
+  }
+
+  const rawDefs = [];
+  let skippedSpecs = 0;
+  let configured = false;
+
+  if (Array.isArray(servers) && servers.length > 0) {
+    configured = true;
+    for (const def of servers) {
+      if (!def || typeof def !== "object" || Array.isArray(def)) {
+        skippedSpecs += 1;
+        continue;
+      }
+      const rawName = typeof def.name === "string" ? def.name.trim() : "";
+      const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 64);
+      const command = typeof def.command === "string" ? def.command.trim() : "";
+      const nameSanitized = sanitizeText(rawName);
+      if (!cleanName || !command || nameSanitized.redactions.length > 0) {
+        for (const kind of nameSanitized.redactions) sourceRedactions.add(kind);
+        skippedSpecs += 1;
+        continue;
+      }
+      rawDefs.push({
+        name: cleanName,
+        command,
+        args: Array.isArray(def.args) ? def.args : [],
+        env: def.env && typeof def.env === "object" && !Array.isArray(def.env) ? def.env : null,
+        trusted: Boolean(def.trusted) || trustedNames.has(cleanName),
+      });
+    }
+  } else {
+    const rawSpec = String(spec || "");
+    if (!rawSpec.trim()) {
+      return {
+        configured: false,
+        state: "disabled",
+        reason: null,
+        trustModel: "external-stdio-mcp-server",
+        inspected: false,
+        spawned: false,
+        executed: false,
+        sandboxed: false,
+        configuredServers: 0,
+        skippedSpecs: 0,
+        unusedTrustedNames: trustedNames.size,
+        truncated: false,
+        dynamicDetails: "unknown-until-started",
+        redactions: [...sourceRedactions],
+        servers: [],
+      };
+    }
+    configured = true;
+    for (const chunk of rawSpec.split(";")) {
+      const entry = chunk.trim();
+      if (!entry) continue;
+      const eq = entry.indexOf("=");
+      if (eq === -1) {
+        for (const kind of sanitizeText(entry).redactions) sourceRedactions.add(kind);
+        skippedSpecs += 1;
+        continue;
+      }
+      const rawName = entry.slice(0, eq).trim();
+      const nameSanitized = sanitizeText(rawName);
+      const name = rawName.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 64);
+      const [command, ...args] = entry
+        .slice(eq + 1)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      if (!name || !command || isCredentialKey(rawName) || nameSanitized.redactions.length > 0) {
+        if (isCredentialKey(rawName)) sourceRedactions.add("credential-field");
+        for (const kind of nameSanitized.redactions) sourceRedactions.add(kind);
+        for (const kind of sanitizeText(entry.slice(eq + 1)).redactions) sourceRedactions.add(kind);
+        skippedSpecs += 1;
+        continue;
+      }
+      rawDefs.push({
+        name,
+        command,
+        args,
+        env: null,
+        trusted: trustedNames.has(name),
+      });
+    }
+  }
+
+  const seenNames = new Set();
+  const matchedTrusted = new Set();
+  const inspectedServers = [];
+  let truncated = false;
+
+  for (const def of rawDefs) {
+    if (seenNames.has(def.name)) {
+      skippedSpecs += 1;
+      continue;
+    }
+    if (inspectedServers.length >= maxServers) {
+      truncated = true;
+      break;
+    }
+    seenNames.add(def.name);
+    if (trustedNames.has(def.name)) matchedTrusted.add(def.name);
+
+    const serverRedactions = new Set();
+    let commandKind = "bare";
+    let commandDisplay = def.command;
+    if (PATH_LIKE_MCP_COMMAND_RE.test(def.command)) {
+      commandKind = "path";
+      commandDisplay = "[REDACTED_PATH]";
+      serverRedactions.add("personal-or-filesystem-path");
+      sourceRedactions.add("personal-or-filesystem-path");
+    } else {
+      const cmdSanitized = sanitizeText(def.command);
+      if (!BARE_MCP_COMMAND_RE.test(def.command) || cmdSanitized.redactions.length > 0) {
+        commandKind = "redacted";
+        commandDisplay = "[REDACTED]";
+        for (const kind of cmdSanitized.redactions) {
+          serverRedactions.add(kind);
+          sourceRedactions.add(kind);
+        }
+      }
+    }
+
+    if (def.args.length > 0) {
+      serverRedactions.add("arguments-withheld");
+      sourceRedactions.add("arguments-withheld");
+      for (const arg of def.args) {
+        for (const kind of sanitizeText(String(arg ?? "")).redactions) {
+          serverRedactions.add(kind);
+          sourceRedactions.add(kind);
+        }
+      }
+    }
+
+    if (def.env) {
+      const envEntries = Object.entries(def.env);
+      if (envEntries.length > 0) {
+        serverRedactions.add("environment-values-withheld");
+        sourceRedactions.add("environment-values-withheld");
+      }
+      for (const [key, val] of envEntries) {
+        if (isCredentialKey(key)) {
+          serverRedactions.add("credential-field");
+          sourceRedactions.add("credential-field");
+        }
+        for (const kind of sanitizeText(String(val ?? "")).redactions) {
+          serverRedactions.add(kind);
+          sourceRedactions.add(kind);
+        }
+      }
+    }
+
+    const isTrusted = Boolean(def.trusted);
+    const approvalPolicy = isTrusted ? "trusted-opt-out" : "approval-required";
+    const effectiveInteractivePolicy = isTrusted
+      ? "trusted-opt-out"
+      : autoApprove
+        ? "auto-approved-by-config"
+        : "approval-required";
+    const unattendedPolicy = isTrusted ? "allowed" : "refused";
+
+    inspectedServers.push(
+      Object.freeze({
+        name: def.name,
+        namespacePrefix: `mcp__${def.name}__`,
+        state: "uninspected",
+        spawned: false,
+        executed: false,
+        transport: "stdio",
+        trusted: isTrusted,
+        dangerous: !isTrusted,
+        approvalPolicy,
+        effectiveInteractivePolicy,
+        unattendedPolicy,
+        sandboxed: false,
+        commandKind,
+        command: commandDisplay,
+        argCount: def.args.length,
+        dynamicTools: "unknown",
+        toolCount: null,
+        redactions: Object.freeze([...serverRedactions]),
+      }),
+    );
+  }
+
+  const unusedTrustedNames = [...trustedNames].filter((name) => !matchedTrusted.has(name)).length;
+  const state = inspectedServers.length === 0 && skippedSpecs > 0
+    ? "rejected"
+    : truncated || skippedSpecs > 0
+      ? "partial"
+      : "uninspected";
+
+  return {
+    configured,
+    state,
+    reason: inspectedServers.length === 0 && skippedSpecs > 0
+      ? "invalid-mcp-spec"
+      : truncated
+        ? "server-limit-reached"
+        : null,
+    trustModel: "external-stdio-mcp-server",
+    inspected: false,
+    spawned: false,
+    executed: false,
+    sandboxed: false,
+    configuredServers: inspectedServers.length,
+    skippedSpecs,
+    unusedTrustedNames,
+    truncated,
+    dynamicDetails: "unknown-until-started",
+    redactions: [...sourceRedactions],
+    servers: inspectedServers,
+  };
+}

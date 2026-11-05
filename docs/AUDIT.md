@@ -806,3 +806,19 @@ manifest tool names cannot be overwritten. Tests in `test/tools.test.js` verify
 the actual agent allow/deny/unattended paths, not just registry flags. This adds
 no claim of isolation, automatic plugin trust review, or universal injection
 resistance.
+
+### Static tool capability and trust inventory
+
+`quasnooze tools` (`src/tool-inventory.js`) lets an operator inspect built-in
+tools, `QUASNOOZE_TOOLS` command manifests, `QUASNOOZE_TOOLS_DIR` plugin
+candidates, and `QUASNOOZE_MCP` server entries without importing plugin modules,
+probing `PATH`, running manifest commands, or spawning MCP child processes.
+Dynamic properties that would require code execution or IPC (plugin exported
+names/trust flags and remote MCP tool lists) remain `"unknown"`. Metadata reads
+cap manifest bytes (`64 KiB`) and directory entries (`64`), reject `..`
+traversal, direct and ancestor symlinks (`O_NOFOLLOW` + canonical path checks),
+workspace-overlapping plugin/command paths, and protected credential directories,
+and redact secrets and personal filesystem paths. `test/tool-inventory.test.js`
+and `inventory-readonly` in `scripts/audit.js` verify that a side-effect canary
+plugin is never imported and canary secrets/paths do not leak. Listing a source
+makes no claim that it is verified safe, trusted by default, or OS-sandboxed.
