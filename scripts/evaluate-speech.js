@@ -261,6 +261,14 @@ export async function evaluateSpeech({ corpus: injected = null, now = Date.now()
 
 const pct = (value) => (value === null ? "withheld" : `${(value * 100).toFixed(1)}%`);
 
+/**
+ * One markdown table cell. Backslashes are escaped along with the pipe and
+ * newlines are flattened: escaping `|` alone would let a transcript ending in a
+ * backslash escape the escape and break the table (CodeQL
+ * js/incomplete-sanitization).
+ */
+const cell = (value) => String(value ?? "").replace(/[\\|]/g, (ch) => `\\${ch}`).replace(/\r?\n/g, " ");
+
 /** `remind text="call mum"` reads better than a bare tool name when the args are the miss. */
 const describe = (intent, args) => {
   if (!intent) return "(no tool)";
@@ -292,7 +300,7 @@ export function renderSpeechEvaluation(report) {
     report.misses.length
       ? "| Utterance | Condition | Wanted | Heard | Transcript |\n|---|---|---|---|---|\n" +
         report.misses.map((miss) =>
-          `| ${miss.id} | ${miss.condition} | ${describe(miss.expected, miss.expectedArgs)} | ${describe(miss.got, miss.gotArgs)} | ${String(miss.said).replace(/\|/g, "\\|")} |`).join("\n")
+          `| ${cell(miss.id)} | ${cell(miss.condition)} | ${cell(describe(miss.expected, miss.expectedArgs))} | ${cell(describe(miss.got, miss.gotArgs))} | ${cell(miss.said)} |`).join("\n")
       : "None.",
     "",
     report.corpusErrors.length ? "## Corpus expectations the router cannot satisfy" : "## Corpus expectations",
