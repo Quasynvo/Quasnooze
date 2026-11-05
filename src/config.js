@@ -104,6 +104,9 @@ export const config = Object.freeze({
   disableGuard: /^(0|false|off|no)$/i.test(env.PINCH_GUARD || ""),
   // Set PINCH_FAST_PATH=off to send deterministic turns through the model again.
   fastPath: !/^(0|false|off|no)$/i.test(env.PINCH_FAST_PATH || ""),
+  // Opt-in (issue #108): the design-then-approve workflow. Off by default, so
+  // `/plan …` is ordinary text on a machine where the owner never asked for it.
+  workflow: bool(env.PINCH_WORKFLOW, false),
   autoApprove: desktopRequested ? false : bool(env.PINCH_AUTO_APPROVE, false),
   // Read-only shell commands run without a prompt; everything else still asks.
   // Off restores "ask for every shell command", which is the old behaviour.
