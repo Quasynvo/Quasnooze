@@ -126,7 +126,12 @@ export function scoreTurn(turn) {
   return { id: turn.id, class: turn.class, tier: turn.tier, pass: failures.length === 0, failures };
 }
 
-const mean = (values) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null);
+/**
+ * A markdown table cell. Both the pipe and the backslash in front of it must be
+ * escaped, or a detail containing `\|` breaks the row -- and the report is the
+ * only thing a reviewer reads.
+ */
+const cell = (value) => String(value).replace(/[\\|]/g, (ch) => (ch === "\\" ? "\\\\" : "\\|"));
 
 function validateCorpus(corpus) {
   if (corpus.version !== CORPUS_VERSION) throw new Error(`Unsupported corpus version ${corpus.version}`);
@@ -298,7 +303,7 @@ export function renderConversationEvaluation(report) {
     "",
     report.failures.length
       ? "| Turn | Code | Detail |\n|---|---|---|\n" +
-        report.failures.map((f) => `| ${f.turn} | ${f.code} | ${String(f.detail).replace(/\|/g, "\\|")} |`).join("\n")
+        report.failures.map((f) => `| ${f.turn} | ${f.code} | ${cell(f.detail)} |`).join("\n")
       : "None.",
     "",
     "This corpus is synthetic and does not establish real-user quality, model behaviour on unseen phrasing, latency, or superiority over another product. " +
