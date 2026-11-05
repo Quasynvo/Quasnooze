@@ -117,7 +117,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 | Verified execution — fault-injection verdicts | **20/20 · 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` |
 | Retrieval — Recall@1 / Recall@5 · MRR@5 | **0.93 / 1.00 · 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` |
 | Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 70.0%** | 48 synthetic text utterances | `npm run speech` |
-| Full regression suite | **817/817 passed** | 66 test files, ~26 s | `node --test --test-concurrency=4` |
+| Full regression suite | **817/817 passed** | 67 test files, ~26 s | `node --test --test-concurrency=4` |
 
 ### Where Quasnooze loses — kept in the README on purpose
 

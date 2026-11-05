@@ -864,7 +864,7 @@ Listed because the absence of this section is usually a lie:
 Issues and PRs welcome. The bar is simple:
 
 ```bash
-node --test     # 110 tests, must stay green
+node --test     # full suite (817 tests, 67 files), must stay green
 ```
 
 - New tool? Add a test, and mark it `dangerous: true` if it changes anything.
