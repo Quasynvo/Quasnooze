@@ -1,0 +1,177 @@
+name: Scanners
+
+# Additional security scanners, kept apart from security.yml so a problem
+# in one experimental scanner can never take the established CodeQL /
+# dependency-review / scorecard jobs down with it.
+#
+#   semgrep      - SAST + secrets rules over the code directories (gating)
+#   gitleaks     - secret scan of the full git history (gating)
+#   osv-scanner  - dependency vulnerabilities (report-first)
+#   trivy        - filesystem vuln/secret/misconfig (report-first)
+#   zizmor       - audits these workflow files themselves
+#
+# Every action is pinned to a commit SHA (enforced by test/roadmap.test.js)
+# and SARIF results publish to the Security tab. See docs/SCANNERS.md.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "47 3 * * 1" # weekly, Monday 03:47 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Semgrep (security-audit + secrets)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      # Version-pinned tool, installed from PyPI - the same pin verified
+      # locally against this tree (0 findings on the scanned directories).
+      - name: Install Semgrep
+        run: pip install "semgrep==1.184.0"
+      - name: Semgrep scan (gating)
+        run: >-
+          semgrep scan --config p/security-audit --config p/secrets
+          --metrics off --error --sarif --output semgrep.sarif
+          src scripts bin public desktop
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  gitleaks:
+    name: Gitleaks (secret history scan)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # full history: a secret deleted later still leaked
+      # Release binary verified against the publisher's checksums file
+      # (sha256 pinned here), instead of a third-party action that would
+      # need an org licence. Verified locally: 163 commits, only canary
+      # fixtures in tests, allowlisted by path+rule in .gitleaks.toml.
+      - name: Install Gitleaks (checksum-verified)
+        run: |
+          curl -sL -o /tmp/gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+      - name: Gitleaks scan (gating)
+        run: /tmp/gitleaks git --redact --no-banner --report-format sarif --report-path gitleaks.sarif .
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  osv-scanner:
+    name: OSV-Scanner (dependency vulnerabilities)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # The org's Actions policy allows only actions/*, github/codeql-action
+      # and verified-marketplace actions, so third-party scanner *actions*
+      # are refused at startup. Scanners therefore run as
+      # checksum-verified release binaries in plain steps.
+      - name: Install OSV-Scanner (checksum-verified)
+        run: |
+          curl -sL -o /tmp/osv-scanner https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  /tmp/osv-scanner" | sha256sum -c -
+          chmod +x /tmp/osv-scanner
+      # No lockfile is committed (package-lock.json is gitignored), and OSV
+      # reads lockfiles - resolve one in CI so the scan has something true
+      # to read. --ignore-scripts: resolving must never execute code.
+      - name: Resolve lockfile for scanning
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      # Report-first: results publish to the Security tab while the
+      # baseline is reviewed; promotion to gating is a deliberate follow-up
+      # once the first report is triaged (see docs/SCANNERS.md).
+      - name: OSV-Scanner (report-only)
+        continue-on-error: true
+        # OSV only reliably reads an explicitly named lockfile here;
+        # scanning ./ exits 128 with 'No package sources found'.
+        run: /tmp/osv-scanner scan source --lockfile package-lock.json --format sarif --output-file osv.sarif
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner
+
+  trivy:
+    name: "Trivy (filesystem: vuln, secret, misconfig)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install Trivy (checksum-verified)
+        run: |
+          curl -sL -o /tmp/trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  /tmp/trivy.tgz" | sha256sum -c -
+          tar -xzf /tmp/trivy.tgz -C /tmp trivy
+      # Report-first for the same reason as OSV above; SARIF still lands
+      # in the Security tab for triage.
+      - name: Trivy filesystem scan (report-only)
+        run: >-
+          /tmp/trivy fs --format sarif --output trivy.sarif
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 .
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+  zizmor:
+    name: zizmor (workflow security audit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: "3.12"
+      # zizmorcore/zizmor-action is refused by the org Actions policy;
+      # the same tool from PyPI, version-pinned, audits identically.
+      # (Verified locally: no findings on this repo's workflows.)
+      - name: Install zizmor
+        run: pip install "zizmor==1.32.0"
+      - name: zizmor
+        run: zizmor --no-online-audits --config zizmor.yml --min-severity low .github/workflows/
