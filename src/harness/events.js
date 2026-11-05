@@ -245,7 +245,7 @@ export function summarizeToolArgs(toolName, rawArgs, { secrets = [] } = {}) {
     .slice(0, HARNESS_LIMITS.maxArgKeys)
     .map((k) => redactHarnessText(k, { secrets, maxLength: HARNESS_LIMITS.maxKeyLength }));
 
-  let target = "withheld";
+  let target;
   let contentBytes = null;
 
   switch (toolName) {
