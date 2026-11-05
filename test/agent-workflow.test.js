@@ -260,10 +260,20 @@ test("a design approval expires", () => {
   );
 });
 
-test("the workflow is off unless the owner turns it on", () => {
+test("the workflow is off unless the owner turns it on", async () => {
   assert.equal(wf.parseWorkflowCommand("/plan tidy", { enabled: false }), null, "parsing needs the opt-in flag");
   assert.equal(wf.parseWorkflowCommand("/plan tidy", { enabled: true }).verb, "plan");
   assert.equal(wf.parseWorkflowCommand("/approve", { enabled: true }).verb, "approve");
   assert.equal(wf.parseWorkflowCommand("/cancel", { enabled: true }).verb, "cancel");
   assert.equal(wf.parseWorkflowCommand("please plan my day", { enabled: true }), null);
+
+  const { classifyCommand, BLOCKED } = await import("../src/risk.js");
+  const { screenCommand } = await import("../src/tools.js");
+  const { redactPreviewText } = await import("../src/action-preview.js");
+  const t0 = performance.now();
+  assert.equal(wf.parseWorkflowCommand(`/plan${" ".repeat(40_000)}tidy`, { enabled: true }).arg, "tidy");
+  assert.notEqual(classifyCommand(`rm -rf ~${" ".repeat(10_000)}keep`).tier, BLOCKED);
+  assert.equal(screenCommand(`rm -rf ~${" ".repeat(10_000)}keep`).allowed, true);
+  assert.equal(redactPreviewText(`https://${"u:".repeat(10_000)}no-at`), `https://${"u:".repeat(10_000)}no-at`);
+  assert.ok(performance.now() - t0 < 250, "command and preview matchers must stay linear");
 });

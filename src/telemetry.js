@@ -13,7 +13,7 @@
  * text — a log of everything you ever asked is a second copy of your
  * conversations with none of the protections.
  */
-import { appendFileSync, existsSync, statSync, renameSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
+import { appendFileSync, statSync, renameSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "./config.js";
 
@@ -125,11 +125,15 @@ function loadTail() {
 
 function rotate() {
   try {
-    if (!existsSync(FILE) || statSync(FILE).size < ROTATE_BYTES) return;
+    if (statSync(FILE).size < ROTATE_BYTES) return;
     for (let i = KEEP; i > 1; i--) {
       const from = `${FILE}.${i - 1}`;
       const to = `${FILE}.${i}`;
-      if (existsSync(from)) renameSync(from, to);
+      try {
+        renameSync(from, to);
+      } catch (err) {
+        if (err.code !== "ENOENT") throw err;
+      }
     }
     renameSync(FILE, `${FILE}.1`);
   } catch {

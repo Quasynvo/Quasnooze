@@ -329,7 +329,7 @@ function addMsg(role, text) {
   const el = document.createElement("div");
   el.className = `msg ${role}`;
   el.innerHTML = `<div class="who">${role === "user" ? "🧑" : QUASNOOZE_MARK}</div><div class="bubble"></div>`;
-  el.querySelector(".bubble").innerHTML = role === "user" ? md(text) : md(text);
+  el.querySelector(".bubble").innerHTML = md(text);
   $("thread").appendChild(el);
   scrollDown();
   return el;

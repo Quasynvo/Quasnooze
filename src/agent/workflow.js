@@ -526,10 +526,10 @@ export function renderPlan(plan) {
  */
 export function parseWorkflowCommand(text, { enabled = config.workflow } = {}) {
   if (!enabled) return null;
-  const match = /^\/(plan|approve|cancel)\b\s*([\s\S]*)$/i.exec(String(text ?? "").trim());
+  const match = /^\/(plan|approve|cancel)\b(?:\s*(\S[\s\S]*))?$/i.exec(String(text ?? "").trim());
   if (!match) return null;
   const verb = match[1].toLowerCase();
-  const arg = match[2].trim();
+  const arg = (match[2] ?? "").trim();
   if (verb !== "plan" && arg) return { verb, arg, error: `/${verb} takes no arguments` };
   return { verb, arg };
 }

@@ -106,7 +106,7 @@ const undocumentedConfig = {
       "",
       `# ── ${known ? known[0] : envName} ${"─".repeat(Math.max(4, 46 - envName.length))}`,
       ...body.map((l) => `# ${l}`),
-      `${envName}=${fallback.value === "" ? "" : ""}`,
+      `${envName}=`,
     ].join("\n");
 
     return {

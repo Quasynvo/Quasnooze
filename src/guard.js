@@ -107,7 +107,12 @@ export function auditReply({ reply, trace = [], memoryFacts = [], userText = "",
 
   // 3) URLs nobody gave it and no tool fetched.
   const inventedUrls = [...new Set(said.match(URL_RE) || [])].filter((url) => {
-    const bare = url.toLowerCase().replace(/^https?:\/\//, "").replace(/[.,)]+$/, "");
+    const withoutScheme = url.toLowerCase().replace(/^https?:\/\//, "");
+    let end = withoutScheme.length;
+    while (end > 0 && (withoutScheme[end - 1] === "." || withoutScheme[end - 1] === "," || withoutScheme[end - 1] === ")")) {
+      end -= 1;
+    }
+    const bare = withoutScheme.slice(0, end);
     return !evidence.includes(bare) && !(toolOutput || "").toLowerCase().includes(bare);
   });
   if (inventedUrls.length) {

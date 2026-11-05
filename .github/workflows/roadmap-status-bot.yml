@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: roadmap-status
@@ -33,6 +32,9 @@ jobs:
     name: Publish or refresh the rolling roadmap status issue
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

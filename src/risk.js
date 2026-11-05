@@ -84,7 +84,7 @@ function screen(command) {
   const flat = String(command).replace(/\s+/g, " ").trim();
   const DENY = [
     /\brm\s+(-[a-zA-Z]*\s+)*\/\s*$/,
-    /\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(\/|~|\$HOME|\$\{HOME\})\s*\/?\s*(\*)?\s*$/,
+    /\brm\s+-[a-eg-qs-zA-EG-QS-Z]*[rf][a-zA-Z]*\s+(\/|~|\$HOME|\$\{HOME\})(?:\s*\/)?(?:\s*(\*))?\s*$/,
     /\b(mkfs|fdisk|parted)\b/,
     /\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|disk|hd)/,
     /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,

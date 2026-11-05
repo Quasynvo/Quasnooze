@@ -17,7 +17,7 @@
  *   - It does not upload anything or write outside the path you name.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { config, ROOT } from "./config.js";
 import { loadPersonas, loadMemory, loadReminders, loadSchedules, listSessions, loadSession } from "./store.js";
 
@@ -51,7 +51,7 @@ export function buildExport({ includeTelemetry = false } = {}) {
     $schema: "pinch-export/1",
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
-    generator: { name: "quasnooze", from: ROOT.replace(/.*[\\/]/, "") },
+    generator: { name: "quasnooze", from: basename(ROOT) },
     counts: {
       sessions: sessions.length,
       messages: sessions.reduce((n, s) => n + (s.messages?.length || 0), 0),

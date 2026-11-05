@@ -20,8 +20,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 concurrency:
   group: welcome-${{ github.event.pull_request.number || github.event.issue.number }}
@@ -31,6 +29,9 @@ jobs:
   welcome:
     name: Greet first-time contributor
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
     if: >-
       (github.event_name == 'pull_request_target' &&
         (github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||

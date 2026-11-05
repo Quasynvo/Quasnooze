@@ -10,7 +10,7 @@ export function redactPreviewText(value, secrets = []) {
     .replace(/\b(?:Bearer\s+)[^\s,;]+/gi, 'Bearer [REDACTED]')
     .replace(/\b((?:[\w-]*(?:token|secret|password|api[_-]?key|authorization)[\w-]*)\s*[=:]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi, '$1[REDACTED]')
     .replace(/\b(?:sk-[\w-]{8,}|gh[pousr]_[\w]{8,}|github_pat_[\w]{8,})\b/g, '[REDACTED]')
-    .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1[REDACTED]@');
+    .replace(/(https?:\/\/)[^\s/:@]+:[^\s/@]+@/gi, '$1[REDACTED]@');
 }
 
 export function approvalDescription(value, secrets = []) {

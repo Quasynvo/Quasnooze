@@ -274,7 +274,7 @@ export function checkWorkflows(repoRoot = ROOT) {
   const errors = [];
   for (const file of files) {
     const text = readFileSync(join(dir, file), "utf8");
-    for (const m of text.matchAll(/^\s*-?\s*uses:\s*([^\s#]+)/gm)) {
+    for (const m of text.matchAll(/^[\t ]*(?:-[\t ]*)?uses:[\t ]*([^\s#]+)/gm)) {
       const ref = m[1];
       if (ref.startsWith("./")) continue;
       const parts = ref.split("@");
@@ -284,8 +284,28 @@ export function checkWorkflows(repoRoot = ROOT) {
         );
       }
     }
+    const jobsIndex = text.search(/^jobs:\s*$/m);
+    const header = jobsIndex === -1 ? text : text.slice(0, jobsIndex);
+    const topPerms = /^permissions:\s*(.*(?:\r?\n[ \t]+.+)*)/m.exec(header);
+    if (!topPerms) {
+      errors.push(`${file}: missing explicit top-level permissions block`);
+    } else if (/:\s*write\b|\bwrite-all\b/i.test(topPerms[1])) {
+      errors.push(
+        `${file}: top-level permissions must be read-only; declare write scopes on individual jobs`,
+      );
+    }
   }
   return { files: files.length, errors };
+}
+
+function readOptionalUtf8(filePath) {
+  if (!filePath) return null;
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return null;
+    throw err;
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -293,10 +313,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (sub === "status") {
     const issuesFile = argValue(rest, "--issues-json") || argValue(rest, "--issues");
     const outFile = argValue(rest, "--out");
-    const issues =
-      issuesFile && existsSync(issuesFile)
-        ? JSON.parse(readFileSync(issuesFile, "utf8"))
-        : [];
+    const rawIssues = readOptionalUtf8(issuesFile);
+    const issues = rawIssues ? JSON.parse(rawIssues) : [];
     const md = renderStatusMarkdown(loadRoadmap(), issues);
     if (outFile) writeFileSync(outFile, md);
     else process.stdout.write(md);
@@ -308,11 +326,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const bodyPath = argValue(rest, "--body");
     const outFile = argValue(rest, "--out");
     const lines = Number(argValue(rest, "--lines", "0")) || 0;
-    const files =
-      changedPath && existsSync(changedPath)
-        ? readFileSync(changedPath, "utf8").split(/\r?\n/).filter(Boolean)
-        : [];
-    const prBody = bodyPath && existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "";
+    const rawChanged = readOptionalUtf8(changedPath);
+    const files = rawChanged ? rawChanged.split(/\r?\n/).filter(Boolean) : [];
+    const prBody = readOptionalUtf8(bodyPath) ?? "";
     const md = renderPrContext(loadRoadmap(), files, prBody);
     const labels = labelsForChangedFiles(files, lines);
     if (outFile) writeFileSync(outFile, JSON.stringify({ comment: md, labels }, null, 2));

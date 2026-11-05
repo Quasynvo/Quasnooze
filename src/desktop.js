@@ -16,8 +16,19 @@ const SESSION = "desktop-resident";
 const APPS = new Map([["calculator", "calculator"], ["calc", "calculator"], ["notepad", "notepad"], ["file explorer", "explorer"], ["explorer", "explorer"]]);
 const SITES = new Map([["github", "https://github.com/"], ["youtube", "https://www.youtube.com/"], ["google", "https://www.google.com/"]]);
 
+function stripTrailingPunct(str) {
+  let end = str.length;
+  while (end > 0) {
+    const ch = str[end - 1];
+    if (ch !== "." && ch !== "!" && ch !== "?") break;
+    end -= 1;
+  }
+  return end === str.length ? str : str.slice(0, end);
+}
+
 export function desktopIntent(input) {
-  const text = /^open https:\/\//i.test(input.trim()) ? input.trim() : input.trim().replace(/[.!?]+$/, "");
+  const trimmed = input.trim();
+  const text = /^open https:\/\//i.test(trimmed) ? trimmed : stripTrailingPunct(trimmed);
   if (/^\/persona(?:\s|$)/i.test(text)) return {kind:"persona"};
   const lower = text.toLowerCase();
   if (/^(?:what(?:'s| is) the )?time$/.test(lower) || lower === "what time is it") return { kind: "time" };
