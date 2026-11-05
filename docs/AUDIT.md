@@ -822,3 +822,25 @@ and redact secrets and personal filesystem paths. `test/tool-inventory.test.js`
 and `inventory-readonly` in `scripts/audit.js` verify that a side-effect canary
 plugin is never imported and canary secrets/paths do not leak. Listing a source
 makes no claim that it is verified safe, trusted by default, or OS-sandboxed.
+
+### Deterministic action lifecycle policy events
+
+`src/harness/events.js` provides an opt-in, in-process lifecycle pipeline
+(`QUASNOOZE_HARNESS_EVENTS=off|standard|strict` or `createHarnessPipeline()`)
+with four typed stages: `beforeTool`, `beforeCommit`, `afterTool`, and
+`beforeContextTrim`. Every tool call follows `validate -> deterministic policy
+-> existing user approval -> execute -> bounded after event`. Policy checks
+reduce monotonically over `continue < ask < deny`: returning `"allow"` or
+`{ bypassApproval: true }` is clamped to `"continue"` and never overrides
+schema validation, the catastrophic command screen, unattended refusals, or
+interactive session approval. Commit proposals (`git`/`hg`/`svn`/`jj` `commit`
+across shell chains/wrappers and structured commit tools) are recognized
+structurally in `src/risk.js` and always gated. Policy handler errors,
+rejections, timeouts, invalid return shapes, and `AbortSignal` cancellations
+fail closed (`deny`) before `tool.run()`. `afterTool` and `beforeContextTrim`
+callbacks receive deep-frozen, redacted metadata without credentials, raw
+prompts, commit messages, or tool output, and cannot alter execution or
+compaction. External shell, network, or plugin hook keys are rejected at
+configuration time. This pipeline coordinates in-process guard rails only; it
+does not sandbox child processes or validate arbitrary owner-written JS tools.
+
