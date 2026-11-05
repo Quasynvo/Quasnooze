@@ -755,3 +755,54 @@ test("rejects external shell/network/plugin hooks, arbitrary runAgent callbacks,
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.deepEqual(pkg.dependencies || {}, {});
 });
+
+test("fast-path turns enforce beforeTool -> execute -> afterTool and stop on policy denial", async () => {
+  const seen = [];
+  const allowFast = createHarnessPipeline({
+    policyChecks: {
+      beforeTool: [
+        (ev) => {
+          seen.push(`before:${ev.tool.name}`);
+          return "continue";
+        },
+      ],
+    },
+    observers: {
+      afterTool: [(ev) => seen.push(`after:${ev.tool.name}:${ev.ok}`)],
+    },
+  });
+
+  const okFast = await runAgent({
+    sessionId: "fast-harness-ok",
+    text: "what time is it",
+    harness: allowFast,
+  });
+  assert.equal(okFast.trace[0]?.tool, "time_now");
+  assert.equal(okFast.trace[0]?.ok, true);
+  assert.deepEqual(seen, ["before:time_now", "after:time_now:true"]);
+
+  const denySeen = [];
+  const denyFast = createHarnessPipeline({
+    policyChecks: {
+      beforeTool: [
+        (ev) => {
+          denySeen.push(`before:${ev.tool.name}`);
+          return { decision: "deny", reason: "clock-disabled" };
+        },
+      ],
+    },
+    observers: {
+      afterTool: [(ev) => denySeen.push(`after:${ev.tool.name}`)],
+    },
+  });
+
+  const deniedFast = await runAgent({
+    sessionId: "fast-harness-deny",
+    text: "what time is it",
+    harness: denyFast,
+  });
+  assert.equal(deniedFast.trace[0]?.denied, true);
+  assert.equal(deniedFast.trace[0]?.reason, "clock-disabled");
+  assert.deepEqual(denySeen, ["before:time_now"]);
+});
+
