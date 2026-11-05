@@ -20,6 +20,7 @@
     "demo": "node scripts/demo.js",
     "pair": "node scripts/pair.js",
     "brain": "node scripts/braincheck.js",
+    "speech": "node scripts/evaluate-speech.js",
     "service": "node scripts/service.js",
     "supervise": "node scripts/supervise.js",
     "audit": "node scripts/audit.js",

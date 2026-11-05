@@ -229,6 +229,29 @@ test("the human report names every check and ends with a verdict", async () => {
   assert.match(text, /5 ok · ▲ 1 warn · ✖ 0 fail · 3 skipped/);
 });
 
+test("speech accuracy is printed as a corpus size with its caveat, never as a bare accuracy", async () => {
+  const report = await doctor();
+  // A text fixture scored through the router is not evidence about a microphone.
+  assert.doesNotMatch(plain(renderDoctor(report)), /speech accuracy/, "speech is only printed when the caller measured it");
+  report.speech = {
+    version: 1,
+    utterances: 48,
+    conditions: { clean: 14, accented: 12 },
+    headline: { reported: true, wer: 0.0974, commandAccuracy: 0.7708, samples: 48 },
+    misses: 11,
+    baseline: "current",
+  };
+  const text = plain(renderDoctor(report));
+  assert.match(text, /speech accuracy {2}corpus v1 n=48 \(clean 14 · accented 12\)/);
+  assert.match(text, /wer 9\.7% · commands 77\.1% \(n=48\)/);
+  assert.match(text, /synthetic hypotheses, no microphone/);
+  assert.match(text, /11 named command misses; baseline current/);
+
+  // A withheld headline prints the reason, not a number that does not exist.
+  report.speech.headline = { reported: false, reason: "withheld: accented below the 8-sample minimum" };
+  assert.match(plain(renderDoctor(report)), /withheld: accented below the 8-sample minimum/);
+});
+
 test("an unhealthy report is rendered as needing attention, not as healthy", async () => {
   const report = await doctor({}, { ollama: async () => ({ ok: false, status: 0, ms: 5, failure: "connect ECONNREFUSED" }) });
   assert.match(plain(renderDoctor(report)), /verdict: needs attention/);

@@ -20,6 +20,7 @@ import { planFor } from "../src/failure.js";
 import { renderDoctor, renderJson, runDoctor } from "../src/doctor.js";
 import { collectEnvironment, configuredSecrets, renderBaseline, runBaseline } from "../src/baseline.js";
 import { latencyReport } from "../src/telemetry.js";
+import { speechBaseline } from "./evaluate-speech.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -72,6 +73,12 @@ const report = await runDoctor({
 // present, because "no turns recorded yet" is itself the answer to "why is my
 // latency table empty" — and it is a null, not a zero.
 report.latency = latencyReport();
+
+// Voice accuracy is measured, not asserted (docs/SPEECH-BASELINE-V1.md). This is
+// the corpus size and whether the committed baseline still matches this build —
+// it scores authored text through the shipped router, so it downloads no model,
+// opens no microphone and can run on a locked-down machine.
+report.speech = await speechBaseline();
 
 if (baseline) {
   // Model phases only run against a provider the probes actually verified. A missing or

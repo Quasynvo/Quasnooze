@@ -1,0 +1,574 @@
+{
+  "name": "speech-command-accuracy",
+  "version": 1,
+  "synthetic": true,
+  "license": "CC0-1.0",
+  "provenance": "Hand-authored text, released CC0. There are no recordings of real people here and no audio files at all: each utterance is a reference transcript plus the plausible transcript a recogniser might return for it under one condition. That makes the corpus redistributable and the runner offline, and it also means this is not a recording of any actual microphone or model.",
+  "conditions": {
+    "clean": "close microphone, quiet room, clear speech",
+    "accented": "clear audio, non-native or regional accent: substitutions and merged words",
+    "noisy": "fan, street or crowded room: dropped words and filler insertions",
+    "numbers-names": "digits, amounts and people's names, where one wrong digit or letter changes the command"
+  },
+  "utterances": [
+    {
+      "id": "clean-clock-01",
+      "condition": "clean",
+      "reference": "what time is it",
+      "hypothesis": "what time is it",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "clean-clock-02",
+      "condition": "clean",
+      "reference": "what's the date today",
+      "hypothesis": "what's the date today",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "clean-clock-03",
+      "condition": "clean",
+      "reference": "current time",
+      "hypothesis": "current time",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "clean-clock-04",
+      "condition": "clean",
+      "reference": "what day is it today",
+      "hypothesis": "what day is it today",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "clean-calc-01",
+      "condition": "clean",
+      "reference": "what is 18% of 250",
+      "hypothesis": "what is 18% of 250",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "18/100*250"
+        }
+      }
+    },
+    {
+      "id": "clean-calc-02",
+      "condition": "clean",
+      "reference": "what is 20 percent of 150",
+      "hypothesis": "what is 20 percent of 150",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "20/100*150"
+        }
+      }
+    },
+    {
+      "id": "clean-remind-01",
+      "condition": "clean",
+      "reference": "remind me to call mum in 20 minutes",
+      "hypothesis": "remind me to call mum in 20 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "call mum",
+          "when": "in 20 minutes"
+        }
+      }
+    },
+    {
+      "id": "clean-remind-02",
+      "condition": "clean",
+      "reference": "remind me to take the bread out in 30 minutes",
+      "hypothesis": "remind me to take the bread out in 30 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "take the bread out",
+          "when": "in 30 minutes"
+        }
+      }
+    },
+    {
+      "id": "clean-task-01",
+      "condition": "clean",
+      "reference": "add a task to buy milk",
+      "hypothesis": "add a task to buy milk",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "buy milk"
+        }
+      }
+    },
+    {
+      "id": "clean-task-02",
+      "condition": "clean",
+      "reference": "add a task to email the landlord",
+      "hypothesis": "add a task to email the landlord",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "email the landlord"
+        }
+      }
+    },
+    {
+      "id": "clean-remember-01",
+      "condition": "clean",
+      "reference": "remember that the boiler code is 4417",
+      "hypothesis": "remember that the boiler code is 4417",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the boiler code is 4417"
+        }
+      }
+    },
+    {
+      "id": "clean-remember-02",
+      "condition": "clean",
+      "reference": "remember that the parking bay is 12",
+      "hypothesis": "remember that the parking bay is 12",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the parking bay is 12"
+        }
+      }
+    },
+    {
+      "id": "clean-chat-01",
+      "condition": "clean",
+      "reference": "turn on the kitchen light",
+      "hypothesis": "turn on the kitchen light",
+      "expect": {
+        "intent": null,
+        "args": {}
+      }
+    },
+    {
+      "id": "clean-chat-02",
+      "condition": "clean",
+      "reference": "tell me a joke",
+      "hypothesis": "tell me a joke",
+      "expect": {
+        "intent": null,
+        "args": {}
+      }
+    },
+    {
+      "id": "accented-clock-01",
+      "condition": "accented",
+      "reference": "what time is it",
+      "hypothesis": "what time is it right now",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "accented-clock-02",
+      "condition": "accented",
+      "reference": "what's the date today",
+      "hypothesis": "what is the date today",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "accented-calc-01",
+      "condition": "accented",
+      "reference": "what is 18% of 250",
+      "hypothesis": "what is 18 percent of 250",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "18/100*250"
+        }
+      }
+    },
+    {
+      "id": "accented-calc-02",
+      "condition": "accented",
+      "reference": "what is 20 percent of 150",
+      "hypothesis": "what's 20 percent of 150",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "20/100*150"
+        }
+      }
+    },
+    {
+      "id": "accented-remind-01",
+      "condition": "accented",
+      "reference": "remind me to call mum in 20 minutes",
+      "hypothesis": "remind me to call mom in 20 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "call mum",
+          "when": "in 20 minutes"
+        }
+      }
+    },
+    {
+      "id": "accented-remind-02",
+      "condition": "accented",
+      "reference": "remind me to take the bread out in 30 minutes",
+      "hypothesis": "remind me to take the bread out in 30 minute",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "take the bread out",
+          "when": "in 30 minutes"
+        }
+      }
+    },
+    {
+      "id": "accented-remind-03",
+      "condition": "accented",
+      "reference": "remind me to water the plants in 2 hours",
+      "hypothesis": "remind me to water the plants in 2 hour",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "water the plants",
+          "when": "in 2 hours"
+        }
+      }
+    },
+    {
+      "id": "accented-task-01",
+      "condition": "accented",
+      "reference": "add a task to buy milk",
+      "hypothesis": "add a task to buy mink",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "buy milk"
+        }
+      }
+    },
+    {
+      "id": "accented-task-02",
+      "condition": "accented",
+      "reference": "add a task to email the landlord",
+      "hypothesis": "add a task to email the landlord",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "email the landlord"
+        }
+      }
+    },
+    {
+      "id": "accented-remember-01",
+      "condition": "accented",
+      "reference": "remember that the boiler code is 4417",
+      "hypothesis": "remember that the boiler code is 4417",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the boiler code is 4417"
+        }
+      }
+    },
+    {
+      "id": "accented-remember-02",
+      "condition": "accented",
+      "reference": "remember that the parking bay is 12",
+      "hypothesis": "remember that the parking base is 12",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the parking bay is 12"
+        }
+      }
+    },
+    {
+      "id": "accented-chat-01",
+      "condition": "accented",
+      "reference": "turn on the kitchen light",
+      "hypothesis": "turn on the kitchen lite",
+      "expect": {
+        "intent": null,
+        "args": {}
+      }
+    },
+    {
+      "id": "noisy-clock-01",
+      "condition": "noisy",
+      "reference": "what time is it",
+      "hypothesis": "uh what time is it",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "noisy-clock-02",
+      "condition": "noisy",
+      "reference": "what's the date today",
+      "hypothesis": "what's the date",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "noisy-calc-01",
+      "condition": "noisy",
+      "reference": "what is 18% of 250",
+      "hypothesis": "what is 18 of 250",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "18/100*250"
+        }
+      }
+    },
+    {
+      "id": "noisy-calc-02",
+      "condition": "noisy",
+      "reference": "what is 20 percent of 150",
+      "hypothesis": "what is 20 of 150",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "20/100*150"
+        }
+      }
+    },
+    {
+      "id": "noisy-remind-01",
+      "condition": "noisy",
+      "reference": "remind me to call mum in 20 minutes",
+      "hypothesis": "remind me to call in 20 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "call mum",
+          "when": "in 20 minutes"
+        }
+      }
+    },
+    {
+      "id": "noisy-remind-02",
+      "condition": "noisy",
+      "reference": "remind me to take the bread out in 30 minutes",
+      "hypothesis": "remind me to take the bread out in 30 minute",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "take the bread out",
+          "when": "in 30 minutes"
+        }
+      }
+    },
+    {
+      "id": "noisy-remind-03",
+      "condition": "noisy",
+      "reference": "remind me to water the plants in 2 hours",
+      "hypothesis": "remind me to water the plant in 2 hours",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "water the plants",
+          "when": "in 2 hours"
+        }
+      }
+    },
+    {
+      "id": "noisy-task-01",
+      "condition": "noisy",
+      "reference": "add a task to buy milk",
+      "hypothesis": "add a task buy milk",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "buy milk"
+        }
+      }
+    },
+    {
+      "id": "noisy-task-02",
+      "condition": "noisy",
+      "reference": "add a task to email the landlord",
+      "hypothesis": "add a task email the landlord",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "email the landlord"
+        }
+      }
+    },
+    {
+      "id": "noisy-remember-01",
+      "condition": "noisy",
+      "reference": "remember that the boiler code is 4417",
+      "hypothesis": "remember the boiler code is 4417",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the boiler code is 4417"
+        }
+      }
+    },
+    {
+      "id": "noisy-remember-02",
+      "condition": "noisy",
+      "reference": "remember that the parking bay is 12",
+      "hypothesis": "remember the parking bay is twelve",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the parking bay is 12"
+        }
+      }
+    },
+    {
+      "id": "noisy-chat-01",
+      "condition": "noisy",
+      "reference": "turn on the kitchen light",
+      "hypothesis": "turn on the kitchen",
+      "expect": {
+        "intent": null,
+        "args": {}
+      }
+    },
+    {
+      "id": "numbers-clock-01",
+      "condition": "numbers-names",
+      "reference": "what time is it",
+      "hypothesis": "what time is it",
+      "expect": {
+        "intent": "time_now",
+        "args": {}
+      }
+    },
+    {
+      "id": "numbers-calc-01",
+      "condition": "numbers-names",
+      "reference": "what is 18% of 250",
+      "hypothesis": "what is 18% of 250",
+      "expect": {
+        "intent": "calculator",
+        "args": {
+          "expression": "18/100*250"
+        }
+      }
+    },
+    {
+      "id": "numbers-remind-01",
+      "condition": "numbers-names",
+      "reference": "remind me to call priya in 15 minutes",
+      "hypothesis": "remind me to call priya in 50 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "call priya",
+          "when": "in 15 minutes"
+        }
+      }
+    },
+    {
+      "id": "numbers-remind-02",
+      "condition": "numbers-names",
+      "reference": "remind me to pay the 1200 bill in 2 hours",
+      "hypothesis": "remind me to pay the 1200 bill in 2 hours",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "pay the 1200 bill",
+          "when": "in 2 hours"
+        }
+      }
+    },
+    {
+      "id": "numbers-remind-03",
+      "condition": "numbers-names",
+      "reference": "remind me to renew the domain in 30 minutes",
+      "hypothesis": "remind me to renew the domain in 13 minutes",
+      "expect": {
+        "intent": "remind",
+        "args": {
+          "text": "renew the domain",
+          "when": "in 30 minutes"
+        }
+      }
+    },
+    {
+      "id": "numbers-task-01",
+      "condition": "numbers-names",
+      "reference": "add a task to call 4417",
+      "hypothesis": "add a task to call 4471",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "call 4417"
+        }
+      }
+    },
+    {
+      "id": "numbers-remember-01",
+      "condition": "numbers-names",
+      "reference": "remember that the boiler code is 4417",
+      "hypothesis": "remember the boiler code is 4417",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the boiler code is 4417"
+        }
+      }
+    },
+    {
+      "id": "numbers-remember-02",
+      "condition": "numbers-names",
+      "reference": "remember that the wifi password is 8842",
+      "hypothesis": "remember that the wifi password is 88 42",
+      "expect": {
+        "intent": "remember",
+        "args": {
+          "fact": "the wifi password is 8842"
+        }
+      }
+    },
+    {
+      "id": "numbers-task-02",
+      "condition": "numbers-names",
+      "reference": "add a task to email priya about 1200",
+      "hypothesis": "add a task to email priya about 1200",
+      "expect": {
+        "intent": "add_task",
+        "args": {
+          "title": "email priya about 1200"
+        }
+      }
+    },
+    {
+      "id": "numbers-chat-01",
+      "condition": "numbers-names",
+      "reference": "book bay 12 for tomorrow",
+      "hypothesis": "book bay 21 for tomorrow",
+      "expect": {
+        "intent": null,
+        "args": {}
+      }
+    }
+  ]
+}
