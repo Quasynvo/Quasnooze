@@ -1,0 +1,59 @@
+name: "CodeQL (additional languages)"
+
+# JavaScript/TypeScript is already analysed by .github/workflows/security.yml
+# (security-and-quality queries, daily). This workflow covers the languages
+# that job does not: the GitHub Actions workflows themselves, the Python
+# tooling under scripts/, and the C# Windows companion under desktop/.
+# Keeping the two apart means no language is analysed twice and no SARIF
+# category collides.
+#
+# Third-party actions are pinned to a commit SHA, not a tag, matching
+# security.yml — test/roadmap.test.js enforces this for every workflow.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "35 2 * * 0" # weekly, Sunday 02:35 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: csharp
+            build-mode: none
+          - language: python
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          category: "/language:${{ matrix.language }}"
