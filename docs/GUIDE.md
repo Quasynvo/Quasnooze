@@ -432,6 +432,7 @@ Installs only when you ask. `systemctl stop pinch` and it is gone; `data/` and `
 | `npm run setup` | the guided wizard |
 | `quasnooze doctor` | re-verify every token and connection |
 | `quasnooze health [--json] [--baseline]` | provider matrix + structured readiness with next actions; `--baseline` adds the synthetic, content-free latency artifact (see `docs/DIAGNOSTICS.md`) |
+| `quasnooze tools [--json] [--strict]` | read-only static capability and trust inventory across built-in, manifest, plugin and MCP sources without executing plugins or commands (see `docs/TOOL-INVENTORY.md`) |
 | `quasnooze brain-test` | model speed **and** whether it can call tools at all |
 | `quasnooze chat` / `quasnooze ask "…"` | terminal use, same brain, same memory |
 | `quasnooze pair` | phone URL + locally-generated QR |
@@ -1120,6 +1121,9 @@ counts as trust. Treat this opt-out as a permission grant; unlike built-in file
 tools, arbitrary plugin code is not automatically restricted to the workspace.
 
 The existing `QUASNOOZE_TOOLS` JSON command manifest and MCP integration remain
-available and unchanged. `node --test test/tools.test.js` covers module loading,
-collisions, trust defaults, workspace rejection, CLI startup, real approval,
-denial and unattended refusal.
+available and unchanged. Run `quasnooze tools` (or `quasnooze tools --json`; see
+`docs/TOOL-INVENTORY.md`) to review configured built-in, manifest, plugin and MCP
+sources without importing plugins or spawning processes. `node --test test/tools.test.js`
+and `node --test test/tool-inventory.test.js` cover module loading, collisions,
+trust defaults, workspace rejection, static non-execution, CLI startup, real
+approval, denial and unattended refusal.

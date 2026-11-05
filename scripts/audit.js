@@ -21,7 +21,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { deflateSync } from "node:zlib";
-import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -227,6 +227,68 @@ await check("process-timeout", "a timed-out command returns and leaves nothing r
   }
   if (alive) throw new Error(`orphaned process survived: ${alive}`);
   return "returned on time, process group killed";
+});
+
+await check("inventory-readonly", "tool inventory never executes plugins or leaks secrets", async () => {
+  const { buildToolInventory, renderToolInventory } = await import("../src/tool-inventory.js");
+  const invRoot = join(scratch, "inventory-probe");
+  const pluginDir = join(invRoot, "plugins");
+  mkdirSync(pluginDir, { recursive: true });
+  const marker = join(invRoot, "canary-ran.txt");
+  writeFileSync(
+    join(pluginDir, "canary.mjs"),
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "executed");\nexport default { name: "canary", description: "canary", parameters: { type: "object", properties: {} }, run: async () => "x" };\n`,
+  );
+  const secretCanary = "sk-auditinventorysecret987654321";
+  const pathCanary = "/home/alice/private-vault/keys.txt";
+  const manifestFile = join(invRoot, "tools.json");
+  writeFileSync(
+    manifestFile,
+    JSON.stringify({
+      apiKey: secretCanary,
+      tools: [
+        {
+          name: "vault_lookup",
+          description: `Lookup in ${pathCanary} using ${secretCanary}`,
+          command: "/usr/local/bin/vault-helper",
+          args: ["--token", secretCanary, pathCanary],
+          parameters: {},
+        },
+      ],
+    }),
+  );
+
+  const report = buildToolInventory({
+    workspaceRoots: [workspace],
+    customToolsPath: manifestFile,
+    toolsDir: pluginDir,
+    mcpSpec: `files=npx -y @mcp/fs ${pathCanary}`,
+    extraSecrets: [secretCanary],
+  });
+  if (existsSync(marker)) throw new Error("canary plugin was imported during static inventory");
+  if (report.sources.localPlugins.candidates[0]?.imported !== false) {
+    throw new Error("plugin marked imported");
+  }
+  const serialized = `${JSON.stringify(report)}\n${renderToolInventory(report)}`;
+  if (serialized.includes(secretCanary) || serialized.includes("alice") || serialized.includes(scratch)) {
+    throw new Error("secret or personal path leaked in inventory output");
+  }
+
+  let symlinkChecked = false;
+  const linkManifest = join(invRoot, "linked-tools.json");
+  try {
+    symlinkSync(manifestFile, linkManifest);
+    symlinkChecked = true;
+  } catch {
+    /* symlinks unavailable */
+  }
+  if (symlinkChecked) {
+    const linked = buildToolInventory({ workspaceRoots: [workspace], customToolsPath: linkManifest });
+    if (linked.sources.customManifest.state !== "rejected") {
+      throw new Error("symlinked manifest was not rejected");
+    }
+  }
+  return "canary plugin untouched, secrets/paths redacted, symlinks refused";
 });
 
 // ── 3. the panel ────────────────────────────────────────────────────────────
