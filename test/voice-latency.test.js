@@ -14,7 +14,6 @@
  *   2. **No words.** A stage log that carries the transcript is a second copy of
  *      your conversations with none of the protections.
  */
-import { get } from "node:http";
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
