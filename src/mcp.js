@@ -242,10 +242,14 @@ export function toQuasnoozeTool(client, definition) {
     mcp: { server: client.name, tool: remoteName },
     async run(args) {
       const result = await client.callTool(remoteName, args || {});
-      // Tool output is a prompt-injection surface like any other fetched text.
+      // Tool output is a prompt-injection surface like any other fetched
+      // text. Wrap it as untrusted — and neutralise any closing tag inside
+      // the output itself, or a hostile server breaks out of the wrapper
+      // and its text is read as if Quasnooze had produced it.
+      const safe = String(result.output ?? "").replace(/<\/untrusted-source/gi, "<\\/untrusted-source");
       return {
         ok: result.ok,
-        output: `<untrusted-source tool="mcp__${client.name}__${remoteName}">\n${result.output}\n</untrusted-source>`,
+        output: `<untrusted-source tool="mcp__${client.name}__${remoteName}">\n${safe}\n</untrusted-source>`,
       };
     },
   };

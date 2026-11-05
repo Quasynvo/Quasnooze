@@ -1,0 +1,12 @@
+# Gitleaks configuration - the allowlist is deliberately narrow.
+# The two entries below are canary fixtures: tests plant fake key-shaped
+# strings to prove scanners/inventories flag them. They are not credentials,
+# were never credentials, and rotating them is meaningless. Any OTHER
+# generic-api-key hit, in any other file, must fail the scan.
+[[allowlists]]
+description = "Canary key-shaped strings planted in scanner tests"
+rules = ["generic-api-key"]
+paths = [
+  "test/harness-events.test.js",
+  "test/tool-inventory.test.js",
+]
