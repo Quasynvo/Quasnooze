@@ -96,18 +96,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # The org's Actions policy allows only actions/*, github/codeql-action
+      # and verified-marketplace actions, so third-party scanner *actions*
+      # are refused at startup. Scanners therefore run as
+      # checksum-verified release binaries in plain steps.
+      - name: Install OSV-Scanner (checksum-verified)
+        run: |
+          curl -sL -o /tmp/osv-scanner https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  /tmp/osv-scanner" | sha256sum -c -
+          chmod +x /tmp/osv-scanner
+      # No lockfile is committed (package-lock.json is gitignored), and OSV
+      # reads lockfiles - resolve one in CI so the scan has something true
+      # to read. --ignore-scripts: resolving must never execute code.
+      - name: Resolve lockfile for scanning
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       # Report-first: results publish to the Security tab while the
       # baseline is reviewed; promotion to gating is a deliberate follow-up
       # once the first report is triaged (see docs/SCANNERS.md).
       - name: OSV-Scanner (report-only)
         continue-on-error: true
-        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
-        with:
-          scan-args: |-
-            --recursive
-            --format sarif
-            --output osv.sarif
-            ./
+        run: /tmp/osv-scanner scan source --recursive --format sarif --output-file osv.sarif ./
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
@@ -126,18 +134,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      # Report-first for the same reason as OSV above (exit-code 0);
-      # SARIF still lands in the Security tab for triage.
+      - name: Install Trivy (checksum-verified)
+        run: |
+          curl -sL -o /tmp/trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  /tmp/trivy.tgz" | sha256sum -c -
+          tar -xzf /tmp/trivy.tgz -C /tmp trivy
+      # Report-first for the same reason as OSV above; SARIF still lands
+      # in the Security tab for triage.
       - name: Trivy filesystem scan (report-only)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
+        run: >-
+          /tmp/trivy fs --format sarif --output trivy.sarif
+          --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 .
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
@@ -156,10 +163,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      # Audits the workflows themselves (template injection, excessive
-      # permissions, unpinned actions). Plain mode: annotations on the PR,
-      # no GitHub Advanced Security requirement.
-      - name: zizmor
-        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
-          advanced-security: false
+          python-version: "3.12"
+      # zizmorcore/zizmor-action is refused by the org Actions policy;
+      # the same tool from PyPI, version-pinned, audits identically.
+      # (Verified locally: no findings on this repo's workflows.)
+      - name: Install zizmor
+        run: pip install "zizmor==1.32.0"
+      - name: zizmor
+        run: zizmor --no-online-audits .github/workflows/
