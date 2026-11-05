@@ -1772,7 +1772,7 @@
     {
       "id": "voice-05-stt-accuracy-harness",
       "title": "test(voice): a labelled speech corpus and command-accuracy report",
-      "status": "backlog",
+      "status": "shipped",
       "difficulty": "medium",
       "labels": [
         "help wanted",
@@ -1780,13 +1780,17 @@
         "area/voice"
       ],
       "files": [
+        "scripts/evaluate-speech.js",
+        "test/speech-accuracy.test.js",
+        "test-fixtures/speech/v1/corpus.json",
+        "docs/SPEECH-BASELINE-V1.md",
+        "docs/VOICE.md",
         "scripts/doctor.js",
-        "test/voice.test.js",
-        "docs/VOICE.md"
+        "src/doctor.js"
       ],
-      "verify": "node --test test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "verify": "node --test test/speech-accuracy.test.js\nnode scripts/evaluate-speech.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~2-3 days",
-      "body": "## Context\n\nThe README says voice accuracy has not been measured on physical hardware, and that is still true: there is no corpus, no word-error-rate number and no command-accuracy number. Any future \"it understands you better now\" claim would therefore be an opinion.\n\nThe retrieval side of this repository already sets the pattern — a labelled local corpus and a reproducible report (`docs/RETRIEVAL-EVALUATION.md`). Speech deserves the same.\n\n## What to change\n\n- A small, redistributable corpus of short command utterances: clean, accented, noisy, and numbers/names, with a licence that permits publishing the text and the expected transcript.\n- A runner that scores word error rate and, separately, **command accuracy** — did the transcript select the intended tool with the intended arguments.\n- Report per condition, with sample counts, and refuse to print a headline number when a condition has fewer than a stated minimum of samples.\n- `docs/VOICE.md`: the report location, the method, and the fact that synthetic or replayed audio is not hardware acceptance.\n\n**Safety:** the corpus must contain no recordings of real people without consent, and no private data.\n\n## Acceptance criteria\n\n- [ ] The runner is deterministic and offline; no model download at test time\n- [ ] Command accuracy is measured separately from WER, because a plausible transcript can still pick the wrong tool\n- [ ] Every reported number carries its sample count\n- [ ] The docs distinguish measured results from unperformed physical-microphone checks\n\n## How to verify\n\n```bash\nnode --test test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~2-3 days"
+      "body": "## Context\n\nThe README says voice accuracy has not been measured on physical hardware, and that is still true: there is no corpus, no word-error-rate number and no command-accuracy number. Any future \"it understands you better now\" claim would therefore be an opinion.\n\nThe retrieval side of this repository already sets the pattern — a labelled local corpus and a reproducible report (`docs/RETRIEVAL-EVALUATION.md`). Speech deserves the same.\n\n## What to change\n\n- A small, redistributable corpus of short command utterances: clean, accented, noisy, and numbers/names, with a licence that permits publishing the text and the expected transcript.\n- A runner that scores word error rate and, separately, **command accuracy** — did the transcript select the intended tool with the intended arguments.\n- Report per condition, with sample counts, and refuse to print a headline number when a condition has fewer than a stated minimum of samples.\n- `docs/VOICE.md`: the report location, the method, and the fact that synthetic or replayed audio is not hardware acceptance.\n\n**Safety:** the corpus must contain no recordings of real people without consent, and no private data.\n\n## Acceptance criteria\n\n- [ ] The runner is deterministic and offline; no model download at test time\n- [ ] Command accuracy is measured separately from WER, because a plausible transcript can still pick the wrong tool\n- [ ] Every reported number carries its sample count\n- [ ] The docs distinguish measured results from unperformed physical-microphone checks\n\n## How to verify\n\n```bash\nnode --test test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Where it landed\n\n`scripts/evaluate-speech.js` scores the corpus in `test-fixtures/speech/v1/corpus.json` (48 hand-authored utterances, CC0-1.0, no audio) and writes `docs/SPEECH-BASELINE-V1.md`. Word error rate and command accuracy are reported separately, each with its sample count; a condition under `MIN_CONDITION_SAMPLES` (8) reports withheld, and so does the headline. `npm run health` prints the corpus size and whether the committed baseline is still current. The hypotheses are authored text, so this is not hardware acceptance — that boundary is stated in `docs/VOICE.md`.\n\n## Time estimate\n\n~2-3 days"
     },
     {
       "id": "voice-06-repair-dialogue",

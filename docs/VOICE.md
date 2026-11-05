@@ -238,6 +238,53 @@ same status sequence, the same final callback, no partials. That is the
 "no behavioural difference" test — the caller cannot tell which path ran except by
 counting requests.
 
+## How accurate is it
+
+There are two questions hiding in "does it understand me", and averaging them
+loses the one that matters:
+
+- **word error rate** — how close the transcript is to the words that were said;
+- **command accuracy** — whether that transcript selects the intended tool with
+  the intended arguments.
+
+They are measured and reported separately, on a labelled corpus of 48 short
+utterances in `test-fixtures/speech/v1/corpus.json` (14 clean, 12 accented, 12
+noisy, 10 numbers-and-names; CC0-1.0, text only). The report is
+[docs/SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md), regenerated with
+`node scripts/evaluate-speech.js`; a test compares the committed file with the
+runner's output, so a stale number fails the build instead of sitting there
+looking measured.
+
+Why two numbers: "turn off the kitchen light" heard as "turn off the kitchen
+lite" is one word wrong and the same command; "remind me at two" heard as "remind
+me at noon" is one word wrong and the wrong reminder. Arguments are compared after
+normalising number words and plurals — a cosmetic error must not be scored as a
+broken command, or the two numbers collapse into one. The current corpus shows the
+point: the numbers-and-names condition has a *lower* word error rate than the
+accented one and the *worse* command accuracy, because digit substitutions are
+small in word terms and total in command terms.
+
+Every number carries its sample count, and a condition with fewer than
+`MIN_CONDITION_SAMPLES` (8) utterances reports **withheld** rather than a
+percentage, including the headline if any condition is under the line. A WER from
+three samples is a coincidence with a decimal point.
+
+**This is not hardware acceptance.** The hypotheses in the corpus are authored
+text, not recordings: the runner downloads no model, opens no microphone and
+touches no network. So the word error rate describes the fixture, while command
+accuracy is a live measurement of the shipped router (`matchFastIntent`) — and the
+corpus's own reference layer is scored the same way, so an expectation the router
+cannot satisfy surfaces as a corpus error rather than as an accuracy figure. What
+the report *does* catch immediately is a router that cannot survive realistic
+transcripts: it currently names, for example, a leading hesitation ("uh what time
+is it") and a dropped unit word ("what is 18 of 250") as command misses. The
+misses are listed by utterance id, so they can be turned into work items instead
+of anecdotes.
+
+The physical-microphone question — does this hear *you*, in a kitchen, over a
+fan — remains unmeasured, and nothing in this report should be read as an answer
+to it.
+
 ## Risk, read against [AUDIT.md](AUDIT.md)
 
 | Audit finding | Why this change does not reopen it |
@@ -299,3 +346,7 @@ flattering direction, and a reader who can open the code, run the test and hear 
   a noisy room makes it worse, and `docs/VOICE.md` says so rather than claiming clean segments.
 - Not a claim that browser recognition is private. That path may send audio to the browser vendor
   and is labelled as such; local dictation is the path that keeps audio on your machine.
+- Not a speech-recognition accuracy claim. The word error rate in
+  [SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md) is scored over hand-authored hypotheses, not
+  recordings; it measures the fixture and this build's router, and it says nothing about how well
+  a microphone in a noisy room hears you.

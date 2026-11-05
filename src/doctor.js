@@ -363,6 +363,20 @@ export function renderDoctor(report) {
     if (!text.ready) lines.push(`      ${"\x1b[2m"}next: ${text.next_action}\x1b[0m`);
     if (!voice.ready && voice.next_action !== text.next_action) lines.push(`      ${"\x1b[2m"}voice next: ${voice.next_action}\x1b[0m`);
   }
+  // Speech accuracy, when the caller collected it (scripts/doctor.js does). It is
+  // printed as a corpus size and a permission — "synthetic hypotheses, no
+  // microphone" — because a line like "accuracy 97%" on a text fixture would be
+  // the exact claim docs/VOICE.md refuses to make.
+  if (report.speech) {
+    const speech = report.speech;
+    const counts = Object.entries(speech.conditions).map(([name, samples]) => `${name} ${samples}`).join(" · ");
+    lines.push("");
+    lines.push(`  speech accuracy  corpus v${speech.version} n=${speech.utterances} (${counts})`);
+    const headline = speech.headline.reported
+      ? `wer ${(speech.headline.wer * 100).toFixed(1)}% · commands ${(speech.headline.commandAccuracy * 100).toFixed(1)}% (n=${speech.headline.samples})`
+      : speech.headline.reason;
+    lines.push(`      ${"\x1b[2m"}${headline} — synthetic hypotheses, no microphone; ${speech.misses} named command miss${speech.misses === 1 ? "" : "es"}; baseline ${speech.baseline}\x1b[0m`);
+  }
   const s = report.summary;
   lines.push("");
   lines.push(
