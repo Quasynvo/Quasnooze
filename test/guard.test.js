@@ -84,3 +84,35 @@ test("the footer is calm, specific and lists every flag", () => {
   assert.match(note, /the reply says sent but nothing ran/);
   assert.equal(renderGuardNote([]), "");
 });
+
+test("read-only web search or local file write never excuses a claimed email/post/send", () => {
+  for (const tool of ["search_web", "write_file"]) {
+    const r = auditReply({
+      reply: "Done — I've emailed the launch update to priya@acme.com.",
+      trace: [ok(tool)],
+      userText: "email priya@acme.com",
+      toolOutput: "priya@acme.com",
+    });
+    assert.equal(r.clean, false, `${tool} must not count as sending externally`);
+    assert.ok(r.flags.some((f) => f.code === "action-without-evidence"));
+  }
+  const mcp = auditReply({
+    reply: "I've sent the message.",
+    trace: [ok("mcp__slack__post_message")],
+    userText: "send the slack update",
+  });
+  assert.equal(mcp.clean, true);
+});
+
+test("a tool whose read-back was contradicted does not satisfy action claims", () => {
+  const r = auditReply({
+    reply: "I saved the summary to notes.txt.",
+    trace: [{ tool: "write_file", ok: true, denied: false, verification: { status: "contradicted", detail: "missing" } }],
+    userText: "save notes.txt",
+  });
+  assert.equal(r.clean, false);
+  const flag = r.flags.find((f) => f.code === "action-without-evidence");
+  assert.ok(flag);
+  assert.match(flag.message, /contradicted/);
+});
+

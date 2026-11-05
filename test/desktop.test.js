@@ -249,3 +249,58 @@ test('desktop persona commands work locally without native host or model inferen
  assert.equal(result.fastPath,true);assert.match(result.text,/now uses/);assert.equal(calls,0);
  await runtime.request('/persona use default');await runtime.request('/persona delete local-style');
 });
+
+test('desktop never reports COMPLETED/ready or speaks aloud when guard flags, denials, or contradictions occur', async () => {
+  const native = bridge();
+  let nextResult;
+  const runtime = new DesktopRuntime({ agent: async () => nextResult });
+  runtime.attach(native);
+
+  // 1) Hallucinated action with zero tool calls (guard flagged)
+  nextResult = {
+    text: "I've sent the email.\n\n---\n🛡️ **Code check:** ...",
+    trace: [],
+    guard: [{ code: "action-without-evidence", message: 'the reply says "sent" but no tool ran' }],
+    error: null,
+  };
+  const guarded = await runtime.request("email priya");
+  assert.equal(guarded.ok, false);
+  assert.equal(guarded.acted, false);
+  assert.equal(runtime.snapshot().phase, "attention");
+  assert.equal(runtime.snapshot().recent[0].ok, false);
+  assert.equal(native.messages.at(-1).speak, false);
+
+  // 2) Contradicted read-back
+  nextResult = {
+    text: "Wrote notes.txt",
+    trace: [{ tool: "write_file", ok: true, verification: { status: "contradicted", detail: "missing" } }],
+    guard: [],
+    error: null,
+  };
+  const contradicted = await runtime.request("save notes.txt");
+  assert.equal(contradicted.ok, false);
+  assert.equal(contradicted.acted, false);
+  assert.equal(runtime.snapshot().phase, "attention");
+
+  // 3) Honest conversational reply where zero tools ran
+  nextResult = { text: "Recursion is a function calling itself.", trace: [], guard: [], error: null };
+  const conversational = await runtime.request("explain recursion");
+  assert.equal(conversational.ok, true);
+  assert.equal(conversational.acted, false);
+  assert.equal(runtime.snapshot().phase, "ready");
+  assert.equal(runtime.snapshot().acted, false);
+  assert.equal(native.messages.at(-1).speak, true);
+
+  // 4) Real verified tool execution
+  nextResult = {
+    text: "Added task.",
+    trace: [{ tool: "add_task", ok: true, verification: { status: "verified", detail: "present" } }],
+    guard: [],
+    error: null,
+  };
+  const acted = await runtime.request("add task buy milk");
+  assert.equal(acted.ok, true);
+  assert.equal(acted.acted, true);
+  assert.equal(runtime.snapshot().acted, true);
+});
+

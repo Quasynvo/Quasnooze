@@ -328,24 +328,52 @@ registerTool({
 });
 
 test("the agent attaches a read-back to every action it reports", async () => {
-  const result = await runAgent({ sessionId: "verify-e2e", text: "write-verify-file", channel: "cli" });
+  const events = [];
+  const result = await runAgent({
+    sessionId: "verify-e2e",
+    text: "write-verify-file",
+    channel: "cli",
+    onEvent: (e) => events.push(e),
+  });
   const entry = result.trace.find((t) => t.tool === "write_file");
   assert.ok(entry, "the write should be in the trace");
   assert.equal(entry.verification.status, VERIFIED);
   assert.equal(readFileSync(join(workspace, "agent.txt"), "utf8"), "from the agent\n");
+  const doneEvent = events.find((e) => e.type === "tool_done" && e.name === "write_file");
+  assert.equal(doneEvent?.ok, true);
+  assert.equal(doneEvent?.verification?.status, VERIFIED);
 });
 
 test("a contradicted action reaches the model as a contradiction", async () => {
-  const result = await runAgent({ sessionId: "verify-liar", text: "lie-about-it", channel: "cli" });
+  const unverifiedEvents = [];
+  const result = await runAgent({
+    sessionId: "verify-liar",
+    text: "lie-about-it",
+    channel: "cli",
+    onEvent: (e) => unverifiedEvents.push(e),
+  });
   const entry = result.trace.find((t) => t.tool === "__liar");
   assert.equal(entry.verification.status, UNVERIFIED);
+  const unverifiedDone = unverifiedEvents.find((e) => e.type === "tool_done" && e.name === "__liar");
+  assert.equal(unverifiedDone?.ok, true);
+  assert.equal(unverifiedDone?.verification?.status, UNVERIFIED);
 
   // Register a read-back that always disagrees: the tool's claim is checked
   // against something that exists, and the check fails.
   registerVerifier("__liar", async () => ({ status: "contradicted", detail: "ghost.txt does not exist" }));
-  const second = await runAgent({ sessionId: "verify-liar-2", text: "lie-about-it", channel: "cli" });
+  const contradictedEvents = [];
+  const second = await runAgent({
+    sessionId: "verify-liar-2",
+    text: "lie-about-it",
+    channel: "cli",
+    onEvent: (e) => contradictedEvents.push(e),
+  });
   const secondEntry = second.trace.find((t) => t.tool === "__liar");
   assert.equal(secondEntry.verification.status, CONTRADICTED, "the read-back decides, not the tool");
+  const contradictedDone = contradictedEvents.find((e) => e.type === "tool_done" && e.name === "__liar");
+  assert.equal(contradictedDone?.ok, false, "contradicted tool_done must never mark ok:true for UI checkmarks");
+  assert.equal(contradictedDone?.verification?.status, CONTRADICTED);
+  assert.match(contradictedDone?.preview || "", /contradicted/);
 
   const toolMessage = modelCalls
     .flatMap((call) => call.messages)
