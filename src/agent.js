@@ -896,7 +896,8 @@ export async function runAgent({
             role: "tool", name: call.name, toolCallId: call.id,
             content: "The user denied permission for this action. Do not retry it; ask what they would prefer.",
           });
-          trace.push({ tool: tool.name, args: call.arguments, denied: true });
+          trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true });
+          onEvent({ type: "tool_done", name: tool.name, ok: false, denied: true, preview: `denied: ${label}`.slice(0, 200) });
           continue;
         }
       }
@@ -971,6 +972,7 @@ export async function runAgent({
         ? `${kept}\n\n[output truncated — ${raw.length - kept.length} characters not shown; the per-turn tool output budget is ${TOOL_OUTPUT_BUDGET} characters]`
         : kept;
 
+      const effectiveOk = Boolean(result.ok) && verification?.status !== VERIFY_CONTRADICTED;
       toolOutputs.push(kept);
       trace.push({
         tool: tool.name,
@@ -980,7 +982,16 @@ export async function runAgent({
         ...(verification ? { verification } : {}),
         ...(tier?.tier === TIER_READ && !policyMustAsk ? { tier: "read", auto: true } : {}),
       });
-      onEvent({ type: "tool_done", name: tool.name, ok: result.ok, preview: kept.slice(0, 300) });
+      onEvent({
+        type: "tool_done",
+        name: tool.name,
+        ok: effectiveOk,
+        verification: verification ? { status: verification.status, detail: verification.detail } : null,
+        preview:
+          verification?.status === VERIFY_CONTRADICTED
+            ? `contradicted — ${verification.detail}`.slice(0, 300)
+            : kept.slice(0, 300),
+      });
 
       // A contradicted action is not allowed to be described as done: the note
       // travels with the tool output, so the next model turn cannot miss it.

@@ -59,21 +59,31 @@ function harness(initialVoices = [{ name: "OS voice", lang: "en-IN", localServic
 }
 
 function fakeElement(id = "") {
+  const subs = new Map();
   return {
     id, textContent: "", innerHTML: "", value: "", title: "", hidden: false, disabled: false,
-    dataset: {}, style: {}, children: [], options: [{ text: "EN·IN" }], selectedIndex: 0,
+    dataset: {}, style: {}, children: [], afterNodes: [], options: [{ text: "EN·IN" }], selectedIndex: 0,
     classList: { toggle() {}, add() {}, remove() {}, contains() { return false; } },
     setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k]; }, removeAttribute() {},
     appendChild(c) { this.children.push(c); return c; }, insertBefore(c) { this.children.push(c); return c; },
-    replaceChildren() { this.children = []; }, remove() {}, after() {}, focus() {}, click() {},
-    querySelector() { return fakeElement(); }, querySelectorAll() { return []; },
+    replaceChildren() { this.children = []; }, remove() {}, after(c) { this.afterNodes.push(c); }, focus() {}, click() {},
+    querySelector(sel) {
+      if (!subs.has(sel)) subs.set(sel, fakeElement(sel));
+      return subs.get(sel);
+    },
+    querySelectorAll() { return []; },
     addEventListener() {}, removeEventListener() {}, scrollTop: 0, scrollHeight: 0,
   };
 }
 
 /** Run the whole shipped panel module with a fake DOM. Boot's network calls
  *  are removed; everything above them — including the speech-out wiring — runs. */
-function bootPanel({ speak = "1", voices = [{ name: "OS voice", lang: "en-IN", localService: true }], synthesis = true } = {}) {
+function bootPanel({
+  speak = "1",
+  voices = [{ name: "OS voice", lang: "en-IN", localService: true }],
+  synthesis = true,
+  fetcher = async () => ({ ok: true, json: async () => ({}), text: async () => "", body: { getReader() {} } }),
+} = {}) {
   let source = html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
   assert.ok(source, "the inline panel module is missing");
   const boot = /\(async function boot\(\) \{[\s\S]*?\}\)\(\);/;
@@ -81,6 +91,7 @@ function bootPanel({ speak = "1", voices = [{ name: "OS voice", lang: "en-IN", l
   source = source.replace(boot, "");
 
   const elements = new Map();
+  const created = [];
   const spoken = [];
   class Utterance { constructor(text) { this.text = text; } }
   const synth = synthesis ? {
@@ -95,7 +106,8 @@ function bootPanel({ speak = "1", voices = [{ name: "OS voice", lang: "en-IN", l
       if (!elements.has(id)) elements.set(id, fakeElement(id));
       return elements.get(id);
     },
-    querySelectorAll: () => [], querySelector: () => fakeElement(), createElement: () => fakeElement(),
+    querySelectorAll: () => [], querySelector: () => fakeElement(),
+    createElement: (tag) => { const el = fakeElement(tag); created.push(el); return el; },
     addEventListener() {}, body: fakeElement("body"), documentElement: fakeElement("html"),
   };
   const window = {
@@ -104,21 +116,21 @@ function bootPanel({ speak = "1", voices = [{ name: "OS voice", lang: "en-IN", l
     SpeechRecognition, addEventListener() {}, removeEventListener() {},
   };
   const context = createContext({
-    console, document, window, PINCH_MARK: "<svg></svg>",
+    console, document, window, PINCH_MARK: "<svg></svg>", QUASNOOZE_MARK: "<svg></svg>",
     localStorage: { getItem: (k) => (k === "pinch.speak" ? speak : null), setItem() {}, removeItem() {} },
     location: { search: "", origin: "http://127.0.0.1:7777", pathname: "/" },
     navigator: { language: "en-IN" }, performance: { now: () => 0 },
     requestAnimationFrame: (f) => f(), setInterval() {}, setTimeout() {}, clearTimeout() {},
-    URL, URLSearchParams, AbortSignal, FormData, Blob, TextDecoder, EventSource,
-    fetch: async () => ({ ok: true, json: async () => ({}), text: async () => "", body: { getReader() {} } }),
+    URL, URLSearchParams, AbortSignal, FormData, Blob, TextDecoder, TextEncoder, Uint8Array, EventSource,
+    fetch: fetcher,
     alert() {}, confirm: () => false,
   });
   context.globalThis = context;
   context.window = window;
   window.navigator = context.navigator;
-  source += "\nglobalThis.__speechOut = speechOut; globalThis.__hint = document.getElementById(\"voiceHint\").textContent;";
+  source += "\nglobalThis.__speechOut = speechOut; globalThis.__send = send; globalThis.__hint = document.getElementById(\"voiceHint\").textContent;";
   runInContext(source, context, { filename: "public/index.html" });
-  return { context, spoken, elements, synth };
+  return { context, spoken, elements, created, synth };
 }
 
 test("the real panel module boots, reports a local voice and speaks a completed reply", () => {
@@ -345,3 +357,60 @@ test("the docs no longer claim browser dictation always stays on the device", ()
     assert.match(text, /may send\s+microphone audio to the browser vendor/i, `${file} needs the browser-recognition caveat`);
   }
 });
+
+test("panel send() renders checkmarks only for verified tools, deduplicates guard cards, and stays silent on guarded turns", async () => {
+  function sseResponse(frames) {
+    const payload = frames.map(([ev, data]) => `event: ${ev}\ndata: ${JSON.stringify(data)}\n\n`).join("");
+    return new Response(payload, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }
+
+  let nextFrames = [];
+  const { context, spoken, elements, created } = bootPanel({
+    speak: "1",
+    fetcher: async (url) =>
+      url === "/api/chat" ? sseResponse(nextFrames) : { ok: true, json: async () => [] },
+  });
+
+  // 1) Guard-flagged turn with zero tools: 0 checkmarks, 1 deduplicated guard box, 0 spoken utterances
+  const flag = { code: "action-without-evidence", message: 'the reply says "sent" but no tool ran' };
+  nextFrames = [
+    ["step", { type: "delta", text: "I've sent the email." }],
+    ["step", { type: "guard", flags: [flag] }],
+    [
+      "final",
+      {
+        text:
+          "I've sent the email.\n\n---\n🛡️ **Code check:** the reply above needs a second look.\n" +
+          `  • ${flag.message}\n_Quasnooze checks claims against what actually ran — this one did not line up._`,
+        guard: [flag],
+        trace: [],
+      },
+    ],
+  ];
+  elements.get("input").value = "email priya";
+  await context.__send();
+  const guardCards = created.filter((el) => el.className === "guard");
+  assert.equal(guardCards.length, 1, "exactly one guard card should render");
+  assert.equal((guardCards[0].innerHTML.match(/action-without-evidence|the reply says/g) || []).length, 1, "guard flag must not duplicate");
+  const assistantBubble = created.find((el) => el.className === "msg assistant")?.querySelector(".bubble")?.innerHTML || "";
+  assert.doesNotMatch(assistantBubble, /Code check:/, "inline guard footer should not duplicate above the guard card");
+  assert.equal(created.some((el) => el.className === "step" && el.innerHTML.includes("✓")), false, "no checkmark when no tool ran");
+  assert.equal(spoken.length, 0, "guard-flagged reply must not be spoken aloud");
+
+  // 2) Verified vs unverified vs contradicted tool_done step icons
+  created.length = 0;
+  nextFrames = [
+    ["step", { type: "tool_done", name: "write_file", ok: true, verification: { status: "verified" }, preview: "wrote a.txt" }],
+    ["step", { type: "tool_done", name: "shell", ok: true, verification: { status: "unverified" }, preview: "ls" }],
+    ["step", { type: "tool_done", name: "write_file", ok: false, verification: { status: "contradicted" }, preview: "contradicted — missing" }],
+    ["final", { text: "Checked.", guard: [], trace: [] }],
+  ];
+  elements.get("input").value = "check tools";
+  await context.__send();
+  const stepHtml = created.filter((el) => el.className === "step").map((el) => el.innerHTML);
+  assert.ok(stepHtml.some((h) => h.includes("<span>✓</span>") && h.includes("verified · wrote a.txt")));
+  assert.ok(stepHtml.some((h) => h.includes("<span>•</span>") && h.includes("unverified · ls")));
+  assert.ok(stepHtml.some((h) => h.includes("<span>✕</span>") && h.includes("contradicted — missing")));
+  assert.equal(spoken.length, 1, "clean reply is spoken aloud");
+});
+

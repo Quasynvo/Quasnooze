@@ -17,7 +17,7 @@ import { citedIds as extractCitedIds } from "./citations.js";
 
 /** Verbs that assert a completed action, split by what kind of evidence they need. */
 const ACTION_CLAIMS = [
-  { re: /\b(?:i(?:'ve| have)?\s+)?(?:sent|emailed|posted|submitted)\b/i, needs: ["shell", "write_file", "search_web"] },
+  { re: /\b(?:i(?:'ve| have)?\s+)?(?:sent|emailed|posted|submitted)\b/i, needs: ["shell"], allowMcp: true },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:opened|launched|started)\b/i, needs: ["shell", "open_url"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:created|added|wrote|written|saved|edited|updated|deleted|removed|renamed|moved)\b/i, needs: ["shell", "write_file", "add_task", "complete_task"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:ran|executed|installed|built|tested|deployed|committed|pushed)\b/i, needs: ["shell"] },
@@ -70,19 +70,29 @@ export function auditReply({ reply, trace = [], memoryFacts = [], userText = "",
   if (!said.trim()) return { flags, clean: true };
 
   const succeeded = new Set(
-    (trace || []).filter((t) => t && t.ok && !t.denied).map((t) => t.tool)
+    (trace || [])
+      .filter((t) => t && t.ok && !t.denied && t.verification?.status !== "contradicted")
+      .map((t) => t.tool)
   );
   const denied = (trace || []).filter((t) => t && t.denied);
+  const contradicted = (trace || []).filter((t) => t && t.verification?.status === "contradicted");
 
   // 1) Claimed an action with no tool that could have performed it.
   for (const claim of ACTION_CLAIMS) {
     const match = claim.re.exec(said);
     if (!match) continue;
-    if (claim.needs.some((tool) => succeeded.has(tool))) continue;
+    if (
+      claim.needs.some((tool) => succeeded.has(tool)) ||
+      (claim.allowMcp && [...succeeded].some((tool) => String(tool).startsWith("mcp__")))
+    ) {
+      continue;
+    }
     const verb = match[0].toLowerCase().replace(/^i\s+(have\s+|'ve\s+)?/, "");
     const blocked = denied.length
       ? " (you denied a permission prompt this turn)"
-      : "";
+      : contradicted.length
+        ? " (an independent read-back contradicted the tool's report)"
+        : "";
     flags.push({
       code: "action-without-evidence",
       message: `the reply says "${verb}" but no tool ran that could have done it${blocked}`,

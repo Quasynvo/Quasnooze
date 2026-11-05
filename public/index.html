@@ -956,8 +956,20 @@ async function send() {
       const bubble = live.querySelector(".bubble");
       bubble.classList.remove("streaming");
       bubble.innerHTML = md(finalText);
+    } else {
+      live = addMsg("assistant", finalText);
     }
     scrollDown();
+  }
+
+  function withoutInlineGuard(rawText) {
+    const startMarker = "\n\n---\n🛡️ **Code check:**";
+    const endMarker = "_Quasnooze checks claims against what actually ran — this one did not line up._";
+    const start = rawText.indexOf(startMarker);
+    if (start < 0) return rawText;
+    const end = rawText.indexOf(endMarker, start);
+    if (end < 0) return rawText.slice(0, start);
+    return rawText.slice(0, start) + rawText.slice(end + endMarker.length);
   }
 
   // Marks ride with the message they describe. One request, no new endpoint.
@@ -976,6 +988,13 @@ async function send() {
     let answer = "";
     const guardFlags = [];
     const turnSources = [];
+    const addGuardFlags = (items) => {
+      for (const f of items || []) {
+        if (f && !guardFlags.some((g) => g.code === f.code && g.message === f.message)) {
+          guardFlags.push(f);
+        }
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1006,8 +1025,11 @@ async function send() {
           } else if (data.type === "tool_done") {
             const row = document.createElement("div");
             row.className = "step";
-            row.style.color = data.ok ? "var(--ok)" : "var(--bad)";
-            row.innerHTML = `<span>${data.ok ? "✓" : "✕"}</span><span>${String(data.preview || "").slice(0,110).replace(/</g,"&lt;")}</span>`;
+            const vStatus = data.verification?.status || null;
+            const icon = !data.ok ? "✕" : vStatus === "unverified" ? "•" : "✓";
+            row.style.color = !data.ok ? "var(--bad)" : vStatus === "unverified" ? "var(--gold)" : "var(--ok)";
+            const prefix = vStatus === "verified" ? "verified · " : vStatus === "unverified" ? "unverified · " : "";
+            row.innerHTML = `<span>${icon}</span><span>${prefix}${String(data.preview || "").slice(0,110).replace(/</g,"&lt;")}</span>`;
             steps.insertBefore(row, thinking);
             scrollDown();
           } else if (data.type === "approval") {
@@ -1024,14 +1046,14 @@ async function send() {
             steps.insertBefore(row, thinking);
             scrollDown();
           } else if (data.type === "guard") {
-            guardFlags.push(...(data.flags || []));
+            addGuardFlags(data.flags);
           } else if (data.type === "sources") {
             turnSources.length = 0;
             turnSources.push(...(data.items || []));
           }
         } else if (event === "final") {
           answer = data.text;
-          if (data.guard) guardFlags.push(...data.guard);
+          addGuardFlags(data.guard);
         } else if (event === "error") {
           answer = `⚠️ ${data.message}`;
         }
@@ -1039,7 +1061,7 @@ async function send() {
     }
 
     thinking.remove();
-    if (answer) finishLive(answer);
+    if (answer) finishLive(guardFlags.length ? withoutInlineGuard(answer) : answer);
     else if (!live) addMsg("assistant", "…I lost the thread there. Try again?");
 
     if (guardFlags.length && live) {
@@ -1066,7 +1088,7 @@ async function send() {
       live.after(box);
     }
 
-    if (answer) speechOut.speak(answer, { replace: true });
+    if (answer && !guardFlags.length) speechOut.speak(answer, { replace: true });
   } catch (err) {
     thinking.remove();
     addMsg("assistant", `⚠️ Could not reach Quasnooze's server: ${err.message}`);

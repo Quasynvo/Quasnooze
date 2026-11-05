@@ -196,3 +196,22 @@ test('unavailable mic state is UNKNOWN in every visible status, never a claim of
   assert.match(ui.element('footerState').textContent, /UNKNOWN/);
   assert.equal(ui.element('listenButton').disabled, true);
 });
+
+test('command deck distinguishes no-tool replies, guarded/failed turns, and completed tool runs', async () => {
+  let live = { ...state, phase: 'ready', acted: false, fastPath: false, text: 'Plain answer.', recent: [{ command: 'explain x', ok: true, acted: false, ms: 40 }] };
+  const ui = deck(async path => response(path === '/api/desktop' ? live : { model: 'qwen3:4b', provider: 'ollama' }));
+  await ui.refresh();
+  assert.equal(ui.element('presenceTitle').textContent, 'Replied. No tools ran.');
+  assert.equal(ui.element('resultKind').textContent, 'REPLIED · NO TOOLS RAN · LOCAL MODEL');
+
+  live = { ...state, phase: 'attention', acted: false, fastPath: false, text: 'Flagged claim.', recent: [{ command: 'email priya', ok: false, acted: false, ms: 55 }] };
+  await ui.refresh();
+  assert.equal(ui.element('presenceTitle').textContent, 'Something needs attention.');
+  assert.equal(ui.element('resultKind').textContent, 'NEEDS ATTENTION · LOCAL MODEL');
+
+  live = { ...state, phase: 'ready', acted: true, fastPath: false, text: 'Task added.', recent: [{ command: 'add task', ok: true, acted: true, ms: 60 }] };
+  await ui.refresh();
+  assert.equal(ui.element('presenceTitle').textContent, 'Done. Still here.');
+  assert.equal(ui.element('resultKind').textContent, 'COMPLETED · LOCAL MODEL');
+});
+
