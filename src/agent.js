@@ -19,7 +19,7 @@ import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaM
   buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
-import { classifyCommand, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
+import { classifyCommand, classifySystemControl, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
 import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
 import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand } from "./tools.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
@@ -40,6 +40,26 @@ const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 /* ───────────────────────────── approvals ───────────────────────────────── */
 
 const approvals = new Map(); // id -> { resolve, timer, channel, description, createdAt }
+
+/**
+ * Session-scoped approval grants: sessionId -> Set of grant keys.
+ *
+ * Only risk.js may nominate a grant key (today: the reversible volume/media
+ * subset of system_control). A grant is recorded solely when a human answers
+ * an approval prompt that disclosed the session scope, lives in memory only,
+ * and dies with the process — it is never persisted or shared across sessions.
+ */
+const sessionGrants = new Map();
+
+function hasSessionGrant(sessionId, grantKey) {
+  return Boolean(grantKey && sessionGrants.get(sessionId)?.has(grantKey));
+}
+
+function recordSessionGrant(sessionId, grantKey) {
+  if (!grantKey) return;
+  if (!sessionGrants.has(sessionId)) sessionGrants.set(sessionId, new Set());
+  sessionGrants.get(sessionId).add(grantKey);
+}
 
 /**
  * Create a permission prompt. Returns { id, promise } so the blocking
@@ -745,6 +765,12 @@ export async function runAgent({
           ? classifiedShell
           : null;
       const commitProposal = detectCommitProposal(tool.name, call.arguments, { tool });
+      // Volume/media system_control actions are `act` but non-destructive:
+      // one disclosed approval may cover the rest of the session. Unattended
+      // runs never consult grants — the unattended gate below still refuses.
+      const sysControl = tool.name === "system_control" ? classifySystemControl(call.arguments?.action) : null;
+      const grantKey = sysControl?.sessionGrantable && !unattended ? sysControl.grantKey : null;
+      const sessionGranted = hasSessionGrant(sessionId, grantKey);
 
       // 2. Deterministic policy checks (beforeTool, plus beforeCommit on commit proposals).
       // Handlers may restrict ("ask" / "deny") or fail closed; they can never authorize.
@@ -866,7 +892,7 @@ export async function runAgent({
         continue;
       }
 
-      const baselineMustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ;
+      const baselineMustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ && !sessionGranted;
       const policyMustAsk =
         policyDecision === POLICY_DECISIONS.ASK ||
         (commitProposal.isCommit && (!config.autoApprove || Boolean(activeHarness)));
@@ -875,12 +901,24 @@ export async function runAgent({
         autoRan += 1;
         onEvent({ type: "auto", name: tool.name, why: describeTier(tier) });
       }
+      if (sessionGranted && !policyMustAsk && DANGEROUS.has(tool.name) && !config.autoApprove) {
+        // Surface the skipped prompt instead of hiding it: the transcript must
+        // show this ran under an earlier session approval, not silently.
+        onEvent({ type: "auto", name: tool.name, why: "volume/media control approved earlier this session" });
+      }
 
       const mustAsk = baselineMustAsk || policyMustAsk;
       if (mustAsk) {
         const secrets = turnSecrets();
         const preview = buildActionPreview(tool.name, call.arguments, { risk: tier || classifiedShell, secrets });
-        const description = approvalDescription(label, secrets);
+        // The scope of a yes is part of the question: a session-grantable
+        // approval says so in the prompt itself, never retroactively.
+        const description = approvalDescription(
+          grantKey
+            ? `${label}\nApproving also allows further volume/media control in this session without asking again. Lock and sleep always ask.`
+            : label,
+          secrets,
+        );
         const approval = createApproval({ channel, sessionId, description, preview });
         onEvent({ type: "approval", id: approval.id, description, preview });
         const allowed = await awaitApprovalWithSignal(approval, signal);
@@ -900,6 +938,9 @@ export async function runAgent({
           onEvent({ type: "tool_done", name: tool.name, ok: false, denied: true, preview: `denied: ${label}`.slice(0, 200) });
           continue;
         }
+        // A disclosed session-grantable approval was answered yes: remember it
+        // for this session only, so the next volume press does not re-prompt.
+        recordSessionGrant(sessionId, grantKey);
       }
 
       if (signal?.aborted) {
@@ -981,6 +1022,7 @@ export async function runAgent({
         output: kept.slice(0, 400),
         ...(verification ? { verification } : {}),
         ...(tier?.tier === TIER_READ && !policyMustAsk ? { tier: "read", auto: true } : {}),
+        ...(sessionGranted ? { sessionGrant: true } : {}),
       });
       onEvent({
         type: "tool_done",

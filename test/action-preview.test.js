@@ -130,3 +130,21 @@ test('browser formatters render hostile fields as bounded plain text', () => {
   assert.ok(nodes.get('.q').child.textContent.includes(hostile));
   assert.ok(!el.innerHTML.includes(hostile));
 });
+
+test('system_control volume/media previews name the action and stay honest about scope', () => {
+  const vol = buildActionPreview('system_control', { action: 'set_volume', level: 40 });
+  assert.equal(vol.action, 'set_volume');
+  assert.equal(vol.target, 'local computer');
+  assert.match(vol.effectSummary, /40%/);
+  assert.match(vol.effectSummary, /Reversible/);
+  for (const level of [500, -1, 50.5, '50-canary']) {
+    const bad = buildActionPreview('system_control', { action: 'set_volume', level });
+    assert.match(bad.effectSummary, /invalid level \(will be rejected\)/);
+    assert.ok(!bad.effectSummary.includes('500') && !bad.effectSummary.includes('canary'), 'an invalid level is never echoed into the preview');
+  }
+  const media = buildActionPreview('system_control', { action: 'media_play_pause' });
+  assert.equal(media.action, 'media_play_pause');
+  assert.match(media.effectSummary, /media key|Core Audio/);
+  // The destructive-sounding stranger still previews as unknown.
+  assert.equal(buildActionPreview('system_control', { action: 'shutdown' }).effectSummary, 'unknown');
+});

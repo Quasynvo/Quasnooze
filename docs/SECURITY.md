@@ -78,8 +78,14 @@ Quasnooze is an agent with a shell. Read this before you leave it running.
 - **Screenshots.** The `screenshot` tool captures the whole screen, which may include things you
   did not intend to show a model. It is behind the approval gate and the file stays local, but
   read the prompt before allowing it.
-- **`system_control`** can lock or sleep the machine. Shutdown and reboot are deliberately not
-  implemented, so a confused model cannot power off a workstation mid-job.
+- **`system_control`** can lock or sleep the machine, and — through the Windows companion only —
+  adjust volume, mute, and send media keys (play/pause, next, previous). Shutdown and reboot are
+  deliberately not implemented, so a confused model cannot power off a workstation mid-job.
+  Volume and media actions take an enum plus an integer (0–100, rejected when out of range, never
+  clamped) and go through Core Audio and media-key APIs — no model text ever reaches a shell.
+  Because they are reversible and non-destructive, approving one volume/media action can cover the
+  rest of the session; the approval prompt says so when it applies. Lock and sleep always ask,
+  every time, and the session grant dies with the process.
 
 ## Hardening checklist
 

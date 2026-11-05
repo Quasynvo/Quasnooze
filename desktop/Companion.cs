@@ -55,6 +55,96 @@ public sealed class SpeechSessionGate {
     }
 }
 
+// Core Audio (IAudioEndpointVolume) + media keys for the system_control tool.
+// Reached only through the agent's approval gate (session-grantable for this
+// reversible subset); the action name is checked against a fixed allowlist and
+// the only parameter is an integer, so no model text ever becomes a command.
+public static class QuasnoozeAudio {
+    [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorComObject { }
+    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDeviceEnumerator {
+        int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+    }
+    [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IMMDevice {
+        int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object activated);
+    }
+    // Vtable order is the contract: these declarations must match mmdeviceapi
+    // exactly, through VolumeStepDown, or every call lands on the wrong slot.
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioEndpointVolume {
+        int RegisterControlChangeNotify(IntPtr client);
+        int UnregisterControlChangeNotify(IntPtr client);
+        int GetChannelCount(out uint count);
+        int SetMasterVolumeLevel(float levelDb, ref Guid eventContext);
+        int SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+        int GetMasterVolumeLevel(out float levelDb);
+        int GetMasterVolumeLevelScalar(out float level);
+        int SetChannelVolumeLevel(uint channel, float levelDb, ref Guid eventContext);
+        int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid eventContext);
+        int GetChannelVolumeLevel(uint channel, out float levelDb);
+        int GetChannelVolumeLevelScalar(uint channel, out float level);
+        int SetMute([MarshalAs(UnmanagedType.Bool)] bool muted, ref Guid eventContext);
+        int GetMute([MarshalAs(UnmanagedType.Bool)] out bool muted);
+        int GetVolumeStepInfo(out uint step, out uint stepCount);
+        int VolumeStepUp(ref Guid eventContext);
+        int VolumeStepDown(ref Guid eventContext);
+    }
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
+    const uint KeyExtended = 0x1, KeyUp = 0x2;
+    const byte VkMediaNext = 0xB0, VkMediaPrevious = 0xB1, VkMediaPlayPause = 0xB3;
+    static readonly string[] Allowed = { "volume_up", "volume_down", "set_volume", "mute", "unmute", "media_play_pause", "media_next", "media_previous" };
+
+    static IAudioEndpointVolume Endpoint() {
+        var enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumeratorComObject();
+        IMMDevice device;
+        Check(enumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out device), "find the default playback device");
+        Guid iid = typeof(IAudioEndpointVolume).GUID;
+        object activated;
+        Check(device.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out activated), "open the endpoint volume control");
+        return (IAudioEndpointVolume)activated;
+    }
+    static void Check(int hr, string what) {
+        if (hr != 0) throw new InvalidOperationException("Windows audio call failed (could not " + what + ", HRESULT 0x" + hr.ToString("X8") + "). Nothing further was changed.");
+    }
+    static void Tap(byte key) {
+        keybd_event(key, 0, KeyExtended, UIntPtr.Zero);
+        keybd_event(key, 0, KeyExtended | KeyUp, UIntPtr.Zero);
+    }
+    public static string Control(string media, string levelText) {
+        if (Array.IndexOf(Allowed, media) < 0) throw new InvalidOperationException("Media action is not in the allowlist. Nothing was changed.");
+        var volume = Endpoint();
+        Guid ctx = Guid.Empty;
+        bool transport = false;
+        if (media == "volume_up") Check(volume.VolumeStepUp(ref ctx), "step the volume up");
+        else if (media == "volume_down") Check(volume.VolumeStepDown(ref ctx), "step the volume down");
+        else if (media == "set_volume") {
+            int target;
+            // Reject out-of-range input with the bound named — never clamp it.
+            if (!Int32.TryParse(levelText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out target) || target < 0 || target > 100)
+                throw new InvalidOperationException("set_volume needs a whole number from 0 to 100. Nothing was changed.");
+            Check(volume.SetMasterVolumeLevelScalar(target / 100f, ref ctx), "set the volume");
+        }
+        else if (media == "mute") Check(volume.SetMute(true, ref ctx), "mute");
+        else if (media == "unmute") Check(volume.SetMute(false, ref ctx), "unmute");
+        else {
+            transport = true;
+            if (media == "media_play_pause") Tap(VkMediaPlayPause);
+            else if (media == "media_next") Tap(VkMediaNext);
+            else Tap(VkMediaPrevious);
+        }
+        float scalar; bool muted;
+        Check(volume.GetMasterVolumeLevelScalar(out scalar), "read the volume back");
+        Check(volume.GetMute(out muted), "read the mute state back");
+        var state = new Dictionary<string, object>();
+        state["level"] = (int)Math.Round(scalar * 100f);
+        state["muted"] = muted;
+        state["transport"] = transport ? "key-sent-unverified" : "none";
+        return new JavaScriptSerializer().Serialize(state);
+    }
+}
+
 public static class QuasnoozeCompanion {
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint key);
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
@@ -260,6 +350,11 @@ public static class QuasnoozeCompanion {
                 if (!Confirm("Open this address in your browser?\n\n" + url)) throw new InvalidOperationException("Opening the website was denied.");
                 if (expired()) throw new InvalidOperationException("Confirmation expired. Nothing was opened.");
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); result = "Opened " + url;
+            } else if (action == "media") {
+                // No MessageBox here: volume/media is reversible and arrives only
+                // through the agent's (session-grantable) approval gate. The
+                // resulting state goes back so the reply can say what is true now.
+                result = QuasnoozeAudio.Control(Value(m, "media"), Value(m, "level"));
             } else {
                 string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows), path;
                 switch (action) {

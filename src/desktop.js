@@ -117,6 +117,17 @@ export class DesktopRuntime {
     this.bridge.send({ op: action });
     return this.snapshot();
   }
+  /**
+   * Volume / media-transport request for the system_control tool. Parameters
+   * are an enum plus an optional integer — nothing here ever becomes a shell
+   * string. Resolves with the companion's JSON state reply ({level, muted,
+   * transport}); rejects with a typed error when no Windows host is attached,
+   * so callers can degrade with an actionable message instead of guessing.
+   */
+  async media(action, level) {
+    if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });
+    return this.bridge.action({ action: "media", media: action, ...(level !== undefined ? { level } : {}) });
+  }
   async request(text) {
     if (typeof text !== "string" || !text.trim() || text.length > 2000) throw Object.assign(new Error("Use a command of 1–2000 characters."), { status: 400 });
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });

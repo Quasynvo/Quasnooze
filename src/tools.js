@@ -25,6 +25,7 @@ import {
 } from "./store.js";
 import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
+import { SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
 
 /* ───────────────────────────── path sandboxing ─────────────────────────── */
 
@@ -1213,26 +1214,109 @@ export const TOOLS = [
     name: "system_control",
     dangerous: true,
     description:
-      "Lock or sleep the user's computer. Only ever after they explicitly ask. " +
-      "Actions: 'lock' or 'sleep'. Shutdown is deliberately not available.",
+      "Control the user's computer, only ever after they explicitly ask. " +
+      "Actions: 'lock', 'sleep' (whole machine), plus reversible audio/media actions " +
+      "'volume_up', 'volume_down', 'set_volume' (with level 0-100), 'mute', 'unmute', " +
+      "'media_play_pause', 'media_next', 'media_previous' — these need the Windows companion " +
+      "and report the resulting volume and mute state. Shutdown is deliberately not available.",
     parameters: {
       type: "object",
-      properties: { action: { type: "string", enum: ["lock", "sleep"] } },
+      properties: {
+        action: {
+          type: "string",
+          enum: ["lock", "sleep", ...SESSION_GRANTABLE_SYSTEM_CONTROL],
+        },
+        level: {
+          type: "integer",
+          minimum: 0,
+          maximum: 100,
+          description: "Target volume percent, 0-100. Only valid with set_volume.",
+        },
+      },
       required: ["action"],
     },
-    async run({ action }) {
-      const map = {
-        darwin: { lock: "pmset displaysleepnow", sleep: "pmset sleepnow" },
-        win32: {
-          lock: "rundll32.exe user32.dll,LockWorkStation",
-          sleep: "rundll32.exe powrprof.dll,SetSuspendState 0,1,0",
-        },
-        linux: { lock: "loginctl lock-session", sleep: "systemctl suspend" },
-      };
-      const cmd = (map[process.platform] || map.linux)[action];
-      if (!cmd) return { ok: false, output: `Unknown action: ${action}` };
-      const res = await runShell(cmd, { timeoutMs: 10_000 });
-      return { ok: res.ok, output: res.ok ? `Done: ${action}.` : `Failed: ${res.stderr.trim()}` };
+    async run({ action, level }) {
+      if (action === "lock" || action === "sleep") {
+        if (level !== undefined) {
+          return { ok: false, output: `level is only accepted with set_volume, not ${action}. Nothing was changed.` };
+        }
+        // Fixed literal commands keyed by an enum — nothing model-controlled
+        // is ever interpolated into a shell string here.
+        const map = {
+          darwin: { lock: "pmset displaysleepnow", sleep: "pmset sleepnow" },
+          win32: {
+            lock: "rundll32.exe user32.dll,LockWorkStation",
+            sleep: "rundll32.exe powrprof.dll,SetSuspendState 0,1,0",
+          },
+          linux: { lock: "loginctl lock-session", sleep: "systemctl suspend" },
+        };
+        const cmd = (map[process.platform] || map.linux)[action];
+        const res = await runShell(cmd, { timeoutMs: 10_000 });
+        return { ok: res.ok, output: res.ok ? `Done: ${action}.` : `Failed: ${res.stderr.trim()}` };
+      }
+
+      if (!SESSION_GRANTABLE_SYSTEM_CONTROL.includes(action)) {
+        return { ok: false, output: `Unknown action: ${String(action).slice(0, 40)}. Nothing was changed.` };
+      }
+
+      // Bounds are a contract, not a suggestion: out-of-range input is
+      // rejected with the bound named, never silently clamped to 100.
+      if (action === "set_volume") {
+        if (!Number.isInteger(level) || level < 0 || level > 100) {
+          return {
+            ok: false,
+            output: `set_volume needs an integer level between 0 and 100; got ${String(level).slice(0, 30)}. Nothing was changed.`,
+          };
+        }
+      } else if (level !== undefined) {
+        return { ok: false, output: `level is only accepted with set_volume, not ${action}. Nothing was changed.` };
+      }
+
+      // Volume and media keys go through the Windows companion's Core Audio /
+      // media-key host — never through a shell. Imported lazily so the tool
+      // table does not drag in the desktop runtime at module load.
+      const { desktop } = await import("./desktop.js");
+      let raw;
+      try {
+        raw = await desktop.media(action, level);
+      } catch (err) {
+        return {
+          ok: false,
+          output:
+            `${action} needs the Quasnooze Windows companion, which is not connected ` +
+            `(${String(err?.message || "no desktop host").slice(0, 120)}). ` +
+            `Start it with "npm run desktop" on Windows 10/11. There is no shell fallback ` +
+            `for volume or media control on this platform. Nothing was changed.`,
+        };
+      }
+
+      let state = null;
+      try {
+        const parsed = JSON.parse(String(raw));
+        if (parsed && typeof parsed === "object") state = parsed;
+      } catch { /* non-JSON reply handled below */ }
+      if (!state || !Number.isFinite(state.level) || typeof state.muted !== "boolean") {
+        return {
+          ok: false,
+          output:
+            `The companion did not report the resulting audio state, so treat this ${action} as unknown ` +
+            `and check the device directly. Raw companion reply: ${String(raw).slice(0, 200)}`,
+        };
+      }
+
+      const levelPct = Math.max(0, Math.min(100, Math.round(state.level)));
+      const audio = `System volume is now ${levelPct}% and ${state.muted ? "muted" : "not muted"}.`;
+      if (action.startsWith("media_")) {
+        const key = action.replace("media_", "").replace(/_/g, "/");
+        return {
+          ok: true,
+          state: { level: levelPct, muted: state.muted, transport: "key-sent-unverified" },
+          output:
+            `Sent the ${key} media key to Windows. ${audio} ` +
+            `Whether the active player actually changed playback is not verifiable from here.`,
+        };
+      }
+      return { ok: true, state: { level: levelPct, muted: state.muted }, output: audio };
     },
   },
 ];
@@ -1275,7 +1359,7 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   schedule: "Manages recurring unattended agent runs in data/schedules.json; unattended runs cannot add schedules.",
   open_url: "Asks OS default browser opener to open an http(s) URL without prompt.",
   screenshot: "Captures screen via argv binary (shell:false) to workspace image file.",
-  system_control: "Requests OS display lock or system sleep; shutdown is not implemented.",
+  system_control: "Requests OS lock/sleep via fixed literal commands; volume and media keys go through the Windows companion's Core Audio/media-key host (no shell), reporting resulting level and mute state. Shutdown is not implemented.",
 });
 
 /**

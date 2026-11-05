@@ -23,6 +23,7 @@ const ACTION_CLAIMS = [
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:ran|executed|installed|built|tested|deployed|committed|pushed)\b/i, needs: ["shell"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:scheduled|set(?: up)? (?:a )?(?:reminder|timer))\b/i, needs: ["remind"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:screenshot|screenshot taken|locked|slept)\b/i, needs: ["screenshot", "system_control"] },
+  { re: /\b(?:i(?:'ve| have)?\s+)?(?:muted|unmuted|turned (?:up|down) the volume|set the volume)\b/i, needs: ["system_control"] },
 ];
 
 /** Phrases that assert knowledge of the user, which must exist in memory. */
