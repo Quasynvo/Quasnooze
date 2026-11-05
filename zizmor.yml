@@ -1,0 +1,12 @@
+# zizmor configuration.
+#
+# welcome.yml uses pull_request_target - normally a red flag, and worth
+# one. Review (2026-11-06): that workflow never checks out the PR tree,
+# runs no fork code, reads only event metadata and posts one comment
+# with a write token scoped to pull-requests/issues. Its own header
+# documents this as design rule 2. Suppress the rule for that file only;
+# dangerous-triggers still gates every other workflow.
+rules:
+  dangerous-triggers:
+    ignore:
+      - welcome.yml

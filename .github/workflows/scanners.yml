@@ -115,7 +115,9 @@ jobs:
       # once the first report is triaged (see docs/SCANNERS.md).
       - name: OSV-Scanner (report-only)
         continue-on-error: true
-        run: /tmp/osv-scanner scan source --recursive --format sarif --output-file osv.sarif ./
+        # OSV only reliably reads an explicitly named lockfile here;
+        # scanning ./ exits 128 with 'No package sources found'.
+        run: /tmp/osv-scanner scan source --lockfile package-lock.json --format sarif --output-file osv.sarif
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
@@ -172,4 +174,4 @@ jobs:
       - name: Install zizmor
         run: pip install "zizmor==1.32.0"
       - name: zizmor
-        run: zizmor --no-online-audits .github/workflows/
+        run: zizmor --no-online-audits --config zizmor.yml .github/workflows/
