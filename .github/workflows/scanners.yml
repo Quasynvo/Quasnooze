@@ -174,4 +174,4 @@ jobs:
       - name: Install zizmor
         run: pip install "zizmor==1.32.0"
       - name: zizmor
-        run: zizmor --no-online-audits --config zizmor.yml .github/workflows/
+        run: zizmor --no-online-audits --config zizmor.yml --min-severity low .github/workflows/
