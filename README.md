@@ -249,6 +249,7 @@ From a checkout, use `node bin/quasnooze.js help`. The `pinch` entry remains a c
 |---|---|
 | `quasnooze setup` / `quasnooze doctor` | Guided configuration / readiness checks |
 | `quasnooze health` | Provider matrix, routing verdict and structured readiness; `--json` for scripts, `--baseline` for the content-free latency artifact ([diagnostics](docs/DIAGNOSTICS.md)) |
+| `quasnooze tools` | Read-only static capability and trust inventory across built-in, manifest, plugin and MCP sources without plugin execution ([tool inventory](docs/TOOL-INVENTORY.md)) |
 | `quasnooze desktop` | Windows native voice host |
 | `quasnooze chat` / `quasnooze ask "…"` | Terminal conversation / one-shot question |
 | `quasnooze pair` / `quasnooze brain-test` | Phone pairing / model and tool probe |
@@ -320,3 +321,13 @@ faithfulness is explicitly not run. No private corpus, model or network is used.
 Saving requires `--out FILE --write` and interactive confirmation; there is no
 upload or automatic personal-data export. See
 [support-bundle fields, limits and privacy caveats](docs/SUPPORT-BUNDLE.md).
+
+### Static tool capability and trust inventory
+
+`quasnooze tools` (`--json`, `--strict`) inspects built-in tools,
+`QUASNOOZE_TOOLS` manifests, `QUASNOOZE_TOOLS_DIR` plugin candidates and
+`QUASNOOZE_MCP` servers without importing plugins, running manifest commands or
+spawning MCP servers. Dynamic module/server details stay unknown until enabled
+through existing consent paths, and listed entries are never marked sandboxed or
+trusted by default. See
+[tool trust models, bounds and redaction rules](docs/TOOL-INVENTORY.md).

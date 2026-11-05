@@ -45,6 +45,18 @@ const MAX_TIMEOUT_MS = 120_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT = 12_000; // same budget as the shell tool
 
+export const MANIFEST_LIMITS = Object.freeze({
+  maxTools: MAX_TOOLS,
+  maxArgs: MAX_ARGS,
+  maxArgChars: MAX_ARG_CHARS,
+  maxTimeoutMs: MAX_TIMEOUT_MS,
+  defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+});
+
+const BARE_COMMAND_RE = /^[A-Za-z0-9._+-]{1,64}$/;
+const PATH_LIKE_COMMAND_RE =
+  /(?:[\\/]|^~(?=$|[\\/])|^\$(?:\{?HOME\}?|USERPROFILE)\b|^%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%|^[A-Za-z]:)/i;
+
 /** A manifest entry was unusable. Carries the entry name so the log can name it. */
 class ManifestError extends Error {}
 
@@ -361,4 +373,276 @@ export async function startCustomTools({ registerTool, path, workspaceRoots = []
   }
 
   return result;
+}
+
+/**
+ * Pure static validation of a parsed custom-tool manifest object.
+ *
+ * Unlike `startCustomTools` / `toTool`, this function never probes `PATH`,
+ * never stats candidate executables, never spawns a process, and withholds raw
+ * argument vectors, credential-shaped fields, and filesystem command paths.
+ */
+export function inspectManifestData(
+  parsed,
+  {
+    reservedNames = new Set(),
+    workspaceRoots = [],
+    home = "",
+    autoApprove = false,
+    isProtectedPath = () => false,
+    sanitizeText = (v) => ({ text: String(v ?? ""), redactions: [] }),
+    isCredentialKey = () => false,
+  } = {},
+) {
+  const manifestRedactions = new Set();
+  const warnings = [];
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      reason: "invalid-manifest-object",
+      declaredTools: 0,
+      tools: [],
+      skipped: [],
+      redactions: [],
+      warnings,
+    };
+  }
+
+  for (const key of Object.keys(parsed)) {
+    if (key !== "tools" && key !== "$comment" && isCredentialKey(key)) {
+      manifestRedactions.add("credential-field");
+    }
+  }
+  if (typeof parsed.$comment === "string") {
+    for (const kind of sanitizeText(parsed.$comment).redactions) manifestRedactions.add(kind);
+  }
+
+  if (!Array.isArray(parsed.tools)) {
+    return {
+      ok: false,
+      reason: "missing-tools-array",
+      declaredTools: 0,
+      tools: [],
+      skipped: [],
+      redactions: [...manifestRedactions],
+      warnings,
+    };
+  }
+
+  if (parsed.tools.length > MAX_TOOLS) {
+    return {
+      ok: false,
+      reason: "too-many-tools",
+      declaredTools: parsed.tools.length,
+      tools: [],
+      skipped: [],
+      redactions: [...manifestRedactions],
+      warnings,
+    };
+  }
+
+  const seenNames = new Set(reservedNames);
+  const tools = [];
+  const skipped = [];
+
+  for (const raw of parsed.tools) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      skipped.push({ name: "<invalid>", reason: "entry-not-object" });
+      continue;
+    }
+
+    const entryRedactions = new Set();
+    for (const key of Object.keys(raw)) {
+      if (isCredentialKey(key)) {
+        entryRedactions.add("credential-field");
+        manifestRedactions.add("credential-field");
+      }
+    }
+    if ("trusted" in raw) {
+      warnings.push("unsupported-trusted-field-ignored");
+    }
+
+    const rawName = typeof raw.name === "string" ? raw.name : "";
+    const nameSanitized = sanitizeText(rawName);
+    if (!rawName || !NAME_RE.test(rawName) || nameSanitized.redactions.length > 0) {
+      for (const kind of nameSanitized.redactions) manifestRedactions.add(kind);
+      skipped.push({ name: "<invalid>", reason: "invalid-name" });
+      continue;
+    }
+    if (seenNames.has(rawName)) {
+      skipped.push({ name: rawName, reason: "name-collision" });
+      continue;
+    }
+
+    if (typeof raw.description !== "string" || raw.description.trim().length < 8) {
+      skipped.push({ name: rawName, reason: "invalid-description" });
+      continue;
+    }
+
+    if (typeof raw.command !== "string" || !raw.command.trim()) {
+      skipped.push({ name: rawName, reason: "invalid-command" });
+      continue;
+    }
+    const cmdRaw = raw.command.trim();
+    let commandKind = "bare";
+    let commandDisplay = cmdRaw;
+    if (PATH_LIKE_COMMAND_RE.test(cmdRaw)) {
+      entryRedactions.add("personal-or-filesystem-path");
+      manifestRedactions.add("personal-or-filesystem-path");
+      if (cmdRaw.split(/[\\/]+/).includes("..")) {
+        skipped.push({ name: rawName, reason: "command-traversal-rejected" });
+        continue;
+      }
+      const expanded = home ? cmdRaw.replace(/^~(?=$|[\\/])/, home) : cmdRaw;
+      if (
+        !/^\$(?:\{?HOME\}?|USERPROFILE)\b/i.test(cmdRaw) &&
+        !/^%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%/i.test(cmdRaw)
+      ) {
+        const resolvedCmd = isAbsolute(expanded) ? resolve(expanded) : resolve(expanded);
+        if (isProtectedPath(resolvedCmd)) {
+          skipped.push({ name: rawName, reason: "protected-command-path" });
+          continue;
+        }
+        try {
+          assertOutsideWorkspace(resolvedCmd, workspaceRoots);
+        } catch {
+          skipped.push({ name: rawName, reason: "command-inside-workspace" });
+          continue;
+        }
+      }
+      commandKind = "path";
+      commandDisplay = "[REDACTED_PATH]";
+    } else {
+      const cmdSanitized = sanitizeText(cmdRaw);
+      if (!BARE_COMMAND_RE.test(cmdRaw) || cmdSanitized.redactions.length > 0) {
+        commandKind = "redacted";
+        commandDisplay = "[REDACTED]";
+        for (const kind of cmdSanitized.redactions) {
+          entryRedactions.add(kind);
+          manifestRedactions.add(kind);
+        }
+      }
+    }
+
+    if (!Array.isArray(raw.args)) {
+      skipped.push({ name: rawName, reason: "missing-args-array" });
+      continue;
+    }
+    if (raw.args.length > MAX_ARGS) {
+      skipped.push({ name: rawName, reason: "too-many-args" });
+      continue;
+    }
+    if (raw.args.some((token) => typeof token !== "string")) {
+      skipped.push({ name: rawName, reason: "non-string-arg" });
+      continue;
+    }
+
+    let undeclaredPlaceholder = false;
+    for (const token of raw.args.join(" ").matchAll(PLACEHOLDER_RE)) {
+      if (!raw.parameters || typeof raw.parameters !== "object" || !(token[1] in raw.parameters)) {
+        undeclaredPlaceholder = true;
+        break;
+      }
+    }
+    if (undeclaredPlaceholder) {
+      skipped.push({ name: rawName, reason: "undeclared-placeholder" });
+      continue;
+    }
+
+    if (raw.args.length > 0) {
+      entryRedactions.add("arguments-withheld");
+      manifestRedactions.add("arguments-withheld");
+      for (const token of raw.args) {
+        for (const kind of sanitizeText(token).redactions) {
+          entryRedactions.add(kind);
+          manifestRedactions.add(kind);
+        }
+      }
+    }
+
+    let parsedParams;
+    try {
+      parsedParams = parseParameters(raw.parameters, rawName);
+    } catch {
+      skipped.push({ name: rawName, reason: "invalid-parameters" });
+      continue;
+    }
+
+    if (raw.parameters && typeof raw.parameters === "object" && !Array.isArray(raw.parameters)) {
+      for (const [paramKey, spec] of Object.entries(raw.parameters)) {
+        if (isCredentialKey(paramKey)) {
+          entryRedactions.add("credential-field");
+          manifestRedactions.add("credential-field");
+        }
+        if (spec && typeof spec === "object" && !Array.isArray(spec)) {
+          for (const specKey of Object.keys(spec)) {
+            if (isCredentialKey(specKey)) {
+              entryRedactions.add("credential-field");
+              manifestRedactions.add("credential-field");
+            }
+          }
+          if (typeof spec.description === "string") {
+            for (const kind of sanitizeText(spec.description).redactions) {
+              entryRedactions.add(kind);
+              manifestRedactions.add(kind);
+            }
+          }
+        }
+      }
+    }
+
+    const cleanDesc = sanitizeText(raw.description.trim());
+    for (const kind of cleanDesc.redactions) {
+      entryRedactions.add(kind);
+      manifestRedactions.add(kind);
+    }
+
+    const timeoutNum = Number(raw.timeout_ms);
+    const timeoutMs =
+      Number.isFinite(timeoutNum) && timeoutNum > 0
+        ? Math.min(Math.round(timeoutNum), MAX_TIMEOUT_MS)
+        : DEFAULT_TIMEOUT_MS;
+
+    const paramNames = Object.keys(parsedParams.properties);
+    const allowLeadingDashParameters = paramNames.filter(
+      (key) => parsedParams.specs?.[key]?.allowLeadingDash === true,
+    );
+
+    seenNames.add(rawName);
+    tools.push(
+      Object.freeze({
+        name: rawName,
+        source: "customManifest",
+        state: "configured-unverified",
+        executed: false,
+        executableVerified: false,
+        dangerous: true,
+        trusted: false,
+        approvalPolicy: "approval-required",
+        effectiveInteractivePolicy: autoApprove ? "auto-approved-by-config" : "approval-required",
+        unattendedPolicy: "refused",
+        sandboxed: false,
+        commandKind,
+        command: commandDisplay,
+        argCount: raw.args.length,
+        parameters: Object.freeze(paramNames),
+        requiredParameters: Object.freeze([...parsedParams.required]),
+        allowLeadingDashParameters: Object.freeze(allowLeadingDashParameters),
+        timeoutMs,
+        description: cleanDesc.text,
+        redactions: Object.freeze([...entryRedactions]),
+      }),
+    );
+  }
+
+  return {
+    ok: true,
+    reason: null,
+    declaredTools: parsed.tools.length,
+    tools,
+    skipped,
+    redactions: [...manifestRedactions],
+    warnings: [...new Set(warnings)],
+  };
 }
