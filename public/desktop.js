@@ -15,12 +15,18 @@ async function api(path, body) {
 function setText(id, text) { if ($(id).textContent !== text) $(id).textContent = text; }
 function toast(text) { $('toast').textContent=text; $('toast').hidden=false; clearTimeout(toast.timer); toast.timer=setTimeout(()=>$('toast').hidden=true,5000); }
 const labels = {starting:['Starting the Windows host.','Waiting for its ready event; microphone is off.'],recovering:['Companion recovery in progress.','Reconnects start muted. Interrupted side-effect outcomes are unknown; nothing is replayed.'],unavailable:['Companion unavailable.','Automatic retries stopped. Inspect interrupted actions, then explicitly Retry companion.'],'not-running':['Desktop is not connected.','Run the Windows host for local wake listening, spoken replies and desktop actions.'], muting:['Stopping the local microphone.','Waiting for Windows to confirm release; input status is not yet off.'], muted:['Here. With the microphone off.','Enable local wake in the native widget when you want hands-free help.'], armed:['Call me when you need me.','Say “Hey Quasnooze”, pause for LISTENING, then give one request.'], listening:['I’m listening.','One request at a time. Local Windows speech recognition is active.'], working:['Working on your request.','Microphone paused while the request runs. Common actions skip model inference.'], approval:['Your call. Not mine.','Review the exact action below or in the Windows widget. Voice cannot approve it.'], speaking:['Here’s what happened.','Local Windows speech is reading the result. Stop voice does not cancel a running task.'], ready:['Done. Still here.','See the result below. You remain in control of the next action.'], attention:['Something needs attention.','Read the actual error below. No fake offline conversation or automatic cloud fallback.'], reminder:['A little nudge.','Your reminder is here.']};
+function kindText(ok, acted, fastPath) {
+ const head = !ok ? 'NEEDS ATTENTION' : (acted === false ? 'REPLIED · NO TOOLS RAN' : 'COMPLETED');
+ return head + (fastPath ? ' · NO LLM' : ' · LOCAL MODEL');
+}
 function publishMotion(state) { if (typeof CustomEvent === 'function' && typeof globalThis.dispatchEvent === 'function') globalThis.dispatchEvent(new CustomEvent('quasnooze:motion', {detail:state})); }
 function render(state) {
  publishMotion(state);
  $('retryButton').disabled=false;
  current=state; const phase=state.phase || 'not-running', label=labels[phase] || labels.ready;
- $('presence').dataset.phase=phase; $('phase').textContent=phase.replaceAll('-',' ').toUpperCase(); $('presenceTitle').textContent=label[0]; $('presenceCopy').textContent=label[1];
+ $('presence').dataset.phase=phase; $('phase').textContent=phase.replaceAll('-',' ').toUpperCase();
+ $('presenceTitle').textContent=(phase === 'ready' && state.acted === false) ? 'Replied. No tools ran.' : label[0];
+ $('presenceCopy').textContent=label[1];
  setText('micState', state.micUnknown ? 'UNKNOWN' : (state.mic ? 'ON':'OFF')); $('nativeStatus').textContent=state.available ? 'CONNECTED':'NOT RUNNING';
  $('nativeCopy').textContent=state.available ? (state.voice || 'Windows voice host connected.') : (state.text || 'Run npm run desktop on Windows. This webpage never turns on a browser speech recognizer.');
  $('speechDetail').textContent=state.speech ? 'Last speech event — '+state.speech.status.toUpperCase()+': '+state.speech.detail : 'Press Talk locally, accept the native microphone dialog, then speak when LISTENING appears. Uses the Windows default recording device.';
@@ -35,7 +41,10 @@ function render(state) {
  $('latency').textContent=Number.isFinite(state.firstTextMs) ? `${state.firstTextMs} ms first text · ${total}` : (state.lastMs == null ? 'Not measured' : `${state.lastMs} ms`);
  if (state.busy && !state.draft && !state.approval) { $('result').textContent='Preparing a reply…'; $('resultKind').textContent='REQUEST IN PROGRESS'; }
  if (state.busy && state.draft && !state.approval) { $('result').textContent=state.draft; $('resultKind').textContent='RESPONDING · LOCAL MODEL'; }
- if (!state.busy && state.text && (state.recent?.length || phase === 'reminder')) $('result').textContent=state.text;
+ if (!state.busy && state.text && (state.recent?.length || phase === 'reminder')) {
+  $('result').textContent=state.text;
+  if (state.recent?.length && phase !== 'reminder') $('resultKind').textContent=kindText(state.recent[0].ok, state.acted, state.fastPath);
+ }
  const previousApproval=approvalId, permissionFocused=$('permission').contains(document.activeElement) || (permissionFocusRequest && permissionFocusRequest === approvalId && document.activeElement === document.body);
  approvalId=state.approval?.id || ''; $('permission').hidden=!approvalId; $('approvalText').textContent=(state.approval?.description || '') + (state.approval?.preview ? '\n'+approvalPreviewText(state.approval.preview) : '');
  setText('permissionStatus', approvalId ? 'Permission required. Review the action, then choose Allow once or Deny. Escape denies only while focus is in these permission controls.' : 'No tool approval pending.');
@@ -65,7 +74,7 @@ async function refresh() {
 async function run(text) {
  if (!text.trim()) return;
  $('runButton').disabled=true; $('resultKind').textContent='REQUEST IN PROGRESS';
- try { const result=await api('/api/desktop',{text}); $('result').textContent=result.text; $('resultKind').textContent=(result.ok ? 'COMPLETED':'NEEDS ATTENTION')+(result.fastPath ? ' · NO LLM':' · LOCAL MODEL'); }
+ try { const result=await api('/api/desktop',{text}); $('result').textContent=result.text; $('resultKind').textContent=kindText(result.ok, result.acted, result.fastPath); }
  catch(err) { $('result').textContent=err.message; $('resultKind').textContent='REFUSED'; }
  finally { await refresh(); }
 }

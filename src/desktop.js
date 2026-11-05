@@ -126,21 +126,21 @@ export class DesktopRuntime {
     this.update({ phase: "working", text: "Working…", draft: "", firstTextMs: null, lastMs: null });
     this.bridge?.send({ op: "working" }); // releases recognition until the response finishes
     const intent = desktopIntent(text);
-    let reply, failed = false, streamDraft = "", lastDraftAt = 0;
+    let reply, failed = false, acted = intent.kind !== "agent", streamDraft = "", lastDraftAt = 0;
     try {
       switch (intent.kind) {
         case "persona": reply = personaCommand(text, SESSION); break;
         case "time": reply = `It is ${new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: config.timezone })}.`; break;
         case "system": reply = `${(freemem() / 2 ** 30).toFixed(1)} GB free of ${(totalmem() / 2 ** 30).toFixed(1)} GB RAM. Computer uptime: ${Math.floor(uptime() / 3600)} hours.`; break;
         case "mute": this.control("mute"); reply = "Microphone muted."; break;
-        case "unsupported-open": reply = "I can open Calculator, Notepad, File Explorer, GitHub, YouTube, Google, or an explicit https:// address. I will not guess an executable or run a shell command."; break;
+        case "unsupported-open": acted = false; reply = "I can open Calculator, Notepad, File Explorer, GitHub, YouTube, Google, or an explicit https:// address. I will not guess an executable or run a shell command."; break;
         case "native":
           if (!this.bridge) throw new Error("Start npm run desktop on Windows for local app and clipboard actions.");
           reply = await this.bridge.action(intent); break;
         case "find": reply = await this.finder(intent.query); break;
         case "reminder": {
           const when = parseWhen(intent.when);
-          if (!when || when.at.getTime() <= Date.now()) { reply = "Please use a future time, for example: remind me in 20 minutes to stretch."; break; }
+          if (!when || when.at.getTime() <= Date.now()) { acted = false; reply = "Please use a future time, for example: remind me in 20 minutes to stretch."; break; }
           if (!this.bridge) throw new Error("Start the Windows companion so this reminder can be delivered there.");
           addReminder({ id: `r_${randomUUID()}`, text: intent.text.slice(0, 300), at: when.at.toISOString(), address: "desktop:resident", channel: "desktop", sessionId: SESSION, fired: false, createdAt: new Date().toISOString() });
           reply = `Reminder set for ${formatClock(when.at, config.timezone)}: ${intent.text}. Quasnooze must be running to deliver it.`; break;
@@ -170,18 +170,29 @@ export class DesktopRuntime {
               this.bridge?.send({ op: "approval", id: event.id, text: event.description + (event.preview ? "\n" + formatActionPreview(event.preview) : "") });
             } else if (event.type === "tool") { this.approval = null; this.update({ phase: "working", text: event.label || event.name }); }
           } });
-          reply = result.text; failed = Boolean(result.error); break;
+          const traceList = Array.isArray(result.trace) ? result.trace : null;
+          const succeededTool = Boolean(
+            traceList?.some((t) => t && t.ok && !t.denied && t.verification?.status !== "contradicted")
+          );
+          const contradicted = Boolean(traceList?.some((t) => t?.verification?.status === "contradicted"));
+          const guarded = Boolean(result.guard?.length);
+          const allToolsFailed = Boolean(traceList?.length && !succeededTool);
+          reply = result.text;
+          failed = Boolean(result.error || guarded || contradicted || allToolsFailed);
+          acted = traceList ? succeededTool : !failed;
+          break;
         }
       }
-    } catch (err) { reply = String(err.message || "Desktop request failed."); failed = true; }
+    } catch (err) { reply = String(err.message || "Desktop request failed."); failed = true; acted = false; }
     finally { this.busy = false; this.approval = null; }
-    if (epoch !== this.epoch) return { text: reply, ok: false, ms: Date.now() - started, fastPath: intent.kind !== "agent" };
+    const fastPath = intent.kind !== "agent";
+    if (epoch !== this.epoch) return { text: reply, ok: false, acted: false, ms: Date.now() - started, fastPath };
     if (this.notices.length) reply = `${this.notices.splice(0).map((notice) => `Reminder: ${notice}`).join("\n")}\n\n${reply}`;
     const ms = Date.now() - started;
-    this.recent.unshift({ command: text.slice(0, 160), ok: !failed, ms }); this.recent = this.recent.slice(0, 8);
-    this.update({ phase: failed ? "attention" : "ready", text: reply, draft: "", lastMs: ms });
+    this.recent.unshift({ command: text.slice(0, 160), ok: !failed, acted, ms }); this.recent = this.recent.slice(0, 8);
+    this.update({ phase: failed ? "attention" : "ready", acted, fastPath, text: reply, draft: "", lastMs: ms });
     this.bridge?.send({ op: "reply", text: reply.slice(0, 4000), speak: intent.kind !== "mute" && !failed });
-    return { text: reply, ok: !failed, ms, fastPath: intent.kind !== "agent" };
+    return { text: reply, ok: !failed, acted, ms, fastPath };
   }
   notify(text) {
     const notice = String(text).slice(0, 2000);

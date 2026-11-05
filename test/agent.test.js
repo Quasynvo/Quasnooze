@@ -91,15 +91,21 @@ test("dangerous tool asks permission and runs when allowed", async () => {
 
 test("dangerous tool is blocked when the user denies", async () => {
   const marker = join(sandbox, "should-not-exist.txt");
+  const events = [];
   const result = await runAgent({
     sessionId: "test-deny",
     text: `run touch ${marker}`,
     onEvent: (e) => {
+      events.push(e);
       if (e.type === "approval") answerApproval(e.id, false);
     },
   });
   assert.equal(existsSync(marker), false, "denied command must not execute");
-  assert.ok(result.trace.some((t) => t.denied));
+  assert.ok(result.trace.some((t) => t.denied && t.ok === false));
+  const doneEvent = events.find((e) => e.type === "tool_done" && e.name === "shell");
+  assert.ok(doneEvent, "interactive denial must emit tool_done so UI step status shows failure");
+  assert.equal(doneEvent.ok, false);
+  assert.equal(doneEvent.denied, true);
 });
 
 test("shell output is captured into the conversation", async () => {
