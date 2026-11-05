@@ -110,7 +110,7 @@ test('packaged runtime reads user config and persists data across restart and pa
     const root = join(base, install);
     fs.mkdirSync(join(root, 'src'), { recursive: true });
     fs.writeFileSync(join(root, 'package.json'), '{"type":"module"}');
-    for (const name of ['config.js', 'brand-config.js', 'state-paths.js', 'store.js']) {
+    for (const name of ['config.js', 'brand-config.js', 'state-paths.js', 'providers.js', 'store.js']) {
       fs.copyFileSync(join(repo, 'src', name), join(root, 'src', name));
     }
     const code = `const {config}=await import(${JSON.stringify(pathToFileURL(join(root, 'src/config.js')).href)});

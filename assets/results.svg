@@ -11,7 +11,7 @@
 <text class="l" x="48" y="344">Speech commands — clean (synthetic text, no mic)</text><rect class="bar" x="48" y="354" width="820" height="18" rx="9"/><rect class="f2" x="48" y="354" width="820" height="18" rx="9"/><text class="v" x="888" y="369">14 utterances · 100%</text>
 <text class="l" x="48" y="400">Speech commands — accented (synthetic text, no mic)</text><rect class="bar" x="48" y="410" width="820" height="18" rx="9"/><rect class="warn" x="48" y="410" width="615" height="18" rx="9"/><text class="v" x="888" y="425">12 utterances · 75.0%</text>
 <text class="l" x="48" y="456">Speech commands — noisy (synthetic text, no mic)</text><rect class="bar" x="48" y="466" width="820" height="18" rx="9"/><rect class="warn" x="48" y="466" width="547" height="18" rx="9"/><text class="v" x="888" y="481">12 utterances · 66.7%</text>
-<text class="l" x="48" y="512">Speech commands — numbers &amp; names (no mic)</text><rect class="bar" x="48" y="522" width="820" height="18" rx="9"/><rect class="warn" x="48" y="522" width="492" height="18" rx="9"/><text class="v" x="888" y="537">10 · 60.0% (weakest)</text>
+<text class="l" x="48" y="512">Speech commands — numbers &amp; names (no mic)</text><rect class="bar" x="48" y="522" width="820" height="18" rx="9"/><rect class="warn" x="48" y="522" width="574" height="18" rx="9"/><text class="v" x="888" y="537">10 · 70.0% (weakest)</text>
 </g>
 <rect class="card" x="48" y="540" width="1104" height="52" rx="12"/>
 <text class="s" x="68" y="572">Not measured: physical microphone, real-user phrasing, or a named model's intelligence. Fast-path end-to-end: 4.3 ms p50 (n=50, docs/FAST-PATH-EVAL.md).</text>

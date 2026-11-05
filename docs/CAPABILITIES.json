@@ -1,5 +1,5 @@
 {
-  "$comment": "Quasnooze's capability inventory. Every entry claims evidence — a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
+  "$comment": "Quasnooze's capability inventory. Every entry claims evidence \u2014 a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
   "$policy": "in-scope may be proposed. settled has been decided and is only shown so the decision stays visible. out-of-scope contradicts the product identity in .github/prompts/self-improvement.md; the researcher reports it and the proposer is forbidden from acting on it.",
   "updated": "2026-11-05",
   "capabilities": [
@@ -39,8 +39,10 @@
       "status": "have",
       "policy": "settled",
       "evidence": [
-        "src/brain.js: openai-compatible provider via OPENAI_API_KEY"
-      ]
+        "src/brain.js: openai-compatible provider via OPENAI_API_KEY",
+        "src/providers.js: named presets for OpenAI, Anthropic, Gemini, Groq, OpenRouter, Mistral, DeepSeek, Together, xAI plus local LM Studio/llama.cpp/vLLM; quasnooze providers lists them"
+      ],
+      "note": "LLM_PROVIDER names a preset; unknown names fall back to local Ollama, never to a cloud."
     },
     {
       "id": "model-switching",
@@ -116,7 +118,7 @@
         "src/agent.js: tier checked before the approval gate; blocked refuses without asking",
         "test/risk.test.js: 10 attack vectors + the agent loop and the QUASNOOZE_RISK_TIERS=0 kill switch"
       ],
-      "note": "Not a denylist and not a permission prompt you click through blind. A command is 'read' only if argv[0] is on a fixed list of readers, no character in it can chain or redirect, and every path argument resolves inside the workspace. git diff/show are excluded because they can execute repo code (textconv). Anything unrecognised falls to 'act', which asks — so the failure mode is a prompt, not a run."
+      "note": "Not a denylist and not a permission prompt you click through blind. A command is 'read' only if argv[0] is on a fixed list of readers, no character in it can chain or redirect, and every path argument resolves inside the workspace. git diff/show are excluded because they can execute repo code (textconv). Anything unrecognised falls to 'act', which asks \u2014 so the failure mode is a prompt, not a run."
     },
     {
       "id": "chat-channels",
@@ -240,13 +242,13 @@
       "status": "have",
       "policy": "in-scope",
       "evidence": [
-        "src/sources.js: a per-turn registry — only what this turn actually retrieved can be cited",
-        "src/citations.js: citedIds() / validateCitations() — [1], [1,3] and [1-3], checked against the registry",
-        "src/guard.js: 'invented-citation' — a [n] with no source behind it is reported to the user",
+        "src/sources.js: a per-turn registry \u2014 only what this turn actually retrieved can be cited",
+        "src/citations.js: citedIds() / validateCitations() \u2014 [1], [1,3] and [1-3], checked against the registry",
+        "src/guard.js: 'invented-citation' \u2014 a [n] with no source behind it is reported to the user",
         "test/citations.test.js: 'the guard flags a citation to something this turn never fetched'",
         "docs/GUIDE.md: the 'Where the answer came from' section"
       ],
-      "note": "Validated, not decorative. Every citation is checked against the list of things the turn actually fetched, and a citation that names nothing becomes a visible guard flag rather than a dead link. Sources come from web search, files read, and attachments — not from the model's memory. What this does NOT do: verify that a source supports the sentence it is attached to. That is a semantic judgement, and a code-level check that claims to make it would be lying."
+      "note": "Validated, not decorative. Every citation is checked against the list of things the turn actually fetched, and a citation that names nothing becomes a visible guard flag rather than a dead link. Sources come from web search, files read, and attachments \u2014 not from the model's memory. What this does NOT do: verify that a source supports the sentence it is attached to. That is a semantic judgement, and a code-level check that claims to make it would be lying."
     },
     {
       "id": "file-upload",
@@ -268,7 +270,7 @@
         "public/index.html: attach button, drag-and-drop, clipboard paste",
         "test/attachment-http.test.js: proves the text reaches the model"
       ],
-      "note": "Text, PDF, DOCX and images. No OCR for scanned PDFs, no .doc/.xls, nothing written to disk — attachments live in memory for one message."
+      "note": "Text, PDF, DOCX and images. No OCR for scanned PDFs, no .doc/.xls, nothing written to disk \u2014 attachments live in memory for one message."
     },
     {
       "id": "image-understanding",
@@ -306,7 +308,7 @@
         "src/documents.js: bounded incremental in-memory passage index and BM25 ranking",
         "src/tools.js: search_documents registers file-and-line citations in the turn source registry",
         "test/documents.test.js: retrieval, freshness, exclusions, limits, workspace policy and real-tool citation integration",
-        "docs/GUIDE.md: Search your documents — supported formats and honest limits"
+        "docs/GUIDE.md: Search your documents \u2014 supported formats and honest limits"
       ],
       "note": "Offline BM25 retrieval for text/Markdown/RST/CSV and best-effort PDF/DOCX extraction. No embeddings, semantic matching, OCR or persistent vector store. Explicit folder; bounded scans report partial coverage."
     },
@@ -322,8 +324,8 @@
       "status": "have",
       "policy": "in-scope",
       "evidence": [
-        "src/mcp.js: JSON-RPC over stdio, initialize → tools/list → tools/call",
-        "src/tools.js: registerTool() — dynamic registry, refuses to shadow a built-in",
+        "src/mcp.js: JSON-RPC over stdio, initialize \u2192 tools/list \u2192 tools/call",
+        "src/tools.js: registerTool() \u2014 dynamic registry, refuses to shadow a built-in",
         "test/mcp.test.js: 'a third-party tool is offered to the model over HTTP'",
         "docs/GUIDE.md: the QUASNOOZE_MCP section"
       ],
@@ -344,17 +346,17 @@
       "status": "have",
       "policy": "in-scope",
       "evidence": [
-        "pinch-tools.example.json: a JSON manifest entry is a tool — name, description, command, args",
+        "pinch-tools.example.json: a JSON manifest entry is a tool \u2014 name, description, command, args",
         "src/tools.js: loadLocalTools() loads owner-reviewed QUASNOOZE_TOOLS_DIR .js/.mjs modules via registerTool(), refuses collisions and workspace directories, defaults dangerous:true",
         "src/cli.js: local modules loaded before terminal turns",
         "src/index.js: local modules loaded before server/desktop turns",
         "test/tools.test.js: module loading, trust defaults, approval/denial/unattended refusal and workspace/symlink restrictions",
         "src/custom-tools.js: startCustomTools() resolves the executable, refuses anything inside the workspace, registers via registerTool() with dangerous:true",
         "src/index.js: loaded before listen(), so the tool list is final before anything can ask for it",
-        "test/custom-tools.test.js: 'a model-supplied argument is data, never a shell' — the semicolon test",
-        "docs/GUIDE.md: 'Your own tools (no code required)' — the five guards and what is not supported"
+        "test/custom-tools.test.js: 'a model-supplied argument is data, never a shell' \u2014 the semicolon test",
+        "docs/GUIDE.md: 'Your own tools (no code required)' \u2014 the five guards and what is not supported"
       ],
-      "note": "Four extension paths: owner-reviewed local JavaScript modules (QUASNOOZE_TOOLS_DIR; not sandboxed), a JSON manifest for a command you already run (src/custom-tools.js), an MCP server for someone else's tools (src/mcp.js), and a built-in for contributors. Manifest tools are always behind the approval gate — there is no trusted-server opt-out, because the arguments come from the model rather than from code you can read first."
+      "note": "Four extension paths: owner-reviewed local JavaScript modules (QUASNOOZE_TOOLS_DIR; not sandboxed), a JSON manifest for a command you already run (src/custom-tools.js), an MCP server for someone else's tools (src/mcp.js), and a built-in for contributors. Manifest tools are always behind the approval gate \u2014 there is no trusted-server opt-out, because the arguments come from the model rather than from code you can read first."
     },
     {
       "id": "scheduled-agents",
@@ -371,13 +373,13 @@
       "status": "have",
       "policy": "in-scope",
       "evidence": [
-        "src/schedules.js: parseCadence() accepts `every 30m`, `daily at 09:00`, `weekly on mon at 8:00` — nothing else parses",
-        "src/scheduler.js: runSchedules() — a due schedule is a full agent turn, delivered back to the chat that created it",
+        "src/schedules.js: parseCadence() accepts `every 30m`, `daily at 09:00`, `weekly on mon at 8:00` \u2014 nothing else parses",
+        "src/scheduler.js: runSchedules() \u2014 a due schedule is a full agent turn, delivered back to the chat that created it",
         "src/agent.js: runAgent({autonomy:'unattended'}) refuses every dangerous tool before the approval gate",
         "test/schedules.test.js: 'an unattended turn refuses a dangerous tool and leaves no approval pending'",
         "docs/GUIDE.md: the 'Tasks that run without you' section"
       ],
-      "note": "No catch-up: a schedule missed while the machine was asleep runs once, late, not N times. Interval cadences are measured from the last run, daily/weekly resolve in the owner's timezone, minimum interval 5 minutes, at most 20 schedules. An unattended turn can never approve anything — dangerous tools are refused and the refusal is in the transcript — and it cannot create further schedules, so a loop cannot spawn loops. QUASNOOZE_SCHEDULED_RUNS=0 stops all of it."
+      "note": "No catch-up: a schedule missed while the machine was asleep runs once, late, not N times. Interval cadences are measured from the last run, daily/weekly resolve in the owner's timezone, minimum interval 5 minutes, at most 20 schedules. An unattended turn can never approve anything \u2014 dangerous tools are refused and the refusal is in the transcript \u2014 and it cannot create further schedules, so a loop cannot spawn loops. QUASNOOZE_SCHEDULED_RUNS=0 stops all of it."
     },
     {
       "id": "conversation-search",
@@ -460,7 +462,7 @@
         "test/agent.test.js: persona switching changes model requests while preserving system rules, approvals and honesty checks",
         "test/personas.test.js: atomic persistence, cross-process reuse, session isolation, export, validation and corrupt-file protection",
         "test/desktop.test.js: persona commands work locally without model inference",
-        "docs/GUIDE.md: Saved personas — command examples, limits and privacy boundaries"
+        "docs/GUIDE.md: Saved personas \u2014 command examples, limits and privacy boundaries"
       ],
       "note": "Named local style/instruction presets selected per session. Presets are subordinate user-role preferences, not system-prompt replacements; tool approvals and honesty checks remain independent. No live-model tone-quality benchmark is claimed."
     },
@@ -542,7 +544,7 @@
         "src/cost.js + GET /api/health: cost of the last 30 days as a range",
         "src/readiness.js + src/baseline.js: structured readiness states derived from the doctor, and a synthetic content-free latency baseline via npm run health -- --baseline (docs/DIAGNOSTICS.md)"
       ],
-      "note": "Local only, never transmitted, and it records timings and counts — not message text. No dashboards and no distributed tracing: this is a file you can `tail`, not an observability platform."
+      "note": "Local only, never transmitted, and it records timings and counts \u2014 not message text. No dashboards and no distributed tracing: this is a file you can `tail`, not an observability platform."
     },
     {
       "id": "deterministic-fast-path",

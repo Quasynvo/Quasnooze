@@ -2,7 +2,7 @@
 
 Fixture SHA-256: `f9ae8d4166658b05d26c5287833c1f9dbfc6a7d33d2b044da250d4aab513d6a5`
 
-Engine: existing bounded lexical BM25; defaults unchanged. 7 documents, 8 labelled passages; 7 answerable and 3 no-answer queries.
+Engine: bounded lexical BM25 with a >=50% query-term coverage gate. 7 documents, 8 labelled passages; 7 answerable and 3 no-answer queries.
 
 - Recall@k = distinct labelled relevant passages in the first k hits / all labelled relevant passages; macro-mean over answerable queries only.
 - MRR@k = macro-mean of 1 / first relevant hit rank (1-based), or 0 when absent within k, over answerable queries only.
@@ -15,20 +15,20 @@ Engine: existing bounded lexical BM25; defaults unchanged. 7 documents, 8 labell
 | 1 | 0.928571 | 1.000000 |
 | 5 | 1.000000 | 1.000000 |
 
-No-answer: 2/3 empty; 1 false positive(s).
+No-answer: 3/3 empty; 0 false positive(s).
 
 | Query | Relevant | Returned (rank order) | Cold indexed/reused | Warm indexed/reused |
 |---|---|---|---|---|
 | travel-ceiling | travel | travel, meals | 7/0 | 0/7 |
-| meal-ceiling | meals | meals, travel | 7/0 | 0/7 |
-| workshop-hours | access | access, handbook, handbook-assembly | 7/0 | 0/7 |
+| meal-ceiling | meals | meals | 7/0 | 0/7 |
+| workshop-hours | access | access | 7/0 | 0/7 |
 | garden-care | garden | garden | 7/0 | 0/7 |
 | release-beacon | release | release | 7/0 | 0/7 |
 | evacuation-route | handbook | handbook | 7/0 | 0/7 |
-| evacuation-complete | handbook, handbook-assembly | handbook-assembly, handbook, access | 7/0 | 0/7 |
+| evacuation-complete | handbook, handbook-assembly | handbook-assembly, handbook | 7/0 | 0/7 |
 | absent-vocabulary | (none) | (none) | 7/0 | 0/7 |
 | absent-medical | (none) | (none) | 7/0 | 0/7 |
-| overlap-no-answer | (none) | travel, meals | 7/0 | 0/7 |
+| overlap-no-answer | (none) | (none) | 7/0 | 0/7 |
 
 ## Stale updates and bounds
 
@@ -162,16 +162,7 @@ Model answer faithfulness: **not-run**; 0 model answers; score null. No model wa
 ## Observed failures
 
 ```json
-[
-  {
-    "kind": "no-answer-false-positive",
-    "query": "overlap-no-answer",
-    "returned": [
-      "travel",
-      "meals"
-    ]
-  }
-]
+[]
 ```
 
 This tiny synthetic baseline does not establish real-user quality, model abstention, latency, rival superiority, native Windows/macOS behavior or hardware performance. No models, private corpora or network calls were used. Independent review remains required. See docs/RETRIEVAL-EVALUATION.md for reproduction and scope.

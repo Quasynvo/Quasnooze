@@ -15,7 +15,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&labelColor=080d19" /></a>
   <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&labelColor=080d19" />
   <img alt="Zero runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-34d399?style=flat-square&labelColor=080d19" />
-  <img alt="810 tests passing" src="https://img.shields.io/badge/tests-810%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
+  <img alt="817 tests passing" src="https://img.shields.io/badge/tests-817%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
   <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&labelColor=080d19" /></a>
 </p>
 
@@ -116,13 +116,13 @@ Every number below ships with its sample size, its method, and a one-command rep
 | Conversation bench — deterministically gated turns | **60/60 (100%)** | 60 turns (16 live-loop, 44 recorded) | `node scripts/evaluate-conversation.js` |
 | Verified execution — fault-injection verdicts | **20/20 · 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` |
 | Retrieval — Recall@1 / Recall@5 · MRR@5 | **0.93 / 1.00 · 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` |
-| Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 60.0%** | 48 synthetic text utterances | `npm run speech` |
-| Full regression suite | **810/810 passed** | 66 test files, ~26 s | `node --test --test-concurrency=4` |
+| Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 70.0%** | 48 synthetic text utterances | `npm run speech` |
+| Full regression suite | **817/817 passed** | 66 test files, ~26 s | `node --test --test-concurrency=4` |
 
 ### Where Quasnooze loses — kept in the README on purpose
 
-- **Speech on numbers-and-names: 60.0%.** A substituted digit is one word of error and a completely different reminder. This is the weakest measured result and the next thing to fix.
-- **Retrieval no-answer: 1 false positive in 3** no-answer queries.
+- **Speech on numbers-and-names: 70.0%** (was 60.0% — spoken digit groups like “88 42” are now joined before routing). The rest are acoustically wrong digits in the transcript itself (*15* heard as *50*); no router can recover those, and this repo will not edit its own exam to pretend otherwise. Attacking them properly — confirmation read-back for numeric arguments — is tracked in the issues.
+- **Retrieval no-answer: fixed and measured.** A ≥50% query-term coverage gate now refuses vocabulary-overlap passages: **3/3 no-answer queries return empty, Recall@5 unchanged at 1.00**.
 - **Voice latency:** ~1.5 s+ to first sound, silence-only turn-taking — far behind ~200 ms full-duplex research systems. Scored honestly in [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md).
 - **Not measured at all:** physical-microphone accuracy, real-user phrasing, and any named model's intelligence (the conversation bench's live tier uses an in-process mock brain). The speech figures are hand-authored *text* hypotheses scored by the shipped router — no microphone, no acoustic model, no recordings.
 
@@ -132,7 +132,8 @@ Every number below ships with its sample size, its method, and a one-command rep
 
 | | **Quasnooze** | Cloud voice assistants | Chat-channel assistant harnesses | Local LLM chat UIs |
 |---|---|---|---|---|
-| Runs fully on your machine | ✅ local model (Ollama) | ❌ cloud | ◐ optional | ✅ |
+| Runs fully on your machine | ✅ Ollama / LM Studio / llama.cpp / vLLM | ❌ cloud | ◐ optional | ✅ |
+| Any major API key you already have | ✅ OpenAI · Anthropic · Gemini · Groq · OpenRouter · Mistral · DeepSeek · Together · xAI (`quasnooze providers`) | ◐ own ecosystem | ◐ varies | ✅ |
 | No account / API key needed | ✅ | ❌ | ◐ | ✅ |
 | Permission gate before state-changing actions | ✅ risk tiers + bounded previews | ❌ | ◐ varies | ❌ (no actions) |
 | Actions verified by independent read-back | ✅ `verified / contradicted / unverified` | ❌ | ❌ | ❌ |
@@ -249,7 +250,7 @@ Configuration uses `.env` or the process environment — prefer `QUASNOOZE_*` na
 ## Build and verify
 
 ```bash
-node --test --test-concurrency=4   # 810 tests across 66 files
+node --test --test-concurrency=4   # 817 tests across 67 files
 node scripts/audit.js               # local audit
 npm run health                      # environment, baselines, speech-corpus freshness
 npm run verify                      # tests + audit together
@@ -259,7 +260,7 @@ Every claim in this README is either linked to its evidence or tested: documenta
 
 ## Documentation
 
-[User guide](docs/GUIDE.md) · [Results & reproduction](docs/RESULTS.md) · [Voice boundaries](docs/VOICE.md) · [Visualizer contract](docs/VISUALIZER.md) · [Channels](docs/CHANNELS.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Conversation bench](docs/CONVERSATION-BENCH.md) · [Retrieval evaluation](docs/RETRIEVAL-EVALUATION.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Product roadmap](docs/ROADMAP-PROPOSED.md) · [Runtime support](docs/SUPPORT.md) · [Tool inventory](docs/TOOL-INVENTORY.md)
+[User guide](docs/GUIDE.md) · [Providers](docs/PROVIDERS.md) · [Results & reproduction](docs/RESULTS.md) · [Voice boundaries](docs/VOICE.md) · [Visualizer contract](docs/VISUALIZER.md) · [Channels](docs/CHANNELS.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Conversation bench](docs/CONVERSATION-BENCH.md) · [Retrieval evaluation](docs/RETRIEVAL-EVALUATION.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Product roadmap](docs/ROADMAP-PROPOSED.md) · [Runtime support](docs/SUPPORT.md) · [Tool inventory](docs/TOOL-INVENTORY.md)
 
 ## Contribute
 

@@ -7,7 +7,7 @@
 > against their runners.
 
 Measured 5 November 2026. Test-suite count verified in a clean checkout of
-`main` (commit `2071723`): **810 tests, 810 passed, 0 failed**
+`main` (commit `2071723`): **817 tests, 817 passed, 0 failed**
 (`node --test --test-concurrency=4`, ~26 s, Node 20 in the measuring sandbox;
 the project requires Node ≥ 22 — see `package.json`).
 
@@ -21,9 +21,9 @@ the project requires Node ≥ 22 — see `package.json`).
 | 4 | Conversation bench, deterministically gated | **60/60 (100%)** | 60 turns (16 live-loop, 44 recorded) | `node scripts/evaluate-conversation.js` | [CONVERSATION-BENCH.md](CONVERSATION-BENCH.md) |
 | 5 | Verified execution, fault injection | **20/20 correct verdicts, 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` | [VERIFIED-EXECUTION.md](VERIFIED-EXECUTION.md) |
 | 6 | Read-back cost (2 KB file write) | **p50 0.28 ms, p95 0.69 ms** (contract allowed 50 ms p95) | 100 | `node --test test/verify.test.js` | [VERIFIED-EXECUTION.md](VERIFIED-EXECUTION.md) |
-| 7 | Retrieval Recall@1 / Recall@5, MRR@5 | **0.93 / 1.00, 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` | [RETRIEVAL-BASELINE-V1.md](RETRIEVAL-BASELINE-V1.md) |
-| 8 | Speech command accuracy (synthetic text hypotheses) | **77.1% overall, 9.7% WER** | 48 utterances | `node scripts/evaluate-speech.js` (`npm run speech`) | [SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md) |
-| 9 | Full regression suite | **810/810 passed** | 66 test files | `node --test --test-concurrency=4` | §4 below |
+| 7 | Retrieval Recall@1 / Recall@5, MRR@5; no-answer | **0.93 / 1.00, 1.00; 3/3 empty, 0 false positives** (coverage gate) | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` | [RETRIEVAL-BASELINE-V1.md](RETRIEVAL-BASELINE-V1.md) |
+| 8 | Speech command accuracy (synthetic text hypotheses) | **79.2% overall, 9.7% WER** (digit-group joining: numbers-names 60% → 70%) | 48 utterances | `node scripts/evaluate-speech.js` (`npm run speech`) | [SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md) |
+| 9 | Full regression suite | **817/817 passed** | 66 test files | `node --test --test-concurrency=4` | §4 below |
 
 ## 2. Speech, by condition — including where it is worst
 
@@ -32,7 +32,7 @@ the project requires Node ≥ 22 — see `package.json`).
 | clean | 14 | 0.0% | 100.0% |
 | accented | 12 | 13.9% | 75.0% |
 | noisy | 12 | 15.2% | 66.7% |
-| numbers-and-names | 10 | 10.1% | **60.0% ← weakest** |
+| numbers-and-names | 10 | 10.1% | **70.0% ← weakest** (was 60.0% before digit-group joining) |
 
 A substituted digit is one word of WER and a completely different reminder —
 which is why WER and command accuracy are reported separately and never
@@ -42,9 +42,11 @@ router. Anyone quoting "77.1%" without that sentence is misquoting this repo.
 
 ## 3. Where Quasnooze loses today (kept on purpose)
 
-- **Numbers-and-names speech routing: 60%** (above). Digits are the failure mode.
-- **Retrieval no-answer:** 1 of 3 no-answer queries returns a false positive
-  (`overlap-no-answer` → travel/meals passages).
+- **Numbers-and-names speech routing: 70%** (above). The remaining misses are
+  acoustically wrong digits in the transcript (*15*→*50*, *30*→*13*, *4417*→*4471*):
+  unrecoverable by any router, tracked for confirmation read-back instead.
+- ~~**Retrieval no-answer:** 1 of 3 false positives~~ — **fixed**: the ≥50%
+  query-term coverage gate returns 3/3 empty with Recall@5 unchanged.
 - **Voice latency & turn-taking:** ~1.5 s+ to first sound and silence-only
   endpointing, vs ~200 ms full-duplex research systems — scored honestly in
   [COMPETITIVE-FRONTIER.md](COMPETITIVE-FRONTIER.md).
@@ -57,7 +59,7 @@ router. Anyone quoting "77.1%" without that sentence is misquoting this repo.
 
 ```bash
 git clone https://github.com/Quasynvo/Quasnooze.git && cd Quasnooze
-node --test --test-concurrency=4        # 810 tests
+node --test --test-concurrency=4        # 817 tests
 node scripts/fast-path-eval.js          # rows 1–2
 node scripts/evaluate-conversation.js   # row 4 (runs in well under a minute)
 node scripts/evaluate-retrieval.js      # row 7

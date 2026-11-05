@@ -52,6 +52,7 @@ ${c.coral("✦ quasnooze")} — local, private, yours
   ${c.bold("quasnooze growth")}          what to build next, measured from this checkout
   ${c.bold("quasnooze support-bundle")}  preview opt-in local diagnostics; no upload
   ${c.bold("quasnooze retention-plan")}  preview retention metadata; never deletes data
+  ${c.bold("quasnooze providers")}       every brain preset, local and cloud, and what each needs
   ${c.bold("quasnooze tools")}           read-only capability and trust inventory; no plugin execution
   ${c.bold("quasnooze export")}          write everything Quasnooze knows to one JSON file
   ${c.bold("quasnooze cost")}            what the last 30 days of turns would have cost
@@ -74,6 +75,9 @@ switch (command) {
     break;
   case "retention-plan":
     run("scripts/retention-plan.js", rest);
+    break;
+  case "providers":
+    run("src/cli.js", ["providers", ...rest]);
     break;
   case "tools":
   case "tool-inventory":

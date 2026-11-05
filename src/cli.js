@@ -57,8 +57,22 @@ async function runToolsInventoryCli(args) {
   }
 }
 
+async function runProvidersCli(args) {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log("quasnooze providers [--json]\nList every brain provider preset (local and cloud), which key it needs, and whether it is configured. Never prints a key. Select one with LLM_PROVIDER=<id>. See docs/PROVIDERS.md.");
+    return;
+  }
+  const json = args.includes("--json");
+  if (args.some((a) => a !== "--json")) { console.error("Invalid providers option; use --help."); process.exitCode = 1; return; }
+  const { providerCatalogue, renderProviderCatalogue } = await import("./providers.js");
+  const { config } = await import("./config.js");
+  const rows = providerCatalogue(process.env, config.llm.preset);
+  console.log(json ? JSON.stringify(rows, null, 2) : renderProviderCatalogue(rows));
+}
+
 async function main() {
   const [mode, ...rest] = process.argv.slice(2);
+  if (mode === "providers") { await runProvidersCli(rest); return; }
   if (mode === "tools" || mode === "tool-inventory") {
     await runToolsInventoryCli(rest);
     return;

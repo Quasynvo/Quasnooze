@@ -5,6 +5,7 @@
  * `git clone && node src/index.js` works with no install step.
  */
 import { resolveStatePaths, assertNoLegacyState } from "./state-paths.js";
+import { resolveProvider } from "./providers.js";
 import { normalizeBrandEnv } from "./brand-config.js";
 import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -82,20 +83,30 @@ export const config = Object.freeze({
   port: Number(env.PINCH_PORT || 7777),
   authKey: env.PINCH_KEY || (desktopRequested ? randomBytes(32).toString("hex") : ""),
 
-  llm: Object.freeze({
-    provider: (env.LLM_PROVIDER || "ollama").toLowerCase(),
-    ollamaUrl: (env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, ""),
+  llm: Object.freeze((() => {
+    // LLM_PROVIDER names a preset (ollama, lmstudio, groq, gemini, …);
+    // `provider` stays the transport the brain implements (ollama | openai
+    // | mock) so every existing call site keeps working, while `preset`
+    // keeps the name the user actually chose. See src/providers.js.
+    const resolved = resolveProvider((env.LLM_PROVIDER || "ollama").toLowerCase(), env);
+    return {
+    provider: resolved.transport,
+    preset: resolved.preset,
+    presetLabel: resolved.label,
+    presetLocal: resolved.local,
+    ollamaUrl: resolved.transport === "ollama" ? resolved.baseUrl : (env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/$/, ""),
     ollamaModel: env.OLLAMA_MODEL || "qwen2.5-coder:7b",
     ollamaThink: bool(env.OLLAMA_THINK, false),
-    openaiBaseUrl: (env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
-    openaiKey: env.OPENAI_API_KEY || "",
-    openaiModel: env.OPENAI_MODEL || "gpt-4o-mini",
+    openaiBaseUrl: resolved.transport === "openai" ? resolved.baseUrl : (env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, ""),
+    openaiKey: resolved.transport === "openai" ? resolved.key : (env.OPENAI_API_KEY || ""),
+    openaiModel: resolved.transport === "openai" ? resolved.model : (env.OPENAI_MODEL || "gpt-4o-mini"),
     // Which provider a turn may fall back to when the selected one fails. Empty by default:
     // failing over from a local model to a cloud endpoint would send the conversation off the
     // machine to keep a turn alive, and that is the user's decision, not a default. Set it to
     // ollama or openai to opt in; "mock" is never accepted as a fallback.
     fallback: (env.LLM_FALLBACK || "").toLowerCase(),
-  }),
+    };
+  })()),
 
   workspaceRoots: workspaceRoots.length ? workspaceRoots : [homedir()],
   // Optional user profile, like an about_me file: injected into the prompt.

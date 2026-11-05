@@ -43,7 +43,7 @@ export async function evaluateRetrieval() {
   const base = await mkdtemp(join(tmpdir(), 'quas-retrieval-eval-'));
   const report = {
     schemaVersion: 1, fixtureVersion: manifest.version, fixture: manifest.name, fixtureSha256: hash.digest('hex'),
-    engine: 'existing bounded lexical BM25; defaults unchanged', cutoffs: manifest.cutoffs,
+    engine: 'bounded lexical BM25 with a >=50% query-term coverage gate', cutoffs: manifest.cutoffs,
     definitions: {
       recall: 'Recall@k = distinct labelled relevant passages in the first k hits / all labelled relevant passages; macro-mean over answerable queries only.',
       rank: 'MRR@k = macro-mean of 1 / first relevant hit rank (1-based), or 0 when absent within k, over answerable queries only.',
