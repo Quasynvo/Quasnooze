@@ -212,7 +212,7 @@ test("the shipped deck marks capture, endpoint and transcript, and never invents
   // itself to the next typed message.
   assert.match(html, /TIMING_TTL_MS/);
   // Measuring must not become a second audio stream or a second request.
-  assert.equal((html.match(/fetch\(\"\/api\/chat\"/g) || []).length, 1, "the deck must keep exactly one chat request");
+  assert.equal((html.match(/fetch\("\/api\/chat"/g) || []).length, 1, "the deck must keep exactly one chat request");
 });
 
 test("cosmic.js stays a text-only concept: it has no microphone to mark", async () => {

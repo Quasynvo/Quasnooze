@@ -339,10 +339,8 @@ export function inspectMcpConfig({
 
   const rawDefs = [];
   let skippedSpecs = 0;
-  let configured = false;
 
   if (Array.isArray(servers) && servers.length > 0) {
-    configured = true;
     for (const def of servers) {
       if (!def || typeof def !== "object" || Array.isArray(def)) {
         skippedSpecs += 1;
@@ -386,7 +384,6 @@ export function inspectMcpConfig({
         servers: [],
       };
     }
-    configured = true;
     for (const chunk of rawSpec.split(";")) {
       const entry = chunk.trim();
       if (!entry) continue;
@@ -528,7 +525,7 @@ export function inspectMcpConfig({
       : "uninspected";
 
   return {
-    configured,
+    configured: true,
     state,
     reason: inspectedServers.length === 0 && skippedSpecs > 0
       ? "invalid-mcp-spec"

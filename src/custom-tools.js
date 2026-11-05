@@ -499,7 +499,7 @@ export function inspectManifestData(
         !/^\$(?:\{?HOME\}?|USERPROFILE)\b/i.test(cmdRaw) &&
         !/^%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%/i.test(cmdRaw)
       ) {
-        const resolvedCmd = isAbsolute(expanded) ? resolve(expanded) : resolve(expanded);
+        const resolvedCmd = resolve(expanded);
         if (isProtectedPath(resolvedCmd)) {
           skipped.push({ name: rawName, reason: "protected-command-path" });
           continue;

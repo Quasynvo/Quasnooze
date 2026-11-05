@@ -138,4 +138,10 @@ test("the fast path is bounded and switchable", () => {
   assert.equal(matchFastIntent(long), null);
   assert.equal(matchFastIntent(""), null);
   assert.equal(matchFastIntent("what time is it\nand also lock the laptop"), null);
+
+  const t0 = performance.now();
+  assert.equal(matchFastIntent(`${".".repeat(50_000)}x`), null);
+  assert.equal(matchFastIntent(`remind me to ${"a ".repeat(60)}nope`), null);
+  assert.equal(matchFastIntent(`new task${" ".repeat(50_000)}`), null);
+  assert.ok(performance.now() - t0 < 250, "fast-path matching must stay linear on adversarial input");
 });

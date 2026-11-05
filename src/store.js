@@ -284,7 +284,11 @@ export function listSessions() {
 
 export function deleteSession(id) {
   const path = sessionPath(id);
-  if (existsSync(path)) unlinkSync(path);
+  try {
+    unlinkSync(path);
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+  }
   cache.delete(path);
   sessionIndex.delete(String(id));
 }

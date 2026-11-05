@@ -111,7 +111,11 @@ function collectSensitivePaths({
     if (typeof raw !== "string") return;
     const trimmed = raw.trim();
     if (trimmed.length < 2 || trimmed === "." || /^[\\/]+$/.test(trimmed)) return;
-    const clean = trimmed.replace(/[\\/]+$/, "");
+    let end = trimmed.length;
+    while (end > 0 && (trimmed[end - 1] === "/" || trimmed[end - 1] === "\\")) {
+      end -= 1;
+    }
+    const clean = trimmed.slice(0, end);
     if (clean.length >= 2 && clean !== ".") {
       paths.add(clean);
       paths.add(clean.replace(/\\/g, "/"));

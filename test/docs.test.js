@@ -132,7 +132,7 @@ test("every command in the CLI table exists in bin/quasnooze.js", () => {
 test("the README's claim about the gate matches the classifier's behaviour", () => {
   // The corrected claim: read-only commands run through, anything that can
   // change state asks. If someone flips the default back, this catches it.
-  assert.match(readme, /`ls`, `cat`, `grep`, `git status` and friends\s*\n?\s*run straight through/);
+  assert.match(readme, /`ls`, `cat`, `grep`, `git status` and friends\s*run straight through/);
   for (const cmd of ["ls", "cat README.md", "grep -rn TODO src", "git status"]) {
     assert.equal(classifyCommand(cmd, { workspaceRoots: [root] }).tier, READ);
   }

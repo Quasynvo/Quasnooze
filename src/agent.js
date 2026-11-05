@@ -660,7 +660,6 @@ export async function runAgent({
     onEvent({ type: "status", message: round === 0 ? "thinking" : "thinking again" });
 
     let out;
-    let streamed = "";
     try {
       // Stream the model's words straight to whoever is waiting. Tool rounds
       // usually produce no text, so this costs nothing when it does not apply.
@@ -679,7 +678,6 @@ export async function runAgent({
           : {}),
         onDelta: (chunk) => {
           if (firstTextMs === null) { firstTextMs = Date.now() - startedAt; markFirstToken(); }
-          streamed += chunk;
           onEvent({ type: "delta", text: chunk });
         },
       });

@@ -142,11 +142,39 @@ test("the committed manifest declares latest_release, so the field cannot go mis
 });
 
 
-test("every workflow action stays SHA-pinned for OpenSSF Scorecard", async () => {
+test("every workflow action stays SHA-pinned and top-level permissions stay read-only for OpenSSF Scorecard", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
   const { checkWorkflows } = await import("../scripts/roadmap-bots.js");
   const { files, errors } = checkWorkflows();
   assert.ok(files >= 7);
   assert.deepEqual(errors, []);
+
+  const tempRepo = mkdtempSync(join(tmpdir(), "quasnooze-wf-check-"));
+  try {
+    mkdirSync(join(tempRepo, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      join(tempRepo, ".github/workflows/bad.yml"),
+      [
+        "name: Bad",
+        "on: [push]",
+        "permissions:",
+        "  contents: read",
+        "  issues: write",
+        "jobs:",
+        "  run:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      ].join("\n"),
+    );
+    const bad = checkWorkflows(tempRepo);
+    assert.equal(bad.errors.length, 1);
+    assert.match(bad.errors[0], /top-level permissions must be read-only/);
+  } finally {
+    rmSync(tempRepo, { recursive: true, force: true });
+  }
 });
 
 test("roadmap status, issue classifier, and PR context helpers stay deterministic and drift-free", async () => {
@@ -189,7 +217,7 @@ test("contributor-queue checks --state all so closed issues are never re-filed a
   const yml = readFileSync(WORKFLOW, "utf8");
   assert.match(yml, /gh api --paginate --slurp/);
   assert.match(yml, /issues\?state=all&per_page=100/);
-  assert.match(yml, /issues:\s*\n\s*types:\s*\[closed\]/);
+  assert.match(yml, /issues:[ \t]*\r?\n\s*types:\s*\[closed\]/);
 });
 
 test('auto_file must be a literal boolean, never an ambiguous string', () => {

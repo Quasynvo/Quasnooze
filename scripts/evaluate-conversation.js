@@ -299,7 +299,7 @@ export function renderConversationEvaluation(report) {
     "|---|---:|---:|---:|",
     ...Object.entries(report.byClass).map(([name, row]) => `| ${name} | ${row.turns} | ${row.passed} | ${pct(row.score)} |`),
     "",
-    report.failures.length ? "## Failures" : "## Failures",
+    "## Failures",
     "",
     report.failures.length
       ? "| Turn | Code | Detail |\n|---|---|---|\n" +

@@ -531,7 +531,7 @@ function modelError(message, status = 400) {
  * an explicit `openai/` prefix and a server-side configured credential/endpoint.
  */
 export async function modelCommand(text) {
-  const match = /^\/model(?:\s+([\s\S]*))?$/i.exec(String(text).trim());
+  const match = /^\/model(?:\s+(\S[\s\S]*))?$/i.exec(String(text).trim());
   if (!match) return null;
   const requested = (match[1] || "").trim();
   if (requested) {

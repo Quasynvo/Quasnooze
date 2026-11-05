@@ -188,7 +188,7 @@ test(`md() never emits an event handler, script tag or javascript: URL`, () => {
     const html = md(input);
     assert.doesNotMatch(html, /<script/i, "emitted a <script");
     assert.doesNotMatch(html, /\son[a-z]+\s*=/i, "emitted an inline event handler");
-    assert.doesNotMatch(html, /href\s*=\s*["']?\s*javascript:/i, "emitted a javascript: href");
+    assert.doesNotMatch(html, /href\s*=\s*(?:["']\s*)?javascript:/i, "emitted a javascript: href");
     // Every anchor we generate must have exactly these attributes.
     for (const tag of html.match(/<a\b[^>]*>/g) || []) {
       const names = [...tag.matchAll(/\s([a-z-]+)=/gi)].map((m) => m[1].toLowerCase()).sort();

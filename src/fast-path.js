@@ -32,12 +32,22 @@ export const FAST_TOOLS = new Set([
 export const MAX_WORDS = 20;
 export const MAX_CHARS = 160;
 
+function stripTrailingSentencePunct(str) {
+  let end = str.length;
+  while (end > 0) {
+    const ch = str[end - 1];
+    if (ch !== "." && ch !== "?" && ch !== "!") break;
+    end -= 1;
+  }
+  return end === str.length ? str : str.slice(0, end);
+}
+
 const normalize = (text) =>
-  String(text ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.?!]+$/, "")
-    .trim();
+  stripTrailingSentencePunct(
+    String(text ?? "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ).trim();
 
 /**
  * Why a candidate was rejected. Kept for telemetry and for the evaluation
@@ -81,9 +91,25 @@ const TIME_FORMS = [
 
 const PERCENT_OF = /^(?:what(?:'s| is)\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)\s+of\s+(\d+(?:\.\d+)?)$/i;
 const ARITHMETIC = /^(?:calculate|compute|what(?:'s| is)|how much is)\s+([\d(][\d\s+\-*/^%().]*)$/i;
-const REMEMBER = /^(?:remember(?: that)?|note that|make a note that|keep in mind that)\s+(.{3,200})$/i;
-const ADD_TASK = /^(?:add (?:a )?task(?: to)?|add to (?:my )?(?:task list|to-?do list)|new task)\s*[:,\-]?\s+(.{3,200})$/i;
-const REMIND = /^remind me (?:to|about)\s+(.{2,140}?)\s+(in\s+\d+\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|tomorrow(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?|tonight|today\s+at\s+\S+|on\s+\d{4}-\d{2}-\d{2}(?:\s+\S+)?)$/i;
+const REMEMBER = /^(?:remember(?: that)?|note that|make a note that|keep in mind that)\s+(\S.{2,199})$/i;
+const ADD_TASK = /^(?:add (?:a )?task(?: to)?|add to (?:my )?(?:task list|to-?do list)|new task)(?:\s*[:,-])?\s+(\S.{2,199})$/i;
+const REMIND_PREFIX = /^remind me (?:to|about)\s+/i;
+const REMIND_WHEN = /^(?:in\s+\d+(?:\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?))|at\s+\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?|tomorrow(?:\s+at\s+\d{1,2}(?::\d{2})?(?:\s*(?:am|pm))?)?|tonight|today\s+at\s+\S+|on\s+\d{4}-\d{2}-\d{2}(?:\s+\S+)?)$/i;
+
+function matchRemind(cleaned) {
+  const prefix = REMIND_PREFIX.exec(cleaned);
+  if (!prefix) return null;
+  const rest = cleaned.slice(prefix[0].length);
+  const limit = Math.min(140, rest.length - 1);
+  for (let idx = 2; idx <= limit; idx += 1) {
+    if (rest[idx] !== " ") continue;
+    const when = rest.slice(idx + 1);
+    if (REMIND_WHEN.test(when)) {
+      return { text: rest.slice(0, idx).trim(), when: when.trim() };
+    }
+  }
+  return null;
+}
 
 /**
  * @param {string} text the user's message
@@ -116,9 +142,9 @@ export function matchFastIntent(text, { attachments = [] } = {}) {
     }
   }
 
-  const remind = cleaned.match(REMIND);
+  const remind = matchRemind(cleaned);
   if (remind) {
-    return { name: "remind", args: { text: remind[1].trim(), when: remind[2].trim() }, why: "reminder" };
+    return { name: "remind", args: remind, why: "reminder" };
   }
 
   const task = cleaned.match(ADD_TASK);

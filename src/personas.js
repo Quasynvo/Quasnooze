@@ -1,7 +1,7 @@
 /** Explicit user commands only; model output never dispatches these commands. */
 import { loadPersonas, activePersona, savePersona, selectPersona, removePersona } from './store.js';
 export function personaCommand(text, sessionId) {
-  const match = /^\/persona(?:\s+([\s\S]*))?$/i.exec(String(text).trim());
+  const match = /^\/persona(?:\s+(\S[\s\S]*))?$/i.exec(String(text).trim());
   if (!match) return null;
   const input=(match[1] || '').trim();
   const help='Commands: /persona list · /persona show <name> · /persona save <name> <style instructions> · /persona use <name|default> · /persona delete <name>';
@@ -10,7 +10,7 @@ export function personaCommand(text, sessionId) {
       const state=loadPersonas();
       return `Active persona for this session: ${activePersona(sessionId)?.name || 'default'}\nSaved: ${state.personas.map(p=>p.name).join(', ') || '(none)'}${state.warning ? '\n'+state.warning : ''}\n${help}`;
     }
-    const command=/^(show|save|use|delete)\s+(\S+)(?:\s+([\s\S]+))?$/.exec(input);
+    const command=/^(show|save|use|delete)\s+(\S+)(?:\s+(\S[\s\S]*))?$/.exec(input);
     if (!command) return help;
     const [,action,name,instructions]=command;
     if (action !== 'save' && instructions) throw new Error('Unexpected extra arguments.');

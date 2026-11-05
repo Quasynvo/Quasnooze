@@ -167,8 +167,8 @@ export function checkFilename(name) {
  */
 const DENY = [
   { re: /\brm\s+(-[a-zA-Z]*\s+)*\/\s*$/, why: "recursive delete of the filesystem root" },
-  { re: /\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(\/|~|\$HOME|\$\{HOME\})\s*\/?\s*(\*)?\s*$/, why: "recursive delete of / or your home directory" },
-  { re: /\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+(\.|\.\.|\.\/|\.\.\/)\s*$/, why: "recursive delete of the current or parent directory" },
+  { re: /\brm\s+-[a-eg-qs-zA-EG-QS-Z]*[rf][a-zA-Z]*\s+(\/|~|\$HOME|\$\{HOME\})(?:\s*\/)?(?:\s*(\*))?\s*$/, why: "recursive delete of / or your home directory" },
+  { re: /\brm\s+-[a-eg-qs-zA-EG-QS-Z]*[rf][a-zA-Z]*\s+(?:\.\.?\/?)\s*$/, why: "recursive delete of the current or parent directory" },
   { re: /\b(mkfs|fdisk|parted)\b/, why: "partitioning or formatting a filesystem" },
   { re: /\bdd\b[^\n]*\bof=\/dev\/(sd|nvme|disk|hd)/, why: "raw write to a block device" },
   { re: />\s*\/dev\/(sd|nvme|disk|hd)/, why: "raw write to a block device" },

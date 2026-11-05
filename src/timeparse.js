@@ -105,7 +105,7 @@ export function parseWhen(phrase, now = new Date()) {
   }
 
   // ── "at 6pm", "by 18:30", bare "6pm", "noon" ──
-  const atMatch = /\b(?:at|by)\s+(.+)$/.exec(raw);
+  const atMatch = /\b(?:at|by)\s+(\S.*)$/.exec(raw);
   const clockSource = atMatch ? atMatch[1] : raw;
   const looksLikeTime = /(\d{1,2}:\d{2})|(\d{1,2}\s*(am|pm))\b|\b(noon|midnight)\b/.test(clockSource);
   if (looksLikeTime) {

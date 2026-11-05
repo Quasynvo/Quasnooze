@@ -31,7 +31,7 @@
  *   node scripts/market.js --offline        # use the cached snapshot, no network
  *   node scripts/market.js --sources a,b    # restrict to specific repos
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -172,14 +172,20 @@ export function gaps(rows, { share = 0.4 } = {}) {
 
 async function main() {
   const caps = loadCapabilities();
-  let sources = [];
+  let sources;
 
   if (flag("--offline")) {
-    if (!existsSync(CACHE)) {
-      console.error("no cached snapshot — run once without --offline");
-      process.exit(1);
+    let cached;
+    try {
+      cached = readFileSync(CACHE, "utf8");
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        console.error("no cached snapshot — run once without --offline");
+        process.exit(1);
+      }
+      throw err;
     }
-    sources = JSON.parse(readFileSync(CACHE, "utf8")).sources || [];
+    sources = JSON.parse(cached).sources || [];
   } else {
     const only = opt("--sources", "")
       .split(",")
