@@ -13,7 +13,7 @@ SARIF publishes it to the repository Security tab.
 | Gitleaks 8.30.1 (checksum-verified binary) | Full git history, redacted | **Gating** | Verified locally over 163 commits; the only hits were canary fixtures in two test files, allowlisted by rule+path in `.gitleaks.toml` |
 | OSV-Scanner v2.7.0 (checksum-verified binary) | Dependency vulnerabilities (CI-resolved lockfile, 116 packages; none is committed) | Report-first | First report needs triage before it may block merges |
 | Trivy v0.76.2 (checksum-verified binary; fs: vuln+secret+misconfig, HIGH/CRITICAL) | Whole tree | Report-first (`--exit-code 0`) | Same reason; SARIF still lands in the Security tab |
-| zizmor 1.32.0 (PyPI; the zizmor GitHub Action is refused by the org Actions policy) | The workflow files themselves | **Gating**, one reviewed suppression | `zizmor.yml` suppresses `dangerous-triggers` for `welcome.yml` only — reviewed 2026-11-06: it never checks out PR code (its header documents this) |
+| zizmor 1.32.0 (PyPI; the zizmor GitHub Action is refused by the org Actions policy) | The workflow files themselves | **Gating**, one reviewed suppression | `zizmor.yml` suppresses `dangerous-triggers` for `welcome.yml` and `roadmap-status-bot.yml` only — reviewed 2026-11-06: neither checks out or executes untrusted trees (see zizmor.yml) |
 
 ## Promotion rule
 

@@ -10,3 +10,9 @@ rules:
   dangerous-triggers:
     ignore:
       - welcome.yml
+      # roadmap-status-bot listens for the "Contributor queue" workflow
+      # finishing. Its job checks out the DEFAULT branch only
+      # (persist-credentials: false), runs this repo's own
+      # scripts/roadmap-bots.js with an issues:write token, and never
+      # checks out or executes the triggering run's tree.
+      - roadmap-status-bot.yml
