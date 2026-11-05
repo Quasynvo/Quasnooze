@@ -307,6 +307,16 @@ sessions, memory, reminders, schedules and telemetry. Policies default off;
 optional age thresholds are preview-only and are never saved or applied. See
 [retention categories, safety and platform limitations](docs/RETENTION.md).
 
+### Synthetic conversation quality bench
+
+Run `node scripts/evaluate-conversation.js` from a source checkout to score
+[60 labelled turns](docs/CONVERSATION-BENCH.md) — factual answers with citations,
+unanswerable documents, follow-ups, tool turns, refusals and social turns. Sixteen
+of them exercise the real agent loop against the in-process mock brain; the rest
+are recorded prose fixtures whose provenance the report states. Every turn is
+gated by deterministic checks, a failing turn is named by id, and the bench runs
+offline in well under a minute. No model, no network, no user conversation.
+
 ### Synthetic retrieval evaluation
 
 Run `node scripts/evaluate-retrieval.js` from a source checkout to reproduce the
