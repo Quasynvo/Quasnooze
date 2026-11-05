@@ -521,24 +521,20 @@ export function inspectMcpConfig({
   }
 
   const unusedTrustedNames = [...trustedNames].filter((name) => !matchedTrusted.has(name)).length;
-  const state = !configured
-    ? "disabled"
-    : inspectedServers.length === 0 && skippedSpecs > 0
-      ? "rejected"
-      : truncated || skippedSpecs > 0
-        ? "partial"
-        : "uninspected";
+  const state = inspectedServers.length === 0 && skippedSpecs > 0
+    ? "rejected"
+    : truncated || skippedSpecs > 0
+      ? "partial"
+      : "uninspected";
 
   return {
     configured,
     state,
-    reason: !configured
-      ? null
-      : inspectedServers.length === 0 && skippedSpecs > 0
-        ? "invalid-mcp-spec"
-        : truncated
-          ? "server-limit-reached"
-          : null,
+    reason: inspectedServers.length === 0 && skippedSpecs > 0
+      ? "invalid-mcp-spec"
+      : truncated
+        ? "server-limit-reached"
+        : null,
     trustModel: "external-stdio-mcp-server",
     inspected: false,
     spawned: false,
