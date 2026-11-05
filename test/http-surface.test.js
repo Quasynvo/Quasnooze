@@ -311,3 +311,52 @@ test("models API: authenticated runtime changes preserve Origin/Host guards and 
     await new Promise((r) => tags.close(r));
   }
 });
+
+test("voice: chunked dictation passes the previous transcript as bounded prompt context", async () => {
+  let received = "";
+  const upstream = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (received += c));
+    req.on("end", () => {
+      body = received;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ text: "open the garage door" }));
+    });
+    void body;
+  });
+  await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
+  const port = PORT + 200;
+  const proc = spawn(process.execPath, [join(root, "src/index.js")], {
+    cwd: root,
+    env: { ...process.env, LLM_PROVIDER: "mock", PINCH_KEY: "", PINCH_HOST: "127.0.0.1", PINCH_PORT: String(port), TELEGRAM_TOKEN: "", PINCH_DATA: mkdtempSync(join(tmpdir(), "pinch-voice-prompt-")), WHISPER_URL: `http://127.0.0.1:${upstream.address().port}/transcribe` },
+    stdio: "ignore",
+  });
+  try {
+    let ready = false;
+    for (let i = 0; i < 100; i++) {
+      try { if ((await fetch(`http://127.0.0.1:${port}/api/health`)).ok) { ready = true; break; } } catch {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(ready);
+    const res = await fetch(`http://127.0.0.1:${port}/api/transcribe`, {
+      method: "POST",
+      // A header cannot carry a newline, so the client flattens the prompt before
+      // sending it; the server flattens again because a header is not a promise.
+      // 614 characters: the tail is what carries continuity, so the tail is what
+      // survives the bound. The head of the prompt is deliberately dropped.
+      headers: { "content-type": "audio/webm", "x-quasnooze-prompt": `${"x".repeat(600)} open the garage` },
+      body: "audio",
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).text, "open the garage door");
+    // The context reaches Whisper, and a 614-character prompt is bounded rather
+    // than forwarded wholesale.
+    assert.match(received, /name="prompt"/);
+    assert.match(received, /open the garage/, "the tail of the prompt did not survive the bound");
+    assert.ok(received.length < 3000, `upstream body was ${received.length} bytes`);
+  } finally {
+    proc.kill("SIGKILL");
+    upstream.closeAllConnections();
+    await new Promise((r) => upstream.close(r));
+  }
+});

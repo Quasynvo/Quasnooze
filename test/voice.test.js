@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { checkVoice, transcribeAudio } from "../src/voice.js";
+import { checkVoice, cleanPrompt, transcribeAudio } from "../src/voice.js";
 
 async function serve(fn, testFn) {
   const server = http.createServer(fn);
@@ -79,4 +79,42 @@ test("doctor voice: does not follow redirects from loopback", async () => {
     assert.match(result[1], /302/);
     assert.equal(calls, 1);
   });
+});
+
+test("voice adapter: a previous chunk's transcript travels as the whisper prompt", async () => {
+  let seen = "";
+  await serve((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen = body;
+      res.end(JSON.stringify({ text: "open the garage door" }));
+    });
+  }, async (url) => {
+    const text = await transcribeAudio(Buffer.from("audio"), "audio/webm", url, { prompt: "open the garage" });
+    assert.equal(text, "open the garage door");
+  });
+  assert.match(seen, /name="prompt"/, "the chunk context never reached Whisper");
+  assert.match(seen, /open the garage/);
+});
+
+test("voice adapter: prompts are bounded and stripped of control characters", async () => {
+  let seen = "";
+  await serve((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => { seen = body; res.end(JSON.stringify({ text: "ok" })); });
+  }, async (url) => {
+    await transcribeAudio(Buffer.from("a"), "audio/webm", url, { prompt: `line one\nline two\t${"x".repeat(900)}` });
+  });
+  assert.doesNotMatch(seen, /line one\r?\nline two/, "a prompt kept its line breaks");
+  assert.ok(seen.length < 1400, "a 900-character prompt was passed through unbounded");
+  // The same rules, stated directly: one line, no control characters, tail-first.
+  assert.equal(cleanPrompt("line one\nline two"), "line one line two");
+  assert.equal(cleanPrompt("a\u0000b\u0007c"), "a b c");
+  assert.equal(cleanPrompt("   "), "");
+  assert.equal(cleanPrompt(undefined), "");
+  const long = cleanPrompt(`${"head ".repeat(200)}the last words`);
+  assert.ok(long.length <= 400);
+  assert.match(long, /the last words$/, "the tail is the part that carries continuity");
 });

@@ -153,6 +153,83 @@ is a slogan.
   cross-device benchmark, not a comparison with another product, and not a
   promise about your hardware — the model, the CPU and the operating system's
   voices all move them.
+## Two speech paths, and which one leaves the device
+
+There have always been two ways to talk to this thing, and they have different
+privacy properties. Naming them in a table is the point: "fast" and "local" used
+to be different products.
+
+| Path | Who recognises the speech | Where the audio goes | Needs |
+|---|---|---|---|
+| **Browser recognition** (`SpeechRecognition` in the deck) | the browser, or its vendor | **may leave the device** — Chrome and Safari are entitled to send audio to their speech service | a browser that ships a recogniser; an explicit per-page opt-in |
+| **Local dictation** | this machine: `AnalyserNode` for endpointing, `MediaRecorder` for audio, `WHISPER_URL` for the transcript | the page → **your own server** (`/api/transcribe`) → the transcription endpoint **you configured** | `WHISPER_URL` pointed at an OpenAI-compatible local server (whisper.cpp, faster-whisper) |
+
+Nothing is persisted in either path: no recording is written to disk, and no
+audio is stored in `data/`. The local path never contacts a browser vendor, and
+the browser path remains opt-in and labelled — the deck asks before it enables it.
+
+The local path is what the microphone button now does **when the browser has no
+recogniser**. That used to be a dead button with a dimmed icon; it is now a
+working one, and the two paths never mix in a single utterance.
+
+## Endpointing: what decides you have finished
+
+`createEndpointer()` in `public/audio-input.js` reads the same analyser frames
+the visualiser draws. There is no model and no dependency:
+
+- **onset** needs `onsetFrames` (default 2) consecutive frames above
+  `speechThreshold` (0.06 of full scale), so a click or a door does not open an
+  utterance;
+- **trailing silence** of `silenceMs` (default **300 ms**) below
+  `silenceThreshold` (0.03) ends it — the same 300 ms the latency budget calls
+  the endpoint stage, so the default holds the published number rather than
+  describing it;
+- **hysteresis** between the two thresholds means a quiet consonant mid-sentence
+  does not end the sentence;
+- **a cap** of `maxUtteranceMs` (15 s) ends a monologue rather than uploading a
+  lecture;
+- **a floor** of `minSpeechMs` (250 ms): a cough is endpointed and *discarded*, and
+  no audio is uploaded for it at all.
+
+### What it does not guarantee
+
+- **It is not a speech classifier.** A fan, a keyboard or a noisy room raises the
+  floor; the detector will decide on loudness, and the honest consequence is that
+  a noisy room produces worse segmentation. There is no noise-floor adaptation in
+  this version, and the thresholds are constants you can change, not estimates.
+- **It says nothing about words.** Endpointing decides *when you stopped*, not
+  what you said. Transcription accuracy is the transcription server's.
+- **Timing is frame-quantised.** The endpoint lands within one animation frame of
+  the window (the test allows one 60 ms frame), and the analyser's own smoothing
+  adds a little. It is not a sample-accurate VAD.
+- **Not barge-in.** It does not detect speech while the assistant is talking, and
+  it does not interrupt playback.
+- **Not a wake word.** Local dictation starts on the button. Background listening
+  still needs the Windows voice host.
+
+## Streaming partials, and why a partial is never a message
+
+With a Whisper-compatible endpoint, waiting for a whole clip is the slow part: a
+two-second sentence is transcribed after the fact, not during it. Local dictation
+therefore uploads **bounded chunks** while you speak (`chunkMs`, default 1.2 s)
+and each chunk carries the previous chunk's transcript as the `prompt` form
+field, so words that fall on a boundary are not lost.
+
+That transcript is **provisional**. It is shown in the message box with
+`aria-busy` set, and it is replaced by the next one. It cannot become a message:
+the only code that appends to the conversation is `send()`, and the only thing
+that calls `send()` is a final transcript. The tests assert that at the source
+level and at the pipeline level, because "the partial never enters history" is a
+property that fails silently and looks like a duplicate message.
+
+`prompt` context is bounded to 400 characters, flattened to one line and taken
+from the **tail** — the recent words are what carry continuity, and an unbounded
+"context" field is a way to push arbitrary text through a transcription endpoint.
+
+Setting `streaming: false` is the whole-clip path: one request at the end, the
+same status sequence, the same final callback, no partials. That is the
+"no behavioural difference" test — the caller cannot tell which path ran except by
+counting requests.
 
 ## Risk, read against [AUDIT.md](AUDIT.md)
 
@@ -202,10 +279,16 @@ flattering direction, and a reader who can open the code, run the test and hear 
 
 - Not full-duplex conversation or barge-in. Speech starts from a completed answer, not streamed
   tokens; see [CONVERSATION.md](CONVERSATION.md#spoken-back-and-forth).
-- Not local browser recognition. Only the Windows voice host guarantees on-device recognition.
+- Not local browser recognition. A browser recogniser may send audio to its vendor; local
+  dictation (above) is the path that keeps audio on your machine, and the Windows voice host
+  remains the only always-on local recogniser.
 - Not speech in every browser. A browser without `speechSynthesis`, or one with no installed
   local voice, gets a visible explanation and silence — not a hidden cloud call.
 - Not a hardware voice-quality or latency benchmark. The test proves *that* the shipped code
   calls a local voice with the right text; it does not prove how good that voice sounds.
 - Not a cross-device latency benchmark. The budget table above is measured on one machine, and
   `firstAudioMs` is recorded only when a caller can supply it — in the browser it is null, never 0.
+- Not a noise-robust endpointing model. The local detector thresholds loudness with hysteresis;
+  a noisy room makes it worse, and `docs/VOICE.md` says so rather than claiming clean segments.
+- Not a claim that browser recognition is private. That path may send audio to the browser vendor
+  and is labelled as such; local dictation is the path that keeps audio on your machine.
