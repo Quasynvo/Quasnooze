@@ -68,7 +68,7 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | 6 | It asks instead of guessing on ambiguous speech | **missing** | `voice-06` |
 | 7 | Speech accuracy is measured, not asserted | **missing** | `voice-05` |
 | 8 | "Do it again", "the second one" work | **missing** | `voice-07` |
-| 9 | Response latency is measured stage by stage | partial (total only) | `voice-01` |
+| 9 | Response latency is measured stage by stage | partial (total only) | `voice-01-latency-budget`, `voice-08-latency-waterfall` |
 | 10 | It speaks back on every surface, not just Windows | **missing** | *deferred — see §6* |
 
 ### 3.2 Acting on the machine
@@ -100,9 +100,10 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | 28 | Local ≠ encrypted, and that is stated | have (documented) | `README.md` |
 | 29 | Every action leaves a local record | have | `src/telemetry.js` |
 | 30 | The typed path is as fast as the spoken one | partial (SSE, no budget) | `voice-01` |
+| 31 | Tool arguments are shaped by the schema at sampling time, not repaired after the fact | **missing** | `reason-03-constrained-tool-arguments` |
 
-**Result:** 8 have, 4 partial, 18 missing. Sixteen roadmap entries address
-eighteen of the missing/partial rows; the two that are not covered are named
+**Result:** 8 have, 4 partial, 19 missing. Eighteen roadmap entries address
+twenty of the missing/partial rows; the ones that are not covered are named
 explicitly in §6 rather than left to look forgotten.
 
 ---
@@ -149,6 +150,9 @@ Targets for a local 7B-class model on the same machine. These are what
 | **Total, end of speech → sound** | **≤ 1.5 s** | Above this, people repeat themselves. |
 | Barge-in → silence | ≤ 150 ms | Above this, it sounds like it is ignoring you. |
 
+The stages below are the ones `voice-08-latency-waterfall` records on every turn, so
+a budget is a live number in `npm run health` rather than a table in a document.
+
 Two constraints on how these are measured, because a latency claim is easy to
 fake:
 
@@ -181,6 +185,7 @@ schedule.
 | **1 — the control floor** | immediately — no prerequisites | `voice-01-latency-budget`, `voice-02-endpointing-partials`, `laptop-01-media-volume`, `laptop-02-app-window-focus`, `laptop-03-clipboard-preview`, `laptop-04-typed-input`, `laptop-05-file-actions-undo` |
 | **2 — judgement and gating** | immediately, as wave 1 fills the cap | `voice-04-wake-gating`, `voice-05-stt-accuracy-harness`, `reason-01-plan-verify`, `reason-02-tool-arg-validation`, `laptop-06-screen-grounding` |
 | **3 — conversation quality** | `voice-03` and `voice-06` wait on `voice-02`; the rest have no prerequisites | `voice-03-barge-in`, `voice-06-repair-dialogue`, `voice-07-voice-memory`, `laptop-07-voice-macros` |
+| **4 — measurement and shaping** | `voice-08-latency-waterfall` waits on `voice-01-latency-budget`; `reason-03-constrained-tool-arguments` waits on `reason-02-tool-arg-validation` | `voice-08-latency-waterfall`, `reason-03-constrained-tool-arguments` |
 
 Nothing here is held behind a date. An item with a prerequisite waits for that
 prerequisite to close; everything else files as slots free up, hourly, which is

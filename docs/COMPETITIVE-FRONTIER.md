@@ -278,3 +278,69 @@ slot is free; the ordering lives in `depends_on`, where the queue can enforce it
 The queue files these automatically; `skill-01` will not appear until `reason-01`
 and `laptop-05` are closed, because a skill compiler that cannot verify a trace or
 undo a mistake is exactly the wrong first version.
+
+---
+
+## 10. The sweep of 2026-11-05: what the rest of the field already proved
+
+The first nine sections compare Quasnooze against the projects that own one axis
+each. This sweep asks a different question: **which improvements have already been
+measured by somebody else, on hardware like ours, and are simply missing here?**
+
+Twenty-eight projects were re-read from their own documentation, plus this
+checkout, end to end. The full comparison, including the projects that were
+deliberately not adopted, is in
+[`research/2026-11-05-ASSISTANT-FRONTIER-SWEEP.md`](research/2026-11-05-ASSISTANT-FRONTIER-SWEEP.md).
+Five items came out of it, and every one of them is a defect in this repository
+that a competitor has already published a number for.
+
+### The four defects, with the evidence that found them
+
+| Defect, in this checkout | What the field already measured | Item |
+|---|---|---|
+| `src/prompt.js` puts the clock and up to forty memory facts into the *system* prompt, and `src/brain.js` sends no `keep_alive`, so Ollama's five-minute unload discards the KV cache. Every turn can pay a full re-prefill. | A warm prefix measured 962 ms → 54 ms prompt-eval on a 723-token prompt (17.7x); host-RAM prefix caching claims up to 93% TTFT reduction. Static-first ordering plus residency is described as the single highest-leverage setting for a local agent. | `mind-04-prefix-cache-residency` |
+| `src/agent.js` runs tool calls in a serial `for` loop, so three independent reads cost three round trips. | Every agent that fans out work (coding agents' subagents, parallel tool execution in hosted assistants) does the same thing: parallelise what has no ordering, serialise what has. | `mind-06-parallel-read-tools` |
+| Tool arguments are free text parsed after the fact; a bad comma costs a whole repair round trip. | Ollama has accepted a full JSON Schema in `format` since 0.5 and constrains decoding with xgrammar — effectively total schema compliance for 10–50 ms per token of sampling overhead. | `reason-03-constrained-tool-arguments` |
+| The Whisper path pads every clip into a fixed 30-second window, so a two-second command costs a paragraph's encode. | Time-to-first-token at one second of audio: 401.7 ms (Whisper Small) versus 65.1 ms (a variable-length streaming encoder of the same class), at a better WER — 8.6% versus 7.8%. | `ear-04-variable-window-stt` |
+
+### The two things missing rather than broken
+
+| Gap | Who already does it | Item |
+|---|---|---|
+| Nothing measures whether an answer was **right**. Retrieval, the fast path, readiness and the laptop bench are all scored; answering is not. | Every serious assistant stack ships a versioned eval corpus with a deterministic runner, and the ones that compound quality keep it vendor-free. | `lead-10-conversation-quality-bench` |
+| A turn's total duration is recorded; the five stages a voice turn actually spends its time in are not. | Local-voice pipelines publish an expected latency per stage and are debugged stage by stage; a pipeline you cannot break down is a pipeline you cannot tune. | `voice-08-latency-waterfall` |
+
+### Two performance items that are *not* in the frontier set
+
+`pinch-026-hybrid-retrieval-gate` and `pinch-027-grounded-answer-check` are product
+hygiene rather than a lead, so they sit in the `pinch-*` family: the first is the
+measurement §8 already demanded before anyone may add a second retriever, and the
+second extends the honesty guard from *actions* to *sources*. Neither is allowed to
+make an answer slower and less true at the same time.
+
+### The same three lines, applied to a borrowed number
+
+Every item above carries a Baseline, a Target and a Must-not-regress line, and the
+borrowed number is never adopted as our target:
+
+- A **reference measurement** on someone else's machine is context, not a promise.
+  `mind-05-draft-model-speculation` exists because a 1.4x–3.2x win is real on the
+  right hardware — and because the same reports show a Vulkan/UMA regression where
+  the draft model made generation dramatically *slower*. The probe decides.
+- A **reranker** measured at +0.8% nDCG for 20x the latency in one public
+  implementation, and at +27% nDCG@10 in another, is not a decision. The corpus
+  decides, per stage, and a rejected stage is removed rather than left behind a
+  flag.
+- A **smarter memory** that injects forty facts "just in case" is the failure this
+  roadmap exists to prevent: `pinch-028-memory-recall-budget` may only cut tokens
+  while keeping recall above 90%, and it may never delete a fact to get there.
+
+### What this sweep refused
+
+| Temptation | Why not |
+|---|---|
+| An answer cache keyed on embedding similarity | Stale answers are indistinguishable from fresh ones, and a personal assistant's state changes constantly. The deterministic fast path (`mind-01`) already covers the queries where a cache would be correct. |
+| Prompt-compression models (LLMLingua-class, up to 20x) | Compressing the *history* is `mind-02`'s job with pinned facts and no model in the loop. A second model that rewrites the user's own words before the real model reads them is a new failure mode for a local-first product. |
+| A second resident model for everything | Memory on a personal laptop is the scarce resource. `mind-05` is opt-in precisely because the draft model costs as much RAM as it saves time. |
+| Multi-turn context handled by one long session (the hosted-default) | The compaction research is unanimous that long sessions rot; `mind-02` plus `agentic-11-resume` already take the structured-handoff route instead. |
+| A vector database, a tracing SaaS, or a hosted eval platform | Each is a service the user did not ask for. The lesson was the technique, not the dependency. |

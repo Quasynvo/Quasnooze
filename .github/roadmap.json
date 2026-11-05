@@ -1714,6 +1714,30 @@
       "body": "## Context\n\nEvery tool in `src/tools.js` declares a `parameters` schema and then trusts whatever the model produced. A missing required field surfaces as a stack trace or a `TypeError` deep inside a handler, which is both a bad answer and a bad bug report.\n\nA validator plus a single repair round turns the most common local-model failure — malformed arguments — into a recoverable event.\n\n## What to change\n\n- A dependency-free validator for the subset of JSON Schema the tools already use (`type`, `required`, `enum`, `properties`, primitives, arrays).\n- On failure, one repair round: return the validation errors to the model and let it retry once, then fail with a typed `BAD_TOOL_ARGS` result.\n- Never coerce a wrong type silently; report it. `set_volume: \"loud\"` is an error, not a zero.\n- The typed failure appears in the transcript as a sentence a person can act on.\n\n**Safety:** validation narrows what the model can do. It must never relax a risk tier or fabricate a default.\n\n## Acceptance criteria\n\n- [ ] Unknown tool names, missing required fields and wrong types all produce `BAD_TOOL_ARGS`\n- [ ] Exactly one repair attempt happens, and it is visible in telemetry\n- [ ] A valid call is passed through byte-identically to today's behaviour\n- [ ] No new runtime dependency\n\n## How to verify\n\n```bash\nnode --test test/tools.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~3-5 hours"
     },
     {
+      "id": "reason-03-constrained-tool-arguments",
+      "title": "feat(agent): shape tool-call arguments at sampling time, not after",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "reasoning",
+        "performance"
+      ],
+      "files": [
+        "src/brain.js",
+        "src/agent.js",
+        "src/tools.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/agent.test.js test/tools.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "depends_on": [
+        "reason-02-tool-arg-validation"
+      ],
+      "body": "## Context\n\nA malformed tool call is currently discovered after the fact: `src/agent.js` parses the arguments, and when parsing fails it spends a whole model round trip answering *\"Your arguments were not valid JSON … Re-emit\"*. That round trip is the most expensive possible way to fix a comma.\n\nLocal runtimes can make the failure mechanically impossible instead: Ollama accepts a full JSON Schema in the `format` field and constrains decoding with xgrammar, giving effectively total schema compliance. `reason-02` catches what the model gets wrong; this item means a smaller share of it is ever wrong, and the repair round becomes the rare fallback rather than the expected path.\n\n## What to change\n\n- Build the schema once per tool from the existing `TOOLS` definitions (single source of truth — no second copy of the shape), flattening where the runtime's supported subset requires it.\n- Send it as `format` on tool-deciding turns for the Ollama provider; leave non-tool turns free-form so answers keep their voice.\n- Keep `reason-02`'s validation and single repair exactly as they are: constrained decoding is defence in depth, not a replacement for checking.\n- Emit a telemetry counter for constrained calls, malformed-argument rate and repairs, so the claim is measured per model — small local models vary enormously here.\n- `docs/ROUTING.md`: which providers get the constraint, and what happens on a provider that does not support it.\n\n**Safety:** the schema constrains **shape only**. It cannot widen a risk tier, pre-approve a call or skip the action preview: a perfectly-shaped `write_file` still goes through the same approval gate as a malformed one.\n\n## Performance contract\n\n- **Baseline:** not implemented — arguments are free text parsed after the fact, and every malformed call costs a full repair round trip (the `Re-emit` path in `src/agent.js`); malformed rate is not currently recorded\n- **Target:** malformed tool arguments under **1% of calls** on the tool-call corpus (from a recorded per-model baseline), with repair round trips for schema-shaped errors down to zero\n- **Must not regress:** a model or provider that ignores the constraint must still get the existing validation and repair path; no tool schema may be loosened to make compliance easier; per-call overhead stays within +50 ms\n\n## Acceptance criteria\n\n- [ ] Schemas are generated from `TOOLS`, not hand-copied\n- [ ] Malformed rate and repair count are recorded per model before and after\n- [ ] A provider without support degrades to today's behaviour, unchanged\n- [ ] `reason-02` validation and repair tests still pass untouched\n- [ ] A shaped-but-unsafe call (write outside the workspace, `act` tier) is still refused by the risk tier\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/tools.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~4-6 days"
+    },
+    {
       "id": "laptop-06-screen-grounding",
       "title": "feat(os): bounded screen understanding for \"click the thing I mean\"",
       "status": "backlog",
@@ -1810,6 +1834,30 @@
       "verify": "node --test test/agent.test.js test/personas.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~2-3 days",
       "body": "## Context\n\n\"Do it again\" and \"the second one\" are how people talk, and they require the assistant to know what \"it\" and \"the second one\" were. The store already keeps sessions and memory, but referents from the previous turn — the window it just focused, the file it just moved — are not carried forward.\n\nThis is the difference between a voice assistant you repeat yourself to and one you talk to.\n\n## What to change\n\n- `src/store.js`: a small per-session referent table (last target per tool family, last list shown, last error) with an expiry, written only for actions the user actually took.\n- `src/agent.js`: include the referents in the prompt as structured context, clearly labelled as what happened, not as instructions from the model.\n- `src/prompt.js`: forbid inventing a referent when none is present — \"the second one\" with no prior list must ask.\n- Deleting a session deletes its referents; nothing here is long-term memory.\n\n**Safety:** carrying a referent is not permission; the same approval rules apply to the repeated action.\n\n## Acceptance criteria\n\n- [ ] A referent is never offered when the previous turn did not establish one\n- [ ] \"Do it again\" repeats the last action only after a fresh approval where the action is destructive\n- [ ] Session deletion removes referents\n- [ ] Referents never appear in telemetry or a support bundle\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/personas.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~2-3 days"
+    },
+    {
+      "id": "voice-08-latency-waterfall",
+      "title": "feat(voice): record a per-stage latency waterfall on every turn",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice",
+        "observability"
+      ],
+      "files": [
+        "src/telemetry.js",
+        "src/voice.js",
+        "scripts/doctor.js",
+        "test/readiness.test.js"
+      ],
+      "verify": "node --test test/readiness.test.js test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-5 days",
+      "depends_on": [
+        "voice-01-latency-budget"
+      ],
+      "body": "## Context\n\n`src/telemetry.js` records a turn's total duration, its tool rounds and its token count. The budget in `docs/VOICE-CONTROL-ROADMAP.md` §5 is written per stage — endpoint, transcript, first token, first audio — but nothing records those stages, so a regression can only be found as \"it feels slower\".\n\nThe local-voice projects that are actually usable treat the pipeline as separate services with separate clocks: Home Assistant's Wyoming path publishes an expected latency per stage and its community measures exactly that. The lesson is not the protocol; it is that a pipeline you cannot break down is a pipeline you cannot tune.\n\n## What to change\n\n- Five timestamps per turn with stable names: `endOfSpeech`, `finalTranscript`, `firstToken`, `firstAudio`, `done`. Missing stages are recorded as missing, never as zero.\n- Persist per-turn stage durations (durations only, no text, no audio) into the existing telemetry store, with a rolling p50/p95 per stage over the last 50 turns.\n- `npm run health` prints the waterfall and names the slowest stage, with the sample count.\n- A CI-friendly check that a stage regression above 20% against the committed baseline fails loudly.\n- `docs/DIAGNOSTICS.md`: how to read a waterfall, and why a missing stage is different from a fast stage.\n\n**Safety:** durations and stage names only — no transcript, no audio, no file paths. Everything stays in the local telemetry file, and the recorder cannot block a turn: if writing fails, the turn proceeds.\n\n## Performance contract\n\n- **Baseline:** partial — `src/telemetry.js` records total turn ms, rounds and tokens; the five stage boundaries exist only as a written budget, with 0 stages persisted per turn\n- **Target:** 5 stage timings persisted for **100%** of voice turns, p50/p95 available per stage at n >= 50, recorder overhead **<= 5 ms** per turn\n- **Must not regress:** the recorder may never drop, delay or reorder a turn, may never record text or audio content, and a blocked write must degrade to a missing stage rather than a failed request\n\n## Acceptance criteria\n\n- [ ] Every voice turn yields five timestamps or an explicit `missing` marker\n- [ ] `npm run health` prints the waterfall with sample counts and the slowest stage\n- [ ] A 20% regression in any stage fails the check\n- [ ] No transcript or audio content appears in the telemetry file (asserted by test)\n- [ ] Overhead is measured at 5 ms or less per turn\n- [ ] Disabling the waterfall restores today's telemetry exactly\n\n## How to verify\n\n```bash\nnode --test test/readiness.test.js test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~3-5 days"
     },
     {
       "id": "duplex-01-semantic-turn-detection",
@@ -1940,6 +1988,30 @@
       "depends_on": [
         "voice-04-wake-gating"
       ]
+    },
+    {
+      "id": "ear-04-variable-window-stt",
+      "title": "feat(voice): transcribe the utterance you got, not a padded 30 seconds",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice",
+        "performance"
+      ],
+      "files": [
+        "src/voice.js",
+        "scripts/doctor.js",
+        "docs/VOICE.md",
+        "test/voice.test.js"
+      ],
+      "verify": "node --test test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "depends_on": [
+        "ear-01-local-streaming-stt"
+      ],
+      "body": "## Context\n\nThe Whisper family pads every clip to a fixed 30-second window before the encoder runs, so a two-second command costs the same encode as a paragraph. On the hardware this product runs on that is the whole latency difference: published end-of-utterance latency at one second of audio is 401.7 ms for Whisper Small against 65.1 ms for a variable-length streaming encoder of the same class (Moonshine v2 Small), at a *better* word error rate (7.8% vs 8.6%); the gap widens to 2173 ms vs 129.8 ms against Large v3.\n\n`ear-01` makes transcription local and streaming. This item fixes the *model class* assumption underneath it: an encoder that processes only the audio it was given, and a small streaming cache so most of the work happens while the person is still talking.\n\n## What to change\n\n- A bench over the labelled corpus that reports, per clip length bucket (1–2 s, 3–5 s, >5 s): transcript latency p50/p95 and WER, for the current path and for a variable-length streaming candidate.\n- Adopt a candidate only if it wins on both axes at 1–3 s; otherwise publish the measurement and close the item as a documented negative result — a slower model with better numbers in a different bucket is not a win.\n- Keep the existing Whisper path as the fallback and as the accuracy reference; the choice is configuration, not a rewrite of `src/voice.js`.\n- Streaming partials cached across chunks, with the final transcript still emitted once, unchanged in shape.\n- `docs/VOICE.md`: which encoder runs where, and that the improvement claim is scoped to short utterances.\n\n**Safety:** audio stays on the device and inside the existing opt-in; no cloud STT path is added, no always-on capture, and the microphone gate and its visible state are untouched. A model that cannot run on this machine is reported, never silently replaced by a network call.\n\n## Performance contract\n\n- **Baseline:** not implemented — the configured Whisper path pads every clip into a fixed 30-second window, so short commands pay the same encoder cost as long ones (reference: 401.7 ms vs 65.1 ms time-to-first-token at 1 s audio; WER 8.6% vs 7.8%)\n- **Target:** short-utterance (1–3 s) transcript latency p50 **at or below 200 ms** with WER within 1 percentage point of today's baseline on the labelled corpus, and time-to-first-token that stops scaling with a padding window\n- **Must not regress:** WER may not get worse beyond 1 pp; no audio may leave the machine; the existing Whisper path must remain selectable and the microphone permission model may not change\n\n## Acceptance criteria\n\n- [ ] The bench reports latency and WER per clip-length bucket for both paths\n- [ ] The short-utterance p50 target is met on this machine, not on a vendor's\n- [ ] A negative result is published and the item closed rather than the target being quietly widened\n- [ ] Final transcript shape, streaming partials and the mic gate are unchanged for callers\n- [ ] Zero network bytes are attributable to transcription\n\n## How to verify\n\n```bash\nnode --test test/voice.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~1-2 weeks"
     },
     {
       "id": "skill-01-conversation-skill-compiler",
@@ -2083,6 +2155,78 @@
       "depends_on": [
         "mind-01-intent-fast-path"
       ]
+    },
+    {
+      "id": "mind-04-prefix-cache-residency",
+      "title": "perf(agent): keep the model resident and the prompt prefix cacheable",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance",
+        "area/agent"
+      ],
+      "files": [
+        "src/prompt.js",
+        "src/brain.js",
+        "src/config.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-5 days",
+      "depends_on": [
+        "mind-01-intent-fast-path"
+      ],
+      "body": "## Context\n\nPrefill, not generation, is what makes a local assistant feel slow: every turn re-processes the system prompt, the tool schemas and the conversation before the first new token exists. llama.cpp and its downstreams keep the KV cache for a shared prefix, so the turn can resume instead of re-reading. Two things in this checkout defeat that reuse:\n\n- `src/prompt.js:50` puts `Date and time: <now>` and up to forty remembered facts into the *system* prompt — the first bytes of every request. A minute boundary, a new fact or a changed workspace list invalidates the whole cache behind it.\n- `src/brain.js:143` sends `options: { temperature, num_ctx, num_predict }` and no `keep_alive`, so Ollama unloads the model — and dumps the cache — after its default five idle minutes.\n\nPublished measurements put the size of the prize at 8x–17x on prompt-eval time for a warm prefix (962 ms cold vs 54 ms warm for a 723-token prompt; up to 93% TTFT reduction with host-RAM prefix caching). This is the cheapest large win on fixed hardware and needs no new dependency.\n\n## What to change\n\n- A canonical prompt builder: one function, one serialisation, static block first (identity, rules, tool list in a deterministic order), then volatile content (time, recalled facts, task) at the tail. A test asserts the byte-identical prefix across two turns in the same minute.\n- Move the clock out of the prefix: keep `time_now` as a tool and the fast path (`mind-01`) as the way to ask the time, and pass the date only when the turn needs it.\n- A bounded `keep_alive` (default 30 minutes, configurable, `0` restores today's behaviour exactly) sent on every Ollama request.\n- Record `prompt_eval_duration`, `prompt_eval_count` and the derived cache-hit ratio per turn in `src/telemetry.js`, so the claim is a number in the panel rather than a feeling.\n- `docs/GUIDE.md`: what is cached, what invalidates it, and how to read the hit ratio.\n\n**Safety:** no new network, no new runtime dependency, no change to what the model is told. `keep_alive` is bounded rather than infinite so a personal laptop is never pinned by the assistant; the setting is documented and user-visible.\n\n## Performance contract\n\n- **Baseline:** not instrumented — the system prompt carries a minute-resolution timestamp and up to 40 memory facts ahead of the task, `src/brain.js` sends no `keep_alive`, and Ollama's default five-minute unload discards the KV cache. A cold re-prefill therefore pays the whole prefix on the first turn after any idle gap or any minute boundary (reference measurement for the same shape of prompt: 962 ms cold vs 54 ms warm prompt-eval, 17.7x)\n- **Target:** multi-turn prefill p50 down **60% or more from turn 2 onward**, cache-hit ratio above 85% at steady state, with a test that proves the prefix is byte-identical across consecutive turns in the same minute\n- **Must not regress:** the model must still know today's date when a turn needs it (a date-rollover test fails the build if the clock is simply deleted), recalled facts must remain available, and a cold first turn may not get slower\n\n## Acceptance criteria\n\n- [ ] Two consecutive turns produce a byte-identical static prefix, asserted by test\n- [ ] Prefill p50 is down 60% or more at turn 2 on the recorded baseline script\n- [ ] `keep_alive` is configurable, bounded, and `0` restores exact current behaviour\n- [ ] Cache-hit ratio is visible in telemetry and `npm run health`\n- [ ] A date-rollover test still returns the correct date through the tool and the fast path\n- [ ] No new dependency and no change to the tool schemas the model receives\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~3-5 days"
+    },
+    {
+      "id": "mind-05-draft-model-speculation",
+      "title": "perf(agent): optional draft model for 1.5-3x faster local generation",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance",
+        "area/agent"
+      ],
+      "files": [
+        "src/brain.js",
+        "src/model-choice.js",
+        "scripts/doctor.js",
+        "docs/GUIDE.md"
+      ],
+      "verify": "node --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1 week",
+      "depends_on": [
+        "mind-04-prefix-cache-residency"
+      ],
+      "body": "## Context\n\nOn CPU and small-GPU laptops, decode is the second half of the latency budget and it is the half nobody optimises. Speculative decoding pairs the resident model with a small draft model that guesses several tokens ahead; the target verifies them in one pass. Published measurements range from 1.4x to 3.2x wall-clock generation (64 t/s → 206 t/s for a 26B target with a 2B-class draft; roughly 2x on an M1 Ultra), at identical output when sampling is greedy.\n\nIt is also a trap if enabled blindly: the same reports show a draft depth above the default of 3 making generation *slower*, and a Vulkan/UMA iGPU regression where the draft model's per-token time collapsed by five orders of magnitude. So this lands as an opt-in, measured, and refused-on-this-hardware-when-it-is-slower feature — not a default.\n\n## What to change\n\n- A probe on the runtime: does it expose a draft model at all? Ollama does not, so this ships as a documented `llama-server` path alongside the existing provider, with no silent switch.\n- A bench script that measures decode t/s with and without the draft at depths 3/5/8 on this machine and writes the result into `readiness` output.\n- Enable only when the measured speedup is at least 1.3x; otherwise the panel says \"draft model measured slower on this machine\" and leaves it off.\n- A greedy-identity check: the same prompt at temperature 0 must produce the same answer with and without speculation.\n- `docs/GUIDE.md`: the memory cost (a second model in RAM/VRAM), how to turn it off, and which hardware classes are known-bad.\n\n**Safety:** opt-in, local only, and it never downloads a model on its own. The confirmation step names the extra memory before the setting is saved. Speculation changes how tokens are produced, never which tool may run: the risk tiers and approval gate are untouched.\n\n## Performance contract\n\n- **Baseline:** not implemented — every token is one forward pass of one model, so decode speed is whatever the model and hardware give (reference range: 1.4x-3.2x available on hardware where the draft predicts well)\n- **Target:** decode tokens/second up **40% or more** on the committed bench prompts with output identical to the no-draft run at temperature 0, and the extra memory reported before the setting can be enabled\n- **Must not regress:** the answer must be identical (greedy) or within the existing eval's noise band at temperature 0.4; time-to-first-token may not rise more than 5%; a machine where the probe measures a slowdown must end up with the feature off\n\n## Acceptance criteria\n\n- [ ] The probe measures this machine and refuses to enable a configuration that is slower\n- [ ] Greedy output is identical with and without the draft on the bench prompt set\n- [ ] Decode t/s, draft depth and extra memory are recorded and shown before enabling\n- [ ] The feature is off by default and documented as unavailable on Ollama's API\n- [ ] Nothing is downloaded, and no provider may be swapped silently\n\n## How to verify\n\n```bash\nnode --test test/router.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~1 week"
+    },
+    {
+      "id": "mind-06-parallel-read-tools",
+      "title": "perf(agent): run independent read-tier tool calls concurrently",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance",
+        "area/agent"
+      ],
+      "files": [
+        "src/agent.js",
+        "src/tools.js",
+        "src/risk.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/agent.test.js test/tools.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "depends_on": [
+        "mind-01-intent-fast-path"
+      ],
+      "body": "## Context\n\n`src/agent.js` executes tool calls in a strict `for` loop over `out.toolCalls`, so a turn that reads three files, greps a directory and checks the time pays five round trips for work that has no ordering between it. Models emit these batches because the answer needs all of them; the loop then serialises them anyway.\n\nTop coding agents fan work out and bring back only the conclusion. For a single-user local assistant the same principle applies at a smaller scale: parallelise the reads, never the actions.\n\n## What to change\n\n- Classify each emitted call with the existing `src/risk.js` tiers, then run the whole `read` batch concurrently with a small fixed cap (4) and re-emit results to the model in the original call order.\n- The batch stops being parallel the moment an `act` or `blocked` call appears: those run alone, in order, through the existing approval gate.\n- An unknown or unclassifiable tool is treated as `act` for scheduling purposes — serialised — so a new plugin cannot inherit concurrency by accident.\n- `src/telemetry.js`: record tool wall-clock, per-call and for the batch, so the win is visible.\n\n**Safety:** concurrency is a scheduling change, not a permission change. Only calls already classified `read` may overlap; approvals remain sequential, single-use, and answered one at a time, and a failure in one read aborts the rest rather than letting a half-batch look complete.\n\n## Performance contract\n\n- **Baseline:** sequential — `src/agent.js` runs `for (const call of out.toolCalls)`, so N independent reads cost N round trips and a 3-file turn pays 3x the wall clock\n- **Target:** wall clock down **35% or more** on the committed multi-read turn suite (N >= 3 reads), with identical model-visible results in identical order\n- **Must not regress:** no `act` call may ever run concurrently or out of order; approval prompts stay one-at-a-time; a denied or failed call still produces the same typed failure; transcript order stays deterministic\n\n## Acceptance criteria\n\n- [ ] Read-tier calls run concurrently with a cap of 4 and results are re-ordered to match the model's call order\n- [ ] Any `act`, `blocked` or unrecognised tool forces the batch back to serial\n- [ ] A failure in one call cancels the others and is reported as one typed failure\n- [ ] The multi-read suite shows a 35%+ wall-clock reduction with no behavioural difference\n- [ ] Telemetry records per-call and per-batch durations\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/tools.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~4-6 days"
     },
     {
       "id": "lead-01-cpu-duplex",
@@ -2295,6 +2439,102 @@
       "verify": "node --test test/skill.test.js\nnode scripts/skill.js verify --dry-run",
       "time_estimate": "~1.5 weeks",
       "body": "## Context\n\nA category leader does not only keep its knowledge in a database. If a compiled skill cannot leave the machine, every user starts from zero and no one can check anyone's work. A small, plain-text, signed-by-content skill file — preconditions, steps, verification steps, and the corpus it was measured on — turns a personal routine into something a colleague can review, run and reject.\n\n## What to change\n\n- A versioned JSON skill file: trigger phrases, preconditions, steps with argument templates, a verification step per action and the provenance (trace id, date, machine).\n- Import that re-runs verification before the skill is accepted, and refuses a skill whose steps include an unverified or dangerous action.\n- A content hash, so a shared skill can be compared and a mutated one is visibly different.\n- `node scripts/skill.js verify <file>` for a reviewer who does not trust the sender.\n\n**Safety:** importing a skill is not importing permission: a portable skill still runs through this machine's approval gate, and a skill cannot embed a pre-approved action.\n\n## Performance contract\n\n- **Baseline:** not implemented — skills do not exist yet outside the roadmap; nothing is exportable, importable or checkable\n- **Target:** export/import round-trips byte-identically, 100% of imports with a missing precondition list or a dangerous step are refused, and `verify` runs in 2 seconds or less per skill\n- **Must not regress:** must not regress replay determinism or the approval gate, and must not accept a skill whose content hash does not match its steps\n\n## Acceptance criteria\n\n- [ ] A skill exported on one machine imports on another with identical steps\n- [ ] A tampered skill fails its hash check with a specific message\n- [ ] A skill containing a shell step is refused without an explicit override\n- [ ] Verification runs offline, with no network access\n\n## How to verify\n\n```bash\nnode --test test/skill.test.js\nnode scripts/skill.js verify test-fixtures/skills/example.json\n```\n\n## Time estimate\n\n~1.5 weeks\n"
+    },
+    {
+      "id": "lead-10-conversation-quality-bench",
+      "title": "test(eval): a labelled conversation corpus that scores answering, not uptime",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "eval",
+        "area/agent"
+      ],
+      "files": [
+        "docs/CONVERSATION.md",
+        "scripts/eval-conversation.js",
+        "test/conversation-quality.test.js"
+      ],
+      "verify": "node --test test/conversation-quality.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "depends_on": [
+        "pinch-022-retrieval-quality-corpus"
+      ],
+      "body": "## Context\n\nThis repository measures retrieval (`pinch-022`), the deterministic fast path (`mind-01`), the laptop control floor (`lead-06`) and readiness (`pinch-012`). It does not measure the thing the product is for: whether an answer was right.\n\nEvery serious assistant stack now ships an eval loop, and the ones that compound quality do it without a vendor: a versioned corpus, a deterministic runner, per-class scores, and a rule that a regression names the failing cases. Without it, every speed item in this roadmap is unmeasurable on the axis that matters most — `mind-03`'s \"equal or better task success\" is currently a sentence with nothing behind it.\n\n## What to change\n\n- A corpus of 60 turns across six classes: factual lookup with a citation, document question with an unanswerable variant, multi-turn follow-up (\"the second one\"), tool-needed, refusal/abstain, and a short social turn. Each carries the expected answer shape, not the expected wording.\n- A scorer with two layers: deterministic checks (citation resolves to a retrieved source, no invented file path, no claim of an action that did not run, tool used when required) and an optional local-model judge for answer adequacy, recorded with model id, seed and prompt hash so a score can be reproduced.\n- One command, offline, in under five minutes, printing per-class scores and a single score with the commit it ran against.\n- The judge prompt is versioned like code; a change to it changes the score and must be reviewed as such.\n- `docs/CONVERSATION.md`: what is scored, what is deliberately not (style, verbosity), and the honest limit — a local judge is a weak judge, so deterministic checks carry the gate.\n\n**Safety:** the corpus is synthetic and local — no user conversation is ever used as eval data, nothing is uploaded, and the judge runs on the configured local model. Scoring must not require the network, so the gate works on a plane.\n\n## Performance contract\n\n- **Baseline:** not implemented — the repo scores retrieval, the fast path and readiness, but no test measures whether an answer was correct, cited or coherent (0 answer-quality assertions in the suite)\n- **Target:** 60 labelled turns scored offline in **under 5 minutes**, producing a reproducible single score with per-class breakdown, of which at least 30 turns are gated by deterministic checks rather than a model judge\n- **Must not regress:** the bench must not become a benchmark nobody runs: it stays inside the five-minute CI budget, and a score change must name the failing turn ids instead of printing a smaller number\n\n## Acceptance criteria\n\n- [ ] The corpus is versioned, synthetic and committed with the harness\n- [ ] Deterministic checks gate at least 30 turns; the judge is optional and recorded\n- [ ] One command runs offline in under five minutes and prints per-class scores\n- [ ] A deliberately broken build (uncited answer, invented path) fails the bench\n- [ ] The judge prompt is versioned and a change to it is visible in review\n- [ ] `docs/CONVERSATION.md` states what the bench cannot measure\n\n## How to verify\n\n```bash\nnode --test test/conversation-quality.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~1-2 weeks"
+    },
+    {
+      "id": "pinch-026-hybrid-retrieval-gate",
+      "title": "feat(rag): decide dense retrieval and reranking on the labelled corpus, not on fashion",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/rag",
+        "eval"
+      ],
+      "files": [
+        "src/documents.js",
+        "src/citations.js",
+        "docs/RETRIEVAL-EVALUATION.md",
+        "test/documents.test.js"
+      ],
+      "verify": "node --test test/documents.test.js test/retrieval-evaluation.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "depends_on": [
+        "pinch-011-local-workspace-document-index",
+        "pinch-022-retrieval-quality-corpus"
+      ],
+      "body": "## Context\n\n`src/documents.js` is a zero-dependency BM25 index, which is the right starting point and the wrong finishing point: BM25 cannot answer a question phrased in words the document does not use. Every local assistant that is good at documents adds a second retriever and fuses by rank.\n\nThe published gains are real but smaller and more conditional than the marketing suggests: tuned hybrid fusion on WANDS gave +7.4% NDCG over either retriever alone; a financial-document bench moved recall@5 from 0.644 (BM25) to 0.695 (RRF) and to 0.816 with a cross-encoder rerank. Against that, one public implementation measured reranking at **+0.8% NDCG for 20x the latency**. Reranking is not free and is not automatically a win — which is why this item is a gate, not a build order.\n\n## What to change\n\n- Measure first: run the existing corpus (`pinch-022`) through BM25 alone, then BM25 + a dense retriever fused with reciprocal rank fusion, then fused + a small local reranker over the top 20.\n- Adopt each stage only if it earns its latency on the corpus; publish the negative result when it does not, and keep the simpler index.\n- Embeddings are computed locally and cached with the document's content hash, so re-indexing a changed file does not re-embed the library.\n- `docs/RETRIEVAL-EVALUATION.md`: the per-stage table (recall@5, nDCG@10, p50/p95) and the explicit decision this item produced.\n\n**Safety:** retrieval stays local: any embedding model runs on the machine, and no document text may be sent to a provider. The index remains a plain local file, and a cache miss must degrade to BM25 rather than to a network call.\n\n## Performance contract\n\n- **Baseline:** BM25 only — one retriever, no fusion, no reranker; recall@5 and nDCG@10 are measured by `pinch-022` and every improvement is unquantified until this item runs\n- **Target:** recall@5 up **8 percentage points or more** on the committed corpus at **p95 <= 150 ms** total retrieval, with each added stage individually justified in the results table\n- **Must not regress:** an added stage that does not clear both bars must be removed rather than left enabled \"for the future\"; citation correctness may not drop; no retrieval path may require the network\n\n## Acceptance criteria\n\n- [ ] The corpus report contains BM25, hybrid and hybrid+rerank rows with recall@5, nDCG@10 and p50/p95\n- [ ] Every stage adopted clears 8 pp recall@5 at p95 <= 150 ms, or is rejected in writing\n- [ ] Embedding cache is keyed by content hash and re-indexing an unchanged vault is fast\n- [ ] Citations still resolve to real passages after fusion and reranking\n- [ ] Zero network calls on the retrieval path, asserted by test\n\n## How to verify\n\n```bash\nnode --test test/documents.test.js test/retrieval-evaluation.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~1-2 weeks"
+    },
+    {
+      "id": "pinch-027-grounded-answer-check",
+      "title": "feat(rag): abstain instead of asserting what the retrieved passage does not say",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/rag",
+        "trust"
+      ],
+      "files": [
+        "src/citations.js",
+        "src/guard.js",
+        "src/documents.js",
+        "test/citations.test.js"
+      ],
+      "verify": "node --test test/citations.test.js test/guard.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~1-2 weeks",
+      "depends_on": [
+        "pinch-022-retrieval-quality-corpus"
+      ],
+      "body": "## Context\n\n`src/guard.js` audits claims the assistant makes about **actions** — it will not let a reply say a file was written when the write failed. Nothing audits claims about **sources**. A document answer can cite a real passage and still say something the passage does not say, and the panel shows a tidy `[1]` next to a wrong sentence.\n\nAssistants that lead on trust handle this with a check-and-abstain step: for each sentence that carries a citation, decide whether the cited span supports it, and when it does not, either widen the citation or say it could not find the answer. \"I could not find that in your notes\" is a better answer than a confident fabrication with a footnote.\n\n## What to change\n\n- Extract citation-bearing sentences from the answer and the retrieved span each one points at.\n- A cheap local support check, deterministic first: does the cited span contain the named entity and the number/date the sentence asserts? Lexical entailment catches the common failure (right document, wrong figure) without a model call.\n- An optional single local-model pass for what the lexical check cannot decide, bounded to the cited sentences and never to the whole reply.\n- Three outcomes rendered honestly: supported (citation kept), unsupported (citation dropped and the sentence softened or removed), unanswerable (explicit abstain, with the searched locations listed).\n- `docs/GUIDE.md`: what a citation means here, now that it means \"this span supports this sentence\".\n\n**Safety:** the check may only *reduce* confidence. It can remove a citation or replace a claim with an abstain; it can never be used to add a citation, to reword a claim into something the source does not support, or to skip the action gate.\n\n## Performance contract\n\n- **Baseline:** not implemented — citations are attached by retrieval, not verified against the sentence; 0 checks compare a claim with the span it cites\n- **Target:** unsupported cited sentences down **50% or more** on the committed corpus with abstain precision at **90% or more** (an abstain must be correct), for **<= 150 ms** added latency on document answers\n- **Must not regress:** answers that were already correct must not start abstaining; a supported claim may not be softened; a citation may never be invented to satisfy the checker; non-document turns are untouched\n\n## Acceptance criteria\n\n- [ ] Lexical support check runs with no model call and catches the wrong-figure case in the corpus\n- [ ] Unsupported rate halves; abstain precision is measured, not assumed\n- [ ] A supported answer keeps its citation verbatim\n- [ ] The abstain text names what was searched and says the answer was not found\n- [ ] Added latency stays at or below 150 ms on document turns\n- [ ] Non-document turns show no behaviour change\n\n## How to verify\n\n```bash\nnode --test test/citations.test.js test/guard.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~1-2 weeks"
+    },
+    {
+      "id": "pinch-028-memory-recall-budget",
+      "title": "perf(memory): recall the facts that matter, not the last forty",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/memory",
+        "performance"
+      ],
+      "files": [
+        "src/prompt.js",
+        "src/store.js",
+        "src/tools.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~4-6 days",
+      "depends_on": [
+        "pinch-022-retrieval-quality-corpus"
+      ],
+      "body": "## Context\n\n`src/prompt.js` injects `loadMemory().facts.slice(-40)` into the system prompt and `slice(-8)` into the conversation prompt. That is recency, not relevance: after a month of use the assistant carries forty mostly-unrelated facts on every turn, which dilutes attention, costs prefill, and changes the prompt prefix so often that caching (`mind-04`) cannot help.\n\nMemory systems that work rank and bound by relevance, keep pinned facts always present, and — the part usually skipped — record where a fact came from so a wrong one can be corrected rather than accumulating. `harness-05` covers provenance; this item covers selection.\n\n## What to change\n\n- Rank remembered facts against the current turn using the existing local scorer (`src/documents.js` BM25 is already in the tree) plus a pinned set and a recency tiebreak.\n- A token budget for the memory block rather than a count of facts, so a fact with a long body cannot crowd out five short ones.\n- Pinned facts (name, timezone, preferences the owner marked) always included; unpinned facts included only when they score above a floor, with the floor measured rather than guessed.\n- The block goes **after** the static prefix (see `mind-04`), so relevance selection and cache reuse do not fight each other.\n- Recall quality measured on a labelled set of turns: did the fact the turn needed make the cut?\n\n**Safety:** no fact may be sent anywhere, no new store, and nothing is deleted: this changes what is *included* in a prompt, never what is remembered. A fact that fails to be recalled is still there next turn.\n\n## Performance contract\n\n- **Baseline:** recency only — up to 40 facts are injected into the system prompt and 8 into the conversation prompt by position, with 0 relevance scoring and no token budget for the block\n- **Target:** injected memory tokens down **60% or more** on turns where more than 20 facts are stored, while recall@5 of the needed fact stays at **90% or more** on the labelled turn set\n- **Must not regress:** the fact a turn needs may not stop being available; pinned facts may never be dropped; a 90%-recall result may not be reached by simply injecting everything again\n\n## Acceptance criteria\n\n- [ ] Memory injection has a token budget and a measured relevance floor\n- [ ] Pinned facts are always present; unpinned facts must earn their place\n- [ ] recall@5 of the needed fact is 90% or more on the labelled turns\n- [ ] Injected memory tokens drop 60% or more on fact-heavy turns\n- [ ] Nothing is deleted from the store by this change\n- [ ] The memory block sits after the static prefix and does not break `mind-04`'s cache test\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~4-6 days"
     }
   ]
 }
