@@ -365,6 +365,42 @@ function scrollDown() {
   requestAnimationFrame(() => (log.scrollTop = log.scrollHeight));
 }
 
+/* ── latency marks (measurement only) ──────────────────────────────────────
+   Five stages, two clocks. A mark that never happened stays undefined and the
+   server records null: a fabricated zero is a perfect score, and a perfect
+   score is the number a reader will believe. Nothing here is sent anywhere
+   except as a handful of integers alongside a message you already sent. */
+let turnOpenedAt = 0;   // microphone opened: the anchor for the browser stages
+let captureEndAt = 0;   // speaker stopped (the recogniser's speech-end)
+let endpointAt = 0;     // endpoint decided: the final transcript was accepted
+let turnTiming = null;  // the marks for the turn currently being spoken
+let turnTimingAt = 0;   // when those marks were completed
+// A mark is only true for the turn it describes. Past a minute it belongs to a
+// send that never happened, and attaching it to the next typed message would be
+// a measurement of nothing dressed as a measurement of something.
+const TIMING_TTL_MS = 60_000;
+
+const msBetween = (from, to) =>
+  from > 0 && to >= from ? Math.round(to - from) : undefined;
+
+function openTurnClock() {
+  turnOpenedAt = performance.now();
+  captureEndAt = 0;
+  endpointAt = 0;
+  turnTiming = null;
+}
+
+/** Take the marks for this turn, once. Typed messages have none — and send none. */
+function takeTiming(sentAt) {
+  const marks = turnTiming;
+  turnTiming = null;
+  if (!marks || sentAt - turnTimingAt > TIMING_TTL_MS) return null;
+  const timing = { ...marks };
+  const transcriptMs = msBetween(endpointAt, sentAt);
+  if (transcriptMs !== undefined) timing.transcriptMs = transcriptMs;
+  return Object.keys(timing).length ? timing : null;
+}
+
 /* ─────────────────────────────── voice ─────────────────────────────────── */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
@@ -400,12 +436,24 @@ if (!SR) {
   recognition.interimResults = true;
   recognition.continuous = false;
 
+  recognition.onspeechend = () => { captureEndAt = performance.now(); };
   recognition.onresult = (event) => {
     let text = "";
     for (const res of event.results) text += res[0].transcript;
     $("input").value = text;
     autoGrow();
-    if (event.results[event.results.length - 1].isFinal) setTimeout(() => send(), 220);
+    if (event.results[event.results.length - 1].isFinal) {
+      // The recogniser has decided the utterance ended and handed over its final
+      // transcript: that instant is both the endpoint decision and the end of
+      // the endpoint stage. Missing marks stay undefined, never 0.
+      endpointAt = performance.now();
+      turnTimingAt = endpointAt;
+      turnTiming = {
+        captureEndMs: msBetween(turnOpenedAt, captureEndAt),
+        endpointMs: msBetween(captureEndAt, endpointAt),
+      };
+      setTimeout(() => send(), 220);
+    }
   };
   recognition.onend = () => { listening = false; $("mic").classList.remove("listening"); };
   recognition.onerror = (e) => {
@@ -419,6 +467,7 @@ $("mic").onclick = () => {
   if (listening) { recognition.stop(); return; }
   listening = true;
   $("mic").classList.add("listening");
+  openTurnClock();
   try { recognition.start(); } catch {}
 };
 
@@ -794,11 +843,13 @@ async function send() {
     scrollDown();
   }
 
+  // Marks ride with the message they describe. One request, no new endpoint.
+  const timing = takeTiming(performance.now());
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ sessionId: store.sessionId, text, attachments: attachmentIds }),
+      body: JSON.stringify({ sessionId: store.sessionId, text, attachments: attachmentIds, ...(timing ? { timing } : {}) }),
     });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 

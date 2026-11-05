@@ -19,6 +19,7 @@ import { config } from "../src/config.js";
 import { planFor } from "../src/failure.js";
 import { renderDoctor, renderJson, runDoctor } from "../src/doctor.js";
 import { collectEnvironment, configuredSecrets, renderBaseline, runBaseline } from "../src/baseline.js";
+import { latencyReport } from "../src/telemetry.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +67,11 @@ const report = await runDoctor({
   plan: planFor(config.llm.provider === "mock" ? { provider: "mock", model: "mock" } : { provider: config.llm.provider, model: config.llm.provider === "openai" ? config.llm.openaiModel : config.llm.ollamaModel }),
   network,
 });
+
+// Where the last turns spent their time, from the local telemetry ring. Always
+// present, because "no turns recorded yet" is itself the answer to "why is my
+// latency table empty" — and it is a null, not a zero.
+report.latency = latencyReport();
 
 if (baseline) {
   // Model phases only run against a provider the probes actually verified. A missing or

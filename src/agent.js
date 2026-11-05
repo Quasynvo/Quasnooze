@@ -26,7 +26,7 @@ import { loadSession, appendMessage, loadMemory } from "./store.js";
 import { auditReply, renderGuardNote } from "./guard.js";
 import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
-import { record } from "./telemetry.js";
+import { normalizeStages, record } from "./telemetry.js";
 import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
 import { parseWorkflowCommand, createWorkflow, submitDesign, approveDesign, beginExecution, finishExecution,
   cancelWorkflow, activeWorkflowFor, loadWorkflow, renderPlan, WorkflowStoreError, LIMITS as WORKFLOW_LIMITS } from "./agent/workflow.js";
@@ -355,6 +355,12 @@ export async function runAgent({
   allowSchedule = true,
   harness,
   signal,
+  // Latency marks, owned by whoever can see the clock they are measured against.
+  // `stages` is mutated in place by the caller (the HTTP layer marks the first
+  // delta it writes); this function fills the mark it owns and normalises the
+  // object on the way to disk.
+  stages = null,
+  stageAnchor = null,
 }) {
   const activeHarness = resolveHarnessPipeline(harness, config.harnessEvents);
   const turnSecrets = () => [
@@ -372,8 +378,16 @@ export async function runAgent({
   if (command !== null) return {text:command,sessionId,trace:[],guard:[],sources:[],ms:0,firstTextMs:null,error:null};
   const activeModel = brain.active; // Pin provider/model for the entire tool loop.
   const startedAt = Date.now();
+  // The server passes the instant the request arrived; a channel, the CLI or a
+  // test has no such instant and anchors on this turn's start instead. Either
+  // way a stage is a duration from a real clock, never a guess.
+  const stageAnchorAt = Number.isFinite(stageAnchor) ? stageAnchor : startedAt;
+  const markFirstToken = () => {
+    if (stages && stages.firstTokenMs === null) stages.firstTokenMs = Math.max(0, Date.now() - stageAnchorAt);
+  };
+  const withStages = (event) => (stages ? { ...event, stages: normalizeStages(stages) } : event);
   const unattended = autonomy === "unattended";
-  const simpleTurn = (reply) => ({
+  const simpleTurn = (reply) => (markFirstToken(), {
     text: reply,
     firstTextMs: Date.now() - startedAt,
     error: null,
@@ -580,7 +594,8 @@ export async function runAgent({
           }
           appendMessage(sessionId, { role: "assistant", content: reply, trace: fastTrace, guard: fastGuard.flags });
           const fastMs = Date.now() - startedAt;
-          record({
+          markFirstToken();
+          record(withStages({
             kind: "turn",
             sessionId,
             channel,
@@ -596,7 +611,7 @@ export async function runAgent({
             auto: 0,
             guardFlags: fastGuard.flags.length,
             error: null,
-          });
+          }));
           onEvent({ type: "tool_done", name: fast.name, ok: true, preview: String(fastResult.output).slice(0, 300) });
           return { text: reply, firstTextMs: fastMs, error: null, trace: fastTrace, sessionId, guard: fastGuard.flags, sources: [], ms: fastMs };
         }
@@ -663,7 +678,7 @@ export async function runAgent({
             }
           : {}),
         onDelta: (chunk) => {
-          if (firstTextMs === null) firstTextMs = Date.now() - startedAt;
+          if (firstTextMs === null) { firstTextMs = Date.now() - startedAt; markFirstToken(); }
           streamed += chunk;
           onEvent({ type: "delta", text: chunk });
         },
@@ -1060,7 +1075,8 @@ export async function runAgent({
   appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
 
   const ms = Date.now() - startedAt;
-  record({
+  markFirstToken();
+  record(withStages({
     kind: "turn",
     sessionId,
     channel,
@@ -1078,7 +1094,7 @@ export async function runAgent({
     auto: autoRan,
     guardFlags: guard.flags.length,
     error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
-  });
+  }));
 
   return {
     text: finalText,
