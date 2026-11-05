@@ -222,6 +222,13 @@ that calls `send()` is a final transcript. The tests assert that at the source
 level and at the pipeline level, because "the partial never enters history" is a
 property that fails silently and looks like a duplicate message.
 
+**Silence is not paid for.** Partial uploads happen only while the frame in hand is
+voiced. Audio captured during a pause — including the trailing silence before the
+endpoint — rides on the next upload and on the final POST, so pausing never costs
+audio and never costs a request that transcribes a room. In the end-to-end demo
+that is four requests instead of five, and a test asserts that every captured
+byte reaches the server exactly once, so the saving cannot quietly become a loss.
+
 `prompt` context is bounded to 400 characters, flattened to one line and taken
 from the **tail** — the recent words are what carry continuity, and an unbounded
 "context" field is a way to push arbitrary text through a transcription endpoint.

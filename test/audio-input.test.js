@@ -300,3 +300,39 @@ test('the deck never opens a second microphone for the same button', async () =>
   assert.doesNotMatch(html, /getUserMedia\s*\(/, 'the deck asks for the microphone itself');
   assert.match(html, /navigator\.mediaDevices\?\.getUserMedia\)/, 'the capability check was dropped');
 });
+
+/* ───── the design decision behind the silence rule, made checkable ──────── */
+
+test('no request is made while the frames are silent, and no audio is dropped', async () => {
+  // A natural pause mid-sentence (240 ms, under the 300 ms endpoint window) must
+  // not cost a request, and must not cost audio either: the paused frames are
+  // still captured and travel with the next chunk.
+  const script = [[0.22, 360], [0.005, 240], [0.22, 300], [0.005, 600]];
+  let frameAt = 0;
+  let produced = 0;
+  const duringSilence = [];
+  const posts = [];
+  const h = harness();
+  await startLocalDictation({
+    frames: (async function* () {
+      for (const frame of frames(script)) { frameAt = frame.at; yield frame; }
+    })(),
+    takeAudio: () => new Blob([new Uint8Array(100).fill(++produced)], { type: 'audio/webm' }),
+    post: async (blob, options) => {
+      // The final upload necessarily happens *after* the silence that ended the
+      // utterance; it is the partials that must never be paid for on silence.
+      posts.push({ bytes: blob.size, at: frameAt, final: Boolean(options?.final) });
+      return h.post(blob, options);
+    },
+    onPartial: h.onPartial, onFinal: h.onFinal, onStatus: h.onStatus,
+    streaming: true, chunkMs: 180,
+  });
+  const silentFrames = new Set(frames(script).filter((f) => f.level < ENDPOINTER_DEFAULTS.silenceThreshold).map((f) => f.at));
+  for (const post of posts) if (!post.final && silentFrames.has(post.at)) duringSilence.push(post.at);
+  assert.deepEqual(duringSilence, [], 'a chunk was uploaded while the room was silent');
+  // Every byte captured reached the server exactly once — nothing was dropped on
+  // the floor just because the upload paused.
+  const sent = posts.reduce((sum, post) => sum + post.bytes, 0);
+  assert.equal(sent, produced * 100, `sent ${sent} bytes of ${produced * 100} captured`);
+  assert.ok(posts.length >= 3, 'the pause stopped the partials entirely');
+});
