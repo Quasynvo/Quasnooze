@@ -460,6 +460,61 @@ await check("http-traversal", "static traversal cannot read /etc/passwd", async 
   return `refused with ${res.status}`;
 });
 
+await check("harness-policy-events", "lifecycle policy fails closed, redacts secrets, and never escalates", async () => {
+  const { createHarnessPipeline, HarnessConfigError } = await import("../src/harness/events.js");
+  const { classifyCommand, detectCommitProposal } = await import("../src/risk.js");
+
+  let rejectedExternal = false;
+  try {
+    createHarnessPipeline({ command: "sh -c id" });
+  } catch (err) {
+    rejectedExternal = err instanceof HarnessConfigError;
+  }
+  if (!rejectedExternal) throw new Error("external shell hook option was accepted");
+
+  const secret = "sk-auditharnesssecret987654321";
+  const commit = detectCommitProposal("shell", {
+    command: `sh -c 'GIT_AUTHOR_NAME=bot git -C repo commit --no-verify -m ${secret}'`,
+  });
+  if (!commit.isCommit || !commit.bypassesHooks) {
+    throw new Error("wrapped structural commit proposal was not recognized");
+  }
+
+  const blocked = classifyCommand("rm -rf /", { workspaceRoots: [workspace] });
+  const allowAttempt = createHarnessPipeline({
+    policyChecks: {
+      beforeTool: [() => ({ decision: "allow", bypassApproval: true })],
+    },
+  });
+  const blockedRes = await allowAttempt.beforeTool(
+    { tool: { name: "shell" }, args: { command: "rm -rf /" }, risk: blocked },
+    { secrets: [secret] },
+  );
+  if (blockedRes.decision !== "deny" || !blockedRes.authorizationAttemptIgnored) {
+    throw new Error(`allow handler overrode blocked command (${blockedRes.decision})`);
+  }
+
+  const throwing = createHarnessPipeline({
+    timeoutMs: 25,
+    policyChecks: {
+      beforeTool: [() => { throw new Error("boom"); }],
+    },
+  });
+  const failedRes = await throwing.beforeTool({
+    tool: { name: "write_file" },
+    args: { path: `notes.txt?token=${secret}`, content: `PRIVATE_BODY_${secret}` },
+  }, { secrets: [secret] });
+  if (failedRes.decision !== "deny" || !failedRes.failedClosed) {
+    throw new Error("throwing policy check did not fail closed");
+  }
+
+  const serialized = JSON.stringify(throwing.events());
+  if (serialized.includes(secret) || serialized.includes("PRIVATE_BODY_")) {
+    throw new Error("harness event leaked secret or file content");
+  }
+  return "fail-closed, non-escalating, secrets & bodies withheld";
+});
+
 // ── 5. the repository itself ────────────────────────────────────────────────
 await check("repo-secrets", "no secrets or personal data are tracked", async () => {
   const out = await runShell("git ls-files", { cwd: root });

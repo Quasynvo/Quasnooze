@@ -127,13 +127,49 @@ function toOllamaMessages(messages) {
   });
 }
 
+async function fitWithTrimHook(
+  messages,
+  { tools = [], maxTokens = ctx.numPredict, onBeforeContextTrim } = {},
+) {
+  const { messages: fitted, dropped, tokens } = fit(messages, { tools, numPredict: maxTokens });
+  if (dropped > 0 && typeof onBeforeContextTrim === "function") {
+    try {
+      await onBeforeContextTrim({
+        totalMessages: messages.length,
+        keptMessages: fitted.length,
+        droppedMessages: dropped,
+        estimatedTokens: tokens,
+        numCtx: ctx.numCtx,
+        numPredict: maxTokens,
+      });
+    } catch {
+      // Observational callback only: never alter or fail context trimming.
+    }
+  }
+  return { fitted, dropped };
+}
+
 const ollama = {
   name: "ollama",
 
-  async chat(messages, { tools = [], model, onDelta, maxTokens = ctx.numPredict, think = config.llm.ollamaThink } = {}) {
+  async chat(
+    messages,
+    {
+      tools = [],
+      model,
+      onDelta,
+      maxTokens = ctx.numPredict,
+      think = config.llm.ollamaThink,
+      onBeforeContextTrim,
+    } = {},
+  ) {
     // Trim to the window *before* the provider does it for us. Ollama drops
     // from the front on overflow, which deletes the system prompt first.
-    const { messages: fitted, dropped } = fit(messages, { tools, numPredict: maxTokens });
+    const { fitted, dropped } = await fitWithTrimHook(messages, {
+      tools,
+      maxTokens,
+      onBeforeContextTrim,
+    });
     const body = {
       model: model || config.llm.ollamaModel,
       // Interactive default: do not spend time generating hidden reasoning.
@@ -244,9 +280,16 @@ function toOpenAiMessages(messages) {
 const openai = {
   name: "openai",
 
-  async chat(messages, { tools = [], model, onDelta, maxTokens = ctx.numPredict } = {}) {
+  async chat(
+    messages,
+    { tools = [], model, onDelta, maxTokens = ctx.numPredict, onBeforeContextTrim } = {},
+  ) {
     if (!config.llm.openaiKey) throw new QuasError(CODES.NEED_AUTH, "OPENAI_API_KEY is not set", { provider: "openai" });
-    const { messages: fitted, dropped } = fit(messages, { tools, numPredict: maxTokens });
+    const { fitted, dropped } = await fitWithTrimHook(messages, {
+      tools,
+      maxTokens,
+      onBeforeContextTrim,
+    });
     const body = {
       model: model || config.llm.openaiModel,
       messages: toOpenAiMessages(fitted),
@@ -331,7 +374,15 @@ const openai = {
 const mock = {
   name: "mock",
 
-  async chat(messages, { onDelta } = {}) {
+  async chat(messages, { tools = [], maxTokens = ctx.numPredict, onDelta, onBeforeContextTrim } = {}) {
+    if (typeof onBeforeContextTrim === "function") {
+      const { fitted } = await fitWithTrimHook(messages, {
+        tools,
+        maxTokens,
+        onBeforeContextTrim,
+      });
+      messages = fitted;
+    }
     // If a tool already ran this turn, summarise its output instead of
     // calling it again — that is what makes the mock brain terminate and
     // lets the full agent loop be demonstrated without a model.

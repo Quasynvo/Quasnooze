@@ -19,7 +19,8 @@ import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaM
   buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
-import { classifyCommand, describeTier, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
+import { classifyCommand, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
+import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
 import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand } from "./tools.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
 import { auditReply, renderGuardNote } from "./guard.js";
@@ -111,6 +112,25 @@ export function pendingApprovalsFor(sessionId) {
   return [...approvals.entries()]
     .filter(([, v]) => v.sessionId === sessionId)
     .map(([id, v]) => ({ id, channel: v.channel, sessionId: v.sessionId, description: v.description, ...(v.preview ? { preview: v.preview } : {}) }));
+}
+
+async function awaitApprovalWithSignal({ id, promise }, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    answerApproval(id, false);
+    return false;
+  }
+  const onAbort = () => {
+    answerApproval(id, false);
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    return await promise;
+  } finally {
+    try {
+      signal.removeEventListener("abort", onAbort);
+    } catch {}
+  }
 }
 
 /* ─────────────────────────── tool argument contract ────────────────────── */
@@ -333,7 +353,18 @@ export async function runAgent({
   // schedules is a fork bomb with a calendar.
   autonomy = "interactive",
   allowSchedule = true,
+  harness,
+  signal,
 }) {
+  const activeHarness = resolveHarnessPipeline(harness, config.harnessEvents);
+  const turnSecrets = () => [
+    ...previewSecrets(),
+    config.authKey,
+    config.llm.openaiKey,
+    config.telegram.token,
+    config.discord.token,
+    config.slack.token,
+  ];
   if (autonomy === "unattended" && /^\/persona(?:\s|$)/i.test(String(text).trim())) {
     return {text:"Persona commands require an interactive user; no persona settings were changed.",sessionId,trace:[],guard:[],sources:[],ms:0,firstTextMs:null,error:null};
   }
@@ -426,67 +457,149 @@ export async function runAgent({
   // while a false match is an action nobody asked for — so ambiguity falls
   // through unchanged, and a tool that fails falls through too, because the
   // model can ask a better question than an error string.
-  if (config.fastPath && !unattended && !social && !attachments.length && !workflowRun) {
+  if (config.fastPath && !unattended && !social && !attachments.length && !workflowRun && !signal?.aborted) {
     const fast = matchFastIntent(text);
     const tool = fast ? TOOL_MAP.get(fast.name) : null;
     if (tool && FAST_TOOLS.has(fast.name) && !DANGEROUS.has(fast.name) && !validateArgs(tool, fast.args)) {
-      let fastResult;
-      try {
-        fastResult = await tool.run(fast.args, {
-          channel,
-          target: addressFor(channel, target),
-          sessionId,
-          sources: createSources(),
-        });
-      } catch (err) {
-        fastResult = { ok: false, output: err instanceof SafePathError ? err.message : `Tool ${fast.name} threw: ${err.message}` };
-      }
-      const fastVerification = await verifyAction(fast.name, fast.args, { sessionId, channel }, fastResult);
-      // A deterministic answer that cannot be confirmed is not an answer: hand
-      // the turn to the model rather than return a claim nobody checked.
-      if (fastResult?.ok && fastVerification?.status !== VERIFY_CONTRADICTED) {
-        let reply = composeFastReply(fast, fastResult.output);
-        const fastTrace = [{
-          tool: fast.name,
-          args: fast.args,
-          ok: true,
-          output: String(fastResult.output).slice(0, 400),
-          ...(fastVerification ? { verification: fastVerification } : {}),
-        }];
-        let fastGuard = { flags: [], clean: true };
-        if (!config.disableGuard) {
-          fastGuard = auditReply({
-            reply,
-            trace: fastTrace,
-            sources: [],
-            citedIds: [],
-            memoryFacts: loadMemory().facts,
-            userText: text,
-            toolOutput: String(fastResult.output ?? ""),
-          });
-          if (!fastGuard.clean) reply += renderGuardNote(fastGuard.flags);
+      let fastBlocked = false;
+      if (activeHarness) {
+        const secrets = turnSecrets();
+        const fastPolicy = await activeHarness.beforeTool(
+          {
+            sessionId,
+            channel,
+            autonomy,
+            round: 1,
+            tool,
+            args: fast.args,
+            risk: null,
+            commitProposal: detectCommitProposal(fast.name, fast.args, { tool }),
+          },
+          { signal, secrets },
+        );
+        if (fastPolicy.decision === POLICY_DECISIONS.DENY) {
+          const reason = fastPolicy.cancelled ? "cancelled" : fastPolicy.reason || "policy";
+          const reply = fastPolicy.cancelled
+            ? "Turn cancelled before action execution."
+            : `Refused by policy (${reason}): no action was executed.`;
+          const deniedTrace = [{
+            tool: fast.name,
+            args: fast.args,
+            ok: false,
+            denied: true,
+            ...(fastPolicy.cancelled ? { cancelled: true } : {}),
+            ...(fastPolicy.failedClosed ? { failedClosed: true } : {}),
+            reason,
+          }];
+          appendMessage(sessionId, { role: "assistant", content: reply, trace: deniedTrace, guard: [] });
+          onEvent({ type: "tool_done", name: fast.name, ok: false, preview: reply.slice(0, 200) });
+          const fastMs = Date.now() - startedAt;
+          return { text: reply, firstTextMs: fastMs, error: null, trace: deniedTrace, sessionId, guard: [], sources: [], ms: fastMs };
         }
-        appendMessage(sessionId, { role: "assistant", content: reply, trace: fastTrace, guard: fastGuard.flags });
-        const fastMs = Date.now() - startedAt;
-        record({
-          kind: "turn",
-          sessionId,
-          channel,
-          autonomy,
-          provider: activeModel.provider,
-          model: activeModel.model,
-          ms: fastMs,
-          firstTextMs: fastMs,
-          mode: "fast",
-          rounds: 0,
-          tokens: 0,
-          tools: 1,
-          auto: 0,
-          guardFlags: fastGuard.flags.length,
-          error: null,
-        });
-        onEvent({ type: "tool_done", name: fast.name, ok: true, preview: String(fastResult.output).slice(0, 300) });
-        return { text: reply, firstTextMs: fastMs, error: null, trace: fastTrace, sessionId, guard: fastGuard.flags, sources: [], ms: fastMs };
+        if (fastPolicy.decision === POLICY_DECISIONS.ASK) {
+          const preview = buildActionPreview(fast.name, fast.args, { risk: null, secrets });
+          const description = approvalDescription(describeCall(fast.name, fast.args), secrets);
+          const approval = createApproval({ channel, sessionId, description, preview });
+          onEvent({ type: "approval", id: approval.id, description, preview });
+          const allowed = await awaitApprovalWithSignal(approval, signal);
+          if (signal?.aborted || !allowed) {
+            const cancelled = Boolean(signal?.aborted);
+            const reply = cancelled
+              ? "Turn cancelled before action execution."
+              : "Permission denied; no action was executed.";
+            const deniedTrace = [{
+              tool: fast.name,
+              args: fast.args,
+              ok: false,
+              denied: true,
+              ...(cancelled ? { cancelled: true, reason: "cancelled" } : {}),
+            }];
+            appendMessage(sessionId, { role: "assistant", content: reply, trace: deniedTrace, guard: [] });
+            return { text: reply, firstTextMs: Date.now() - startedAt, error: null, trace: deniedTrace, sessionId, guard: [], sources: [], ms: Date.now() - startedAt };
+          }
+        }
+      }
+      if (signal?.aborted) fastBlocked = true;
+      if (!fastBlocked) {
+        const fastToolStart = Date.now();
+        let fastResult;
+        try {
+          fastResult = await tool.run(fast.args, {
+            channel,
+            target: addressFor(channel, target),
+            sessionId,
+            sources: createSources(),
+          });
+        } catch (err) {
+          fastResult = { ok: false, output: err instanceof SafePathError ? err.message : `Tool ${fast.name} threw: ${err.message}` };
+        }
+        const fastVerification = await verifyAction(fast.name, fast.args, { sessionId, channel }, fastResult);
+        if (activeHarness) {
+          const fastRaw = String(fastResult?.output ?? "");
+          await activeHarness.afterTool(
+            {
+              sessionId,
+              channel,
+              autonomy,
+              round: 1,
+              tool,
+              ok: Boolean(fastResult?.ok),
+              denied: false,
+              cancelled: false,
+              status: fastResult?.ok ? "ok" : "error",
+              durationMs: Date.now() - fastToolStart,
+              outputBytes: Buffer.byteLength(fastRaw, "utf8"),
+              verificationStatus: fastVerification?.status ?? null,
+            },
+            { secrets: turnSecrets() },
+          );
+        }
+        // A deterministic answer that cannot be confirmed is not an answer: hand
+        // the turn to the model rather than return a claim nobody checked.
+        if (fastResult?.ok && fastVerification?.status !== VERIFY_CONTRADICTED) {
+          let reply = composeFastReply(fast, fastResult.output);
+          const fastTrace = [{
+            tool: fast.name,
+            args: fast.args,
+            ok: true,
+            output: String(fastResult.output).slice(0, 400),
+            ...(fastVerification ? { verification: fastVerification } : {}),
+          }];
+          let fastGuard = { flags: [], clean: true };
+          if (!config.disableGuard) {
+            fastGuard = auditReply({
+              reply,
+              trace: fastTrace,
+              sources: [],
+              citedIds: [],
+              memoryFacts: loadMemory().facts,
+              userText: text,
+              toolOutput: String(fastResult.output ?? ""),
+            });
+            if (!fastGuard.clean) reply += renderGuardNote(fastGuard.flags);
+          }
+          appendMessage(sessionId, { role: "assistant", content: reply, trace: fastTrace, guard: fastGuard.flags });
+          const fastMs = Date.now() - startedAt;
+          record({
+            kind: "turn",
+            sessionId,
+            channel,
+            autonomy,
+            provider: activeModel.provider,
+            model: activeModel.model,
+            ms: fastMs,
+            firstTextMs: fastMs,
+            mode: "fast",
+            rounds: 0,
+            tokens: 0,
+            tools: 1,
+            auto: 0,
+            guardFlags: fastGuard.flags.length,
+            error: null,
+          });
+          onEvent({ type: "tool_done", name: fast.name, ok: true, preview: String(fastResult.output).slice(0, 300) });
+          return { text: reply, firstTextMs: fastMs, error: null, trace: fastTrace, sessionId, guard: fastGuard.flags, sources: [], ms: fastMs };
+        }
       }
     }
   }
@@ -524,6 +637,10 @@ export async function runAgent({
   const ctx = { channel, target: addressFor(channel, target), sessionId, sources };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
+    if (signal?.aborted) {
+      finalText = "Turn cancelled before action execution.";
+      break;
+    }
     rounds = round + 1;
     onEvent({ type: "status", message: round === 0 ? "thinking" : "thinking again" });
 
@@ -536,6 +653,15 @@ export async function runAgent({
         selection: activeModel,
         tools: social ? [] : toolSchemas(),
         ...(social ? {maxTokens:128,think:false} : {}),
+        ...(activeHarness
+          ? {
+              onBeforeContextTrim: (trimInfo) =>
+                activeHarness.beforeContextTrim(
+                  { ...trimInfo, sessionId, channel, autonomy, round },
+                  { secrets: turnSecrets() },
+                ),
+            }
+          : {}),
         onDelta: (chunk) => {
           if (firstTextMs === null) firstTextMs = Date.now() - startedAt;
           streamed += chunk;
@@ -575,8 +701,7 @@ export async function runAgent({
         continue;
       }
 
-      // A call the model malformed is not the human's decision to make, so it
-      // is answered before the approval gate — and before the tool runs.
+      // 1. Validate arguments first — before policy checks, approval, or execution.
       const invalid = call.parseError
         ? `Your arguments were not valid JSON (${call.parseError}). Re-emit ${call.name} with valid JSON.`
         : validateArgs(tool, call.arguments);
@@ -587,11 +712,119 @@ export async function runAgent({
         continue;
       }
 
-      // A scheduled run has no human to ask, so the approval gate cannot apply.
-      // The tool is refused — not auto-approved, which would make a schedule a
-      // way to launder an approval, and not queued for later, which would make
-      // it a way to ambush the user with a prompt they never saw raised.
-      if (unattended && (DANGEROUS.has(tool.name) || (tool.name === "schedule" && !allowSchedule))) {
+      if (signal?.aborted) {
+        const why = "Cancelled: this action was aborted before execution.";
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+        continue;
+      }
+
+      const classifiedShell =
+        tool.name === "shell" && (config.riskTiers || activeHarness)
+          ? classifyCommand(call.arguments?.command, {
+              workspaceRoots: config.workspaceRoots,
+              cwd: call.arguments?.cwd,
+            })
+          : null;
+      const tier =
+        config.riskTiers && !config.autoApprove && tool.name === "shell" && !unattended
+          ? classifiedShell
+          : null;
+      const commitProposal = detectCommitProposal(tool.name, call.arguments, { tool });
+
+      // 2. Deterministic policy checks (beforeTool, plus beforeCommit on commit proposals).
+      // Handlers may restrict ("ask" / "deny") or fail closed; they can never authorize.
+      let policyDecision = POLICY_DECISIONS.CONTINUE;
+      let policyReason = null;
+      let policyCancelled = false;
+      let policyFailedClosed = false;
+      let policyUnattendedRefused = false;
+
+      if (activeHarness) {
+        const secrets = turnSecrets();
+        const beforeOut = await activeHarness.beforeTool(
+          {
+            sessionId,
+            channel,
+            autonomy,
+            round,
+            tool,
+            args: call.arguments,
+            risk: classifiedShell,
+            commitProposal,
+          },
+          { signal, secrets },
+        );
+        policyDecision = beforeOut.decision;
+        policyReason = beforeOut.reason;
+        policyCancelled = Boolean(beforeOut.cancelled);
+        policyFailedClosed = Boolean(beforeOut.failedClosed);
+        policyUnattendedRefused = Boolean(beforeOut.unattendedRefused);
+
+        if (policyDecision !== POLICY_DECISIONS.DENY && commitProposal.isCommit) {
+          const commitOut = await activeHarness.beforeCommit(
+            {
+              sessionId,
+              channel,
+              autonomy,
+              round,
+              tool,
+              args: call.arguments,
+              commitProposal,
+            },
+            { signal, secrets },
+          );
+          policyDecision =
+            commitOut.decision === POLICY_DECISIONS.DENY
+              ? POLICY_DECISIONS.DENY
+              : POLICY_DECISIONS.ASK;
+          policyReason = commitOut.reason || policyReason;
+          if (commitOut.cancelled) policyCancelled = true;
+          if (commitOut.failedClosed) policyFailedClosed = true;
+          if (commitOut.unattendedRefused) policyUnattendedRefused = true;
+        }
+      }
+
+      if (policyCancelled || signal?.aborted) {
+        const why = "Cancelled: this action was aborted before execution.";
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+        continue;
+      }
+
+      if (policyFailedClosed) {
+        const reason = policyReason || "policy-error";
+        const msg = `Refused: policy check failed closed (${reason}). No action was executed.`;
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, failedClosed: true, reason });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg.slice(0, 200) });
+        continue;
+      }
+
+      if (
+        policyDecision === POLICY_DECISIONS.DENY &&
+        !policyUnattendedRefused &&
+        policyReason !== "blocked-by-command-screen"
+      ) {
+        const reason = policyReason || "policy";
+        const msg = `Refused by policy (${reason}): this action is not permitted.`;
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg.slice(0, 200) });
+        continue;
+      }
+
+      // 3. Existing unattended, catastrophic-screen, and session user-approval gates.
+      // Policy "continue" (or ignored "allow") never suppresses any baseline gate.
+      if (
+        unattended &&
+        (DANGEROUS.has(tool.name) ||
+          commitProposal.isCommit ||
+          (tool.name === "schedule" && !allowSchedule) ||
+          policyDecision !== POLICY_DECISIONS.CONTINUE)
+      ) {
         const why = tool.name === "schedule"
           ? "a scheduled run cannot create another schedule"
           : `${tool.name} needs a human's approval and nobody is here`;
@@ -604,41 +837,47 @@ export async function runAgent({
         continue;
       }
 
-      // Risk tiers. A shell command proven read-only, inside the workspace, does
-      // not cost a human's attention — these are things read_file, list_dir and
-      // grep already do unprompted. Everything else asks, exactly as before.
-      // Unattended turns never reach here: they refuse all of DANGEROUS above.
-      let tier = null;
-      if (config.riskTiers && !config.autoApprove && tool.name === "shell" && !unattended) {
-        tier = classifyCommand(call.arguments?.command, {
-          workspaceRoots: config.workspaceRoots,
-          cwd: call.arguments?.cwd,
+      const blockedRisk =
+        tier?.tier === TIER_BLOCKED
+          ? tier
+          : activeHarness && classifiedShell?.tier === TIER_BLOCKED
+            ? classifiedShell
+            : null;
+      if (blockedRisk) {
+        messages.push({
+          role: "tool", name: call.name, toolCallId: call.id,
+          content: `Refused: ${blockedRisk.why}. This command is not runnable at all, with or without approval.`,
         });
-
-        if (tier.tier === TIER_BLOCKED) {
-          messages.push({
-            role: "tool", name: call.name, toolCallId: call.id,
-            content: `Refused: ${tier.why}. This command is not runnable at all, with or without approval.`,
-          });
-          trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "screen", tier: "blocked" });
-          onEvent({ type: "tool_done", name: tool.name, ok: false, preview: `refused: ${tier.why}` });
-          continue;
-        }
-
-        if (tier.tier === TIER_READ) {
-          autoRan += 1;
-          onEvent({ type: "auto", name: tool.name, why: describeTier(tier) });
-        }
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "screen", tier: "blocked" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: `refused: ${blockedRisk.why}` });
+        continue;
       }
 
-      const mustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ;
+      const baselineMustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ;
+      const policyMustAsk =
+        policyDecision === POLICY_DECISIONS.ASK ||
+        (commitProposal.isCommit && (!config.autoApprove || Boolean(activeHarness)));
+
+      if (tier?.tier === TIER_READ && !policyMustAsk) {
+        autoRan += 1;
+        onEvent({ type: "auto", name: tool.name, why: describeTier(tier) });
+      }
+
+      const mustAsk = baselineMustAsk || policyMustAsk;
       if (mustAsk) {
-        const secrets = [...previewSecrets(), config.authKey, config.llm.openaiKey, config.telegram.token, config.discord.token, config.slack.token];
-        const preview = buildActionPreview(tool.name, call.arguments, { risk: tier, secrets });
+        const secrets = turnSecrets();
+        const preview = buildActionPreview(tool.name, call.arguments, { risk: tier || classifiedShell, secrets });
         const description = approvalDescription(label, secrets);
-        const { id, promise } = createApproval({ channel, sessionId, description, preview });
-        onEvent({ type: "approval", id, description, preview });
-        const allowed = await promise;
+        const approval = createApproval({ channel, sessionId, description, preview });
+        onEvent({ type: "approval", id: approval.id, description, preview });
+        const allowed = await awaitApprovalWithSignal(approval, signal);
+        if (signal?.aborted) {
+          const why = "Cancelled: this action was aborted while awaiting approval.";
+          messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
+          trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+          onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+          continue;
+        }
         if (!allowed) {
           messages.push({
             role: "tool", name: call.name, toolCallId: call.id,
@@ -649,7 +888,17 @@ export async function runAgent({
         }
       }
 
+      if (signal?.aborted) {
+        const why = "Cancelled: this action was aborted before execution.";
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+        continue;
+      }
+
+      // 4. Execute tool.
       onEvent({ type: "tool", name: tool.name, label });
+      const toolStartedAt = Date.now();
       let result;
       try {
         // Let evidence-producing tools avoid registering passages the model
@@ -680,6 +929,28 @@ export async function runAgent({
       // turn, and when it runs out the model is told why rather than fed a
       // silently truncated wall of text.
       const raw = String(result.output ?? "");
+
+      // 5. Bounded observational after-event (no raw output, cannot alter result).
+      if (activeHarness) {
+        await activeHarness.afterTool(
+          {
+            sessionId,
+            channel,
+            autonomy,
+            round,
+            tool,
+            ok: Boolean(result?.ok),
+            denied: false,
+            cancelled: false,
+            status: result?.ok ? "ok" : "error",
+            durationMs: Date.now() - toolStartedAt,
+            outputBytes: Buffer.byteLength(raw, "utf8"),
+            verificationStatus: verification?.status ?? null,
+          },
+          { secrets: turnSecrets() },
+        );
+      }
+
       const room = Math.max(0, toolBudget);
       const kept = raw.slice(0, Math.min(12_000, room));
       toolBudget -= kept.length;
@@ -694,7 +965,7 @@ export async function runAgent({
         ok: result.ok,
         output: kept.slice(0, 400),
         ...(verification ? { verification } : {}),
-        ...(tier?.tier === TIER_READ ? { tier: "read", auto: true } : {}),
+        ...(tier?.tier === TIER_READ && !policyMustAsk ? { tier: "read", auto: true } : {}),
       });
       onEvent({ type: "tool_done", name: tool.name, ok: result.ok, preview: kept.slice(0, 300) });
 
