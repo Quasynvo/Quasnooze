@@ -23,7 +23,7 @@ the project requires Node ≥ 22 — see `package.json`).
 | 6 | Read-back cost (2 KB file write) | **p50 0.28 ms, p95 0.69 ms** (contract allowed 50 ms p95) | 100 | `node --test test/verify.test.js` | [VERIFIED-EXECUTION.md](VERIFIED-EXECUTION.md) |
 | 7 | Retrieval Recall@1 / Recall@5, MRR@5; no-answer | **0.93 / 1.00, 1.00; 3/3 empty, 0 false positives** (coverage gate) | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` | [RETRIEVAL-BASELINE-V1.md](RETRIEVAL-BASELINE-V1.md) |
 | 8 | Speech command accuracy (synthetic text hypotheses) | **79.2% overall, 9.7% WER** (digit-group joining: numbers-names 60% → 70%) | 48 utterances | `node scripts/evaluate-speech.js` (`npm run speech`) | [SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md) |
-| 9 | Full regression suite | **817/817 passed** | 66 test files | `node --test --test-concurrency=4` | §4 below |
+| 9 | Full regression suite | **817/817 passed** | 67 test files | `node --test --test-concurrency=4` | §4 below |
 
 ## 2. Speech, by condition — including where it is worst
 

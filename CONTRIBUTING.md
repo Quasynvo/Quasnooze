@@ -22,7 +22,7 @@ welcome, especially the kind that make it **safer** or **work in more places**.
 
 ```bash
 git clone https://github.com/Quasynvo/Quasnooze && cd Quasnooze
-npm test          # 110 tests, no model needed
+npm test          # full suite (817 tests, 67 files), no model needed
 npm run audit     # the adversarial self-check — does the product still refuse attacks?
 npm run demo      # mock brain — the whole app, no Ollama required
 npm run verify    # both of the above, the full gate
