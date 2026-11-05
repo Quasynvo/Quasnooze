@@ -1,6 +1,6 @@
 # Security scanners — what runs, what gates, what is report-first
 
-All scanners run in `.github/workflows/security.yml` (plus CodeQL for
+All scanners run in `.github/workflows/scanners.yml` (plus CodeQL for
 actions/C#/Python in `codeql.yml`; JavaScript CodeQL lives in
 `security.yml`). Every third-party action is pinned to a commit SHA —
 `test/roadmap.test.js` enforces that — and every scanner that produces
