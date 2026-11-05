@@ -368,8 +368,12 @@ async function handleApi(req, res, url) {
     const raw = await readRaw(req, AUDIO_MAX_BYTES);
     if (!raw.length) throw new HTTPError(400, "Audio upload is empty; record a clip first.");
     if (!config.whisperUrl) return json(res, 502, { error: "WHISPER_URL is not configured; set it to an OpenAI-compatible transcription endpoint and restart Quasnooze." });
+    // Optional decoder context for chunked dictation: the previous chunk's
+    // transcript. It is bounded and flattened in src/voice.js, and it never
+    // reaches a log — only the form field that carries it.
+    const prompt = String(req.headers["x-quasnooze-prompt"] || "");
     try {
-      const text = await transcribeAudio(raw, mime, config.whisperUrl);
+      const text = await transcribeAudio(raw, mime, config.whisperUrl, { prompt });
       return json(res, 200, { text });
     } catch (err) {
       const timedOut = err.name === "TimeoutError" || err.name === "AbortError";
