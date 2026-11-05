@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PROVIDER_PRESETS, providerPreset, resolveProvider, providerCatalogue, renderProviderCatalogue } from "../src/providers.js";
+import { PROVIDER_PRESETS, resolveProvider, providerCatalogue, renderProviderCatalogue } from "../src/providers.js";
 import { matchFastIntent } from "../src/fast-path.js";
 
 test("every preset resolves to a known transport with an endpoint", () => {
