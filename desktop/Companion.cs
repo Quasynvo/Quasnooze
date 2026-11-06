@@ -242,8 +242,9 @@ public static class QuasnoozeTyping {
         foreach (char c in text) {
             if (AbortId == id) { code = "ABORTED"; failure = "Typing was aborted."; break; }
             if (QuasnoozeWindows.User32.GetForegroundWindow() != expected) { code = "TARGET_CHANGED"; failure = "The foreground window changed during typing."; break; }
-            var inputs = new[] { Key(c, false), Key(c, true) };
-            if (SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT))) != 2) {
+            try {
+                SendKeys.SendWait(SendKeys.Escape(c.ToString()));
+            } catch {
                 code = "SEND_FAILED"; failure = "Windows refused a keystroke."; break;
             }
             sent++;
