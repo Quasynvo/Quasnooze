@@ -13,7 +13,7 @@ $references = @(
     [System.Speech.Recognition.SpeechRecognitionEngine].Assembly.Location
     [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location
     [System.Windows.Automation.AutomationElement].Assembly.Location
-    [System.Windows.Automation.ValuePattern].Assembly.Location
+    [System.Windows.Automation.AutomationProperty].Assembly.Location
 )
 Add-Type -Path @((Join-Path $PSScriptRoot 'Companion.cs'), (Join-Path $PSScriptRoot 'SpeechDoctor.cs')) -ReferencedAssemblies $references
 if ($AudioSelfTest) {
