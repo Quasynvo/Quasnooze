@@ -1,2 +1,2 @@
 js/file-access-to-http	scripts/setup.js	143	27		Outbound network request depends on [file data](1).
-js/file-access-to-http	src/channels/telegram.js	19	11		Outbound network request depends on [file data](1).
+js/file-access-to-http	src/channels/telegram.js	18	11		Outbound network request depends on [file data](1).
