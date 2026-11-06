@@ -156,7 +156,7 @@ export const config = Object.freeze({
   numPredict: Number(env.PINCH_NUM_PREDICT || 2048),
 
   telegram: Object.freeze({
-    token: env.TELEGRAM_TOKEN || "",
+    token: process.env.TELEGRAM_TOKEN || "",
     allowedIds: list(env.TELEGRAM_ALLOWED_IDS),
   }),
   discord: Object.freeze({
