@@ -177,7 +177,7 @@ public static class QuasnoozeTyping {
             var field = AutomationElement.FocusedElement;
             if (field == null) throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be inspected. Nothing was typed.");
             object raw = field.GetCurrentPropertyValue(ValuePattern.IsPasswordProperty, true);
-            bool password = raw != AutomationElement.NotSupported && raw is bool && (bool)raw;
+            bool password = !object.ReferenceEquals(raw, AutomationElement.NotSupported) && raw is bool && (bool)raw;
             string name = field.Current.Name ?? "";
             string cls = field.Current.ClassName ?? "";
             bool namedPassword = new[] { "password", "passcode", "passphrase", "secret code" }
