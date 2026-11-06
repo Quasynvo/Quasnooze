@@ -2,11 +2,20 @@
 // Use a disposable, loopback mock service with no native companion or Ollama.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
+// The UI base is developer input. Keep it on loopback so a stray environment
+// value cannot turn this optional check into a request to an arbitrary host.
+function loopbackUrl(value){
+ const url=new URL(value || 'http://127.0.0.1:7777/');
+ if(!['127.0.0.1','localhost','::1'].includes(url.hostname)) throw new Error('refusing non-loopback UI base: '+url.hostname);
+ return url.href;
+}
+const UI_BASE=loopbackUrl(process.env.QUASNOOZE_UI_BASE || process.env.PINCH_UI_BASE || 'http://127.0.0.1:7777/');
 (async()=>{
  const browser=await chromium.launch({headless:true});
  const page=await browser.newPage({viewport:{width:1568,height:1000}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(process.env.QUASNOOZE_UI_BASE || process.env.PINCH_UI_BASE || 'http://127.0.0.1:7777/');
+ // nosemgrep: javascript.playwright.security.audit.playwright-goto-injection -- loopback-validated developer URL
+ await page.goto(UI_BASE);
  await page.getByText('LOCAL SERVICE CONNECTED',{exact:true}).waitFor();
  assert.equal(await page.locator('#micState').textContent(),'OFF');
  assert.match(await page.locator('#notice').textContent(),/not running/);
@@ -26,7 +35,8 @@ const assert=require('node:assert/strict');
  if(process.env.PINCH_UI_SCREENSHOT) await page.screenshot({path:process.env.PINCH_UI_SCREENSHOT,fullPage:true});
  const xss=await browser.newPage({viewport:{width:1200,height:900}});
  await xss.route('**/api/desktop',r=>r.fulfill({json:{available:false,mic:false,phase:'attention',text:'<img src=x onerror="window.INJECTED=1">',lastMs:1,recent:[{command:'<script>window.INJECTED=1</script>',ok:false,ms:1}]}}));
- await xss.goto(process.env.QUASNOOZE_UI_BASE || process.env.PINCH_UI_BASE || 'http://127.0.0.1:7777/');await xss.getByText('LOCAL SERVICE CONNECTED',{exact:true}).waitFor();
+ // nosemgrep: javascript.playwright.security.audit.playwright-goto-injection -- loopback-validated developer URL
+ await xss.goto(UI_BASE);await xss.getByText('LOCAL SERVICE CONNECTED',{exact:true}).waitFor();
  assert.equal(await xss.evaluate(()=>window.INJECTED),undefined);
  assert.match(await xss.locator('#result').textContent(),/<img/);
  assert.deepEqual(errors,[]);

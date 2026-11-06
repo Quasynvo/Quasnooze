@@ -320,10 +320,18 @@ export async function runDoctor({
 /* ─────────────────────────────── rendering ─────────────────────────────── */
 
 const PAINT = {
-  [STATUS.OK]: (s) => `\x1b[32m${s}\x1b[0m`,
-  [STATUS.WARN]: (s) => `\x1b[38;5;214m${s}\x1b[0m`,
-  [STATUS.FAIL]: (s) => `\x1b[31m${s}\x1b[0m`,
-  [STATUS.SKIP]: (s) => `\x1b[2m${s}\x1b[0m`,
+  ok: (s) => `\x1b[32m${s}\x1b[0m`,
+  warn: (s) => `\x1b[38;5;214m${s}\x1b[0m`,
+  fail: (s) => `\x1b[31m${s}\x1b[0m`,
+  skip: (s) => `\x1b[2m${s}\x1b[0m`,
+};
+
+/** Static dispatch: a status is a closed set, never an attacker-chosen key. */
+const paint = (status, text) => {
+  if (status === STATUS.OK) return PAINT.ok(text);
+  if (status === STATUS.WARN) return PAINT.warn(text);
+  if (status === STATUS.FAIL) return PAINT.fail(text);
+  return PAINT.skip(text);
 };
 const MARK = { ok: "✔", warn: "▲", fail: "✖", skip: "·" };
 const fmt = (value) => (value === null || value === undefined ? "—" : `${value}`);
@@ -335,7 +343,7 @@ export function renderDoctor(report) {
   lines.push(`   ${report.routing.plan.map((hop) => `${hop.provider}/${hop.model}`).join(" → ")}${report.routing.resilient ? "" : "  (single provider)"}`);
   lines.push("");
   for (const row of report.checks) {
-    const mark = PAINT[row.status](MARK[row.status]);
+    const mark = paint(row.status, MARK[row.status]);
     lines.push(`  ${mark} ${row.id.padEnd(17)} ${row.detail}${row.regressed ? "  ← regressed" : ""}`);
     if (row.hint && row.status !== STATUS.OK) lines.push(`      ${"\x1b[2m"}${row.hint}\x1b[0m`);
   }
@@ -380,10 +388,10 @@ export function renderDoctor(report) {
   const s = report.summary;
   lines.push("");
   lines.push(
-    `  ${PAINT[STATUS.OK](MARK.ok)} ${s.ok} ok · ${PAINT[STATUS.WARN](MARK.warn)} ${s.warn} warn · ` +
-      `${PAINT[STATUS.FAIL](MARK.fail)} ${s.fail} fail · ${s.skip} skipped`,
+    `  ${paint(STATUS.OK, MARK.ok)} ${s.ok} ok · ${paint(STATUS.WARN, MARK.warn)} ${s.warn} warn · ` +
+      `${paint(STATUS.FAIL, MARK.fail)} ${s.fail} fail · ${s.skip} skipped`,
   );
-  lines.push(`  verdict: ${report.ok ? PAINT[STATUS.OK]("healthy") : PAINT[STATUS.FAIL]("needs attention")}${report.ok && s.warn ? PAINT[STATUS.WARN](" (with warnings)") : ""}`);
+  lines.push(`  verdict: ${report.ok ? paint(STATUS.OK, "healthy") : paint(STATUS.FAIL, "needs attention")}${report.ok && s.warn ? paint(STATUS.WARN, " (with warnings)") : ""}`);
   return lines.join("\n");
 }
 

@@ -25,9 +25,9 @@ test('four-repository issues obey their release date and shipped prerequisite ga
   const item = proposed.find(i => i.id === 'harness-02-config-scan');
   const dep = { ...manifest.items.find(i => i.id === item.depends_on[0]), status: 'backlog' };
   const queue = { meta: { open_curated_cap: 10 }, items: [dep, item] };
-  assert.ok(!selectQueue(queue, [], '2026-11-02').some(i => i.id === item.id));
-  assert.ok(!selectQueue(queue, [], '2026-11-03').some(i => i.id === item.id));
+  assert.ok(!selectQueue(queue, []).some(i => i.id === item.id));
+  assert.ok(!selectQueue(queue, []).some(i => i.id === item.id));
   dep.status = 'shipped';
-  assert.ok(selectQueue(queue, [], '2026-11-03').some(i => i.id === item.id));
-  assert.ok(!selectQueue(queue, [{ state: 'closed', body: `<!-- roadmap:${item.id} -->` }], '2026-11-03').some(i => i.id === item.id));
+  assert.ok(selectQueue(queue, []).some(i => i.id === item.id));
+  assert.ok(!selectQueue(queue, [{ state: 'closed', body: `<!-- roadmap:${item.id} -->` }]).some(i => i.id === item.id));
 });

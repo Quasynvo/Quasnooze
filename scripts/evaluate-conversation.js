@@ -117,9 +117,11 @@ export function scoreTurn(turn) {
     if (trace.some((t) => t.tool === name)) fail("tool-ran", `${name} ran on a turn that must not touch the machine`);
   }
   for (const pattern of expect.mustMatch || []) {
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp -- pattern comes from the checked-in evaluation fixture, not a request
     if (!new RegExp(pattern, "i").test(answer)) fail("missing-expected", `the answer does not match /${pattern}/`);
   }
   for (const pattern of expect.mustNotMatch || []) {
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp -- pattern comes from the checked-in evaluation fixture, not a request
     if (new RegExp(pattern, "i").test(answer)) fail("forbidden-content", `the answer matches /${pattern}/, which it must not`);
   }
 

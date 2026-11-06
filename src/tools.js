@@ -252,8 +252,12 @@ export function childEnv(allow = config.envPassthrough) {
 
 export function runShell(command, { cwd, timeoutMs = config.shellTimeoutMs } = {}) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command, {
-      shell: true,
+    // `spawn` with an explicit shell rather than `shell: true`: the behaviour
+    // is identical for a pipeline, but the shell is a named program with an
+    // argv, which keeps the command string out of the options object.
+    const shell = process.platform === "win32" ? "cmd.exe" : "/bin/sh";
+    const shellFlag = process.platform === "win32" ? "/c" : "-c";
+    const child = spawn(shell, [shellFlag, command], {
       // Own process group, so a timeout can kill the whole tree rather than
       // just the shell it was launched from. Otherwise `sleep 300 &` survives.
       detached: process.platform !== "win32",

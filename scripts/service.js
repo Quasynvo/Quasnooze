@@ -71,6 +71,7 @@ WantedBy=default.target
   }
 } else if (os === "darwin") {
   const plistPath = join(homedir(), "Library", "LaunchAgents", "com.pinch.assistant.plist");
+  // nosemgrep: javascript.lang.security.html-in-template-string -- launchd plist template, not browser HTML
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">

@@ -35,7 +35,7 @@ export function phaseFor(event) {
 }
 if (typeof document !== "undefined") init();
 function init() {
-  const $ = (id) => document.getElementById(id),
+  const byId = (id) => document.getElementById(id),
     params = new URLSearchParams(location.search);
   let key = params.get("key") || "";
   if (key) {
@@ -95,9 +95,9 @@ function init() {
     document.body.dataset.state = phase;
     motion.setState(phase);
     const liveInput = !demo && !previewing && phase === "listening" && native?.mic && Number.isFinite(native.audioLevel) && Number.isFinite(native.audioAgeMs) && native.audioAgeMs >= 0 && native.audioAgeMs < 2000;
-    $("signalSource").textContent = (demo || previewing) ? "SILENT SYNTHETIC PREVIEW · NO AUDIO SAMPLES" : liveInput ? "NATIVE INPUT LEVEL · SCALAR, NOT FFT" : phase === "speaking" ? "NATIVE SPEECH STATE · DECORATIVE SPECTRUM" : "STATE-DRIVEN MOTION · NO AUDIO SAMPLES";
-    $("stateTitle").textContent = details[phase]?.[0] || details.idle[0];
-    $("stateDetail").textContent =
+    byId("signalSource").textContent = (demo || previewing) ? "SILENT SYNTHETIC PREVIEW · NO AUDIO SAMPLES" : liveInput ? "NATIVE INPUT LEVEL · SCALAR, NOT FFT" : phase === "speaking" ? "NATIVE SPEECH STATE · DECORATIVE SPECTRUM" : "STATE-DRIVEN MOTION · NO AUDIO SAMPLES";
+    byId("stateTitle").textContent = details[phase]?.[0] || details.idle[0];
+    byId("stateDetail").textContent =
       detail || details[phase]?.[1] || details.idle[1];
   }
   function later(fn, ms) {
@@ -108,17 +108,17 @@ function init() {
     timers.add(id);
   }
   function controls() {
-    $("send").disabled =
+    byId("send").disabled =
       busy || nativeBusy || previewing || (!demo && !connected);
-    $("newChat").disabled = busy || nativeBusy || previewing;
-    $("talk").disabled =
+    byId("newChat").disabled = busy || nativeBusy || previewing;
+    byId("talk").disabled =
       busy ||
       nativeBusy ||
       previewing ||
       (!demo && (!connected || !native?.available));
-    $("stopVoice").disabled = demo || !connected || !native?.available;
-    $("demoToggle").disabled = busy || nativeBusy || previewing;
-    $("animate").disabled =
+    byId("stopVoice").disabled = demo || !connected || !native?.available;
+    byId("demoToggle").disabled = busy || nativeBusy || previewing;
+    byId("animate").disabled =
       busy || nativeBusy || previewing || Boolean(pending);
   }
   function message(who, text = "") {
@@ -136,9 +136,9 @@ function init() {
     const body = document.createElement("div");
     body.textContent = text;
     article.append(label, body);
-    $("messages").append(article);
-    while ($("messages").children.length > 30)
-      $("messages").firstElementChild.remove();
+    byId("messages").append(article);
+    while (byId("messages").children.length > 30)
+      byId("messages").firstElementChild.remove();
     body.scrollIntoView({ block: "nearest" });
     return body;
   }
@@ -161,23 +161,23 @@ function init() {
     return response.json();
   }
   function mode() {
-    $("connection").textContent = demo
+    byId("connection").textContent = demo
       ? "SCRIPTED DESIGN PREVIEW"
       : connected
         ? "QUASNOOZE SERVICE CONNECTED"
         : "SERVICE NOT CONNECTED";
-    $("modeNotice").textContent = demo
+    byId("modeNotice").textContent = demo
       ? "SCRIPTED PREVIEW · Not an AI response. No tools or audio capture. Previewing does not mute a separately running native voice host."
       : connected
         ? "REAL BACKEND · Existing Quasnooze permissions apply. Conversations may be stored by Quasnooze."
         : "Not connected. Connect to Quasnooze in settings, or explicitly try the scripted preview.";
-    $("demoToggle").textContent = demo
+    byId("demoToggle").textContent = demo
       ? "Connect real Quasnooze instead"
       : "Try scripted preview";
     if (demo) {
-      $("backendLabel").textContent =
+      byId("backendLabel").textContent =
         "Scripted interaction · no model or tools called.";
-      $("micLabel").textContent = "PREVIEW · MIC NOT VERIFIED";
+      byId("micLabel").textContent = "PREVIEW · MIC NOT VERIFIED";
     }
     controls();
   }
@@ -187,13 +187,13 @@ function init() {
     try {
       const health = await api("/api/health");
       connected = true;
-      $("backendLabel").textContent =
+      byId("backendLabel").textContent =
         `Configured backend: ${health.provider || "unknown"} · ${health.model || "model unknown"}`;
       native = await api("/api/desktop");
       nativeBusy =
         Boolean(native.busy) ||
         ["listening", "working", "speaking", "approval"].includes(native.phase);
-      $("micLabel").textContent =
+      byId("micLabel").textContent =
         native.available && typeof native.mic === "boolean"
           ? native.mic
             ? "MIC: ON · WINDOWS"
@@ -205,7 +205,7 @@ function init() {
           approval(native.approval.id, native.approval.description, "native", native.approval.preview);
         else if (pending?.kind === "native") {
           pending = null;
-          $("approval").hidden = true;
+          byId("approval").hidden = true;
         }
         if (
           native.text &&
@@ -220,7 +220,7 @@ function init() {
       connected = false;
       native = null;
       nativeBusy = false;
-      $("micLabel").textContent = "MIC: UNKNOWN · CHECK NATIVE TRAY";
+      byId("micLabel").textContent = "MIC: UNKNOWN · CHECK NATIVE TRAY";
       if (!busy && !previewing)
         state(
           "attention",
@@ -233,18 +233,18 @@ function init() {
   }
   function approval(id, description, kind = "web", preview) {
     pending = { id, kind };
-    $("approvalText").textContent = String(
+    byId("approvalText").textContent = String(
       description || "Review this action in the native Windows host.",
     );
-    if (preview) $("approvalText").textContent += "\n" + globalThis.approvalPreviewText(preview);
-    $("approval").hidden = false;
+    if (preview) byId("approvalText").textContent += "\n" + globalThis.approvalPreviewText(preview);
+    byId("approval").hidden = false;
     state("approval");
   }
   async function decide(allowed) {
     if (!pending) return;
     const target = pending;
     pending = null;
-    $("allow").disabled = $("deny").disabled = true;
+    byId("allow").disabled = byId("deny").disabled = true;
     try {
       if (demo) throw Error("Preview animations cannot approve real actions.");
       await api(
@@ -255,12 +255,12 @@ function init() {
       );
       if (!pending || pending === target) {
         pending = null;
-        $("approval").hidden = true;
+        byId("approval").hidden = true;
         state(busy ? "thinking" : "idle");
       }
     } catch (err) {
       if (busy && !pending) pending = target;
-      else $("approval").hidden = true;
+      else byId("approval").hidden = true;
       message(
         "assistant",
         err.message +
@@ -268,11 +268,11 @@ function init() {
       );
       state("attention");
     } finally {
-      $("allow").disabled = $("deny").disabled = false;
+      byId("allow").disabled = byId("deny").disabled = false;
     }
   }
-  $("allow").onclick = () => decide(true);
-  $("deny").onclick = () => decide(false);
+  byId("allow").onclick = () => decide(true);
+  byId("deny").onclick = () => decide(false);
   async function send(text) {
     if (
       !text.trim() ||
@@ -368,7 +368,7 @@ function init() {
       if (pending?.kind === "web") {
         const target = pending;
         pending = null;
-        $("approval").hidden = true;
+        byId("approval").hidden = true;
         try {
           await api("/api/approve", { id: target.id, allowed: false });
         } catch {
@@ -382,43 +382,43 @@ function init() {
       controls();
     }
   }
-  $("composer").onsubmit = (e) => {
+  byId("composer").onsubmit = (e) => {
     e.preventDefault();
-    const text = $("prompt").value;
-    if (!text.trim() || $("send").disabled) return;
-    $("prompt").value = "";
+    const text = byId("prompt").value;
+    if (!text.trim() || byId("send").disabled) return;
+    byId("prompt").value = "";
     send(text);
   };
-  $("prompt").onkeydown = (e) => {
+  byId("prompt").onkeydown = (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      $("composer").requestSubmit();
+      byId("composer").requestSubmit();
     }
   };
   document.querySelectorAll("[data-prompt]").forEach(
     (button) =>
       (button.onclick = () => {
-        $("prompt").value = button.dataset.prompt;
-        $("prompt").focus();
+        byId("prompt").value = button.dataset.prompt;
+        byId("prompt").focus();
       }),
   );
-  $("newChat").onclick = () => {
+  byId("newChat").onclick = () => {
     if (busy || nativeBusy || previewing) return;
     session = newSession();
-    $("messages").replaceChildren();
+    byId("messages").replaceChildren();
     message(
       "assistant",
       "A fresh conversation. This resets this view, not your stored Quasnooze history.",
     );
   };
-  $("demoToggle").onclick = () => {
+  byId("demoToggle").onclick = () => {
     if (busy || nativeBusy || previewing) return;
     demo = !demo;
     native = null;
     pending = null;
-    $("approval").hidden = true;
+    byId("approval").hidden = true;
     session = newSession();
-    $("messages").replaceChildren();
+    byId("messages").replaceChildren();
     state("idle");
     mode();
     if (!demo) refresh();
@@ -443,8 +443,8 @@ function init() {
       }, 2600);
     }, 1200);
   }
-  $("animate").onclick = () => preview();
-  $("talk").onclick = async () => {
+  byId("animate").onclick = () => preview();
+  byId("talk").onclick = async () => {
     if (demo) {
       preview(true);
       return;
@@ -457,7 +457,7 @@ function init() {
       state("attention");
     }
   };
-  $("stopVoice").onclick = async () => {
+  byId("stopVoice").onclick = async () => {
     try {
       await api("/api/desktop", { control: "stop-voice" });
       await refresh();
@@ -469,23 +469,23 @@ function init() {
       );
     }
   };
-  $("settings").onclick = () => $("settingsDialog").showModal();
-  $("connect").onclick = () => {
+  byId("settings").onclick = () => byId("settingsDialog").showModal();
+  byId("connect").onclick = () => {
     if (busy || previewing || nativeBusy) return;
-    key = $("accessKey").value;
-    $("accessKey").value = "";
+    key = byId("accessKey").value;
+    byId("accessKey").value = "";
     demo = false;
-    $("settingsDialog").close();
+    byId("settingsDialog").close();
     refresh();
   };
-  $("reduceMotion").onchange = () =>
-    document.body.classList.toggle("reduced", $("reduceMotion").checked);
-  $("reduceMotion").checked = matchMedia(
+  byId("reduceMotion").onchange = () =>
+    document.body.classList.toggle("reduced", byId("reduceMotion").checked);
+  byId("reduceMotion").checked = matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
-  document.body.classList.toggle("reduced", $("reduceMotion").checked);
-  $("reduceMotion").addEventListener("change", () => motion.setReducedMotion($("reduceMotion").checked));
-  motion.setReducedMotion($("reduceMotion").checked);
+  document.body.classList.toggle("reduced", byId("reduceMotion").checked);
+  byId("reduceMotion").addEventListener("change", () => motion.setReducedMotion(byId("reduceMotion").checked));
+  motion.setReducedMotion(byId("reduceMotion").checked);
   document.addEventListener("visibilitychange", () => {
     document.body.classList.toggle("paused", document.hidden);
     if (!document.hidden) refresh();

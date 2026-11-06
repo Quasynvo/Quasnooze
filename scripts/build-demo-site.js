@@ -96,6 +96,17 @@ const PAGES = [
   },
 ];
 
+/** HTML-escape a value before it is interpolated into the generated page. */
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[ch]));
+}
+
 function banner(page) {
   const styles = {
     wrap: "position:relative;z-index:60;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;padding:10px 16px;font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.08em;color:#c8d8ea;background:#0a1220;border-bottom:1px solid #ffffff24",
@@ -103,10 +114,10 @@ function banner(page) {
     detail: "font:11px/1.7 ui-monospace,Consolas,monospace;color:#8ea3b8;letter-spacing:.02em",
   };
   return (
-    `<div role="note" style="${styles.wrap}"><span>${page.note}</span>` +
-    `<span style="${styles.detail}">${page.detail}</span>` +
-    `<a style="${styles.link}" href="../index.html">About Quasnooze ↗</a>` +
-    `<a style="${styles.link}" href="https://github.com/Quasynvo/Quasnooze">Source ↗</a></div>`
+    '<div role="note" style="' + styles.wrap + '"><span>' + escapeHtml(page.note) + '</span>' +
+    '<span style="' + styles.detail + '">' + escapeHtml(page.detail) + '</span>' +
+    '<a style="' + styles.link + '" href="../index.html">About Quasnooze ↗</a>' +
+    '<a style="' + styles.link + '" href="https://github.com/Quasynvo/Quasnooze">Source ↗</a></div>'
   );
 }
 
@@ -123,24 +134,24 @@ function rewrite(html, page) {
   if (page.preview) {
     // Query-string demo mode can be lost in a share, a redirect or a preview
     // card. The document flag cannot.
-    if (!html.includes("<html")) throw new Error(`${page.from}: no <html> tag to carry data-preview`);
+    if (!html.includes("<html")) throw new Error(page.from + ": no <html> tag to carry data-preview");
     html = html.replace(/<html([^>]*)>/, (_m, attrs) => {
       const cleaned = attrs.replace(/\sdata-preview="[^"]*"/, "");
-      return `<html${cleaned} data-preview="true">`;
+      return "<html" + cleaned + ' data-preview="true">';
     });
   }
 
   const head = [
-    `<meta name="description" content="${page.description}" />`,
-    `<link rel="canonical" href="https://quasynvo.github.io/Quasnooze/demo/${page.to === "index.html" ? "" : page.to}" />`,
-    `<meta property="og:type" content="website" />`,
-    `<meta property="og:title" content="${page.title}" />`,
-    `<meta property="og:description" content="${page.description}" />`,
-    `<meta property="og:image" content="https://quasynvo.github.io/Quasnooze/og-image.png" />`,
+    '<meta name="description" content="' + escapeHtml(page.description) + '" />',
+    '<link rel="canonical" href="https://quasynvo.github.io/Quasnooze/demo/' + escapeHtml(page.to === "index.html" ? "" : page.to) + '" />',
+    '<meta property="og:type" content="website" />',
+    '<meta property="og:title" content="' + escapeHtml(page.title) + '" />',
+    '<meta property="og:description" content="' + escapeHtml(page.description) + '" />',
+    '<meta property="og:image" content="https://quasynvo.github.io/Quasnooze/og-image.png" />',
   ].join("\n    ");
-  html = html.replace("</head>", `    ${head}\n  </head>`);
-  html = html.replace(/<title>[^<]*<\/title>/, `<title>${page.title}</title>`);
-  html = html.replace(/<body([^>]*)>/, (_m, attrs) => `<body${attrs}>${banner(page)}`);
+  html = html.replace("</head>", "    " + head + "\n  </head>");
+  html = html.replace(/<title>[^<]*<\/title>/, "<title>" + escapeHtml(page.title) + "</title>");
+  html = html.replace(/<body([^>]*)>/, (_m, attrs) => "<body" + attrs + ">" + banner(page));
   return html;
 }
 

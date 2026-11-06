@@ -191,6 +191,7 @@ async function checkTelegram(token) {
     // encode it so a stray "/", "?", "#" or space cannot reshape the request
     // to the provider — the shape regex above is a courtesy, this is the
     // actual confinement.
+    // codeql[js/file-access-to-http] -- the token is sent only to the Telegram API that issued it; the host is a literal and the token is percent-encoded.
     const { body } = await jsonFetch(`https://api.telegram.org/bot${encodeURIComponent(token)}/getMe`);
     if (!body?.ok) return { ok: false, error: body?.description || "invalid token" };
     return { ok: true, label: `@${body.result.username}` };

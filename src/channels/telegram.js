@@ -9,7 +9,8 @@ import { answerApproval, pendingApprovalsFor } from "../agent.js";
 import { registerSender } from "../outbound.js";
 import { formatIncomingTelegramText } from "./telegram-reply.js";
 
-const API = (method) => `https://api.telegram.org/bot${config.telegram.token}/${method}`;
+// codeql[js/file-access-to-http] -- the bot token is sent only to the Telegram API that issued it; the host is a literal and the token is percent-encoded.
+const API = (method) => `https://api.telegram.org/bot${encodeURIComponent(config.telegram.token)}/${method}`;
 
 async function call(method, payload) {
   const res = await fetch(API(method), {

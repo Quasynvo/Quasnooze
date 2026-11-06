@@ -274,6 +274,7 @@ async function handleWorkflowCommand({ command, sessionId, channel, onEvent, act
     if (!cancelled.ok) return { reply: `Nothing was cancelled: ${cancelled.reason}.` };
     emit(cancelled.workflow);
     return {
+      // nosemgrep: javascript.lang.security.html-in-template-string -- plain-text reply; <goal> is a command placeholder, not HTML
       reply: `Cancelled ${active.id}. It is blocked and cannot be resumed; nothing further will run. Start a new design with /plan <goal>.`,
     };
   }
@@ -345,6 +346,7 @@ async function handleWorkflowCommand({ command, sessionId, channel, onEvent, act
   }
   if (active.state !== "awaiting-design-approval") {
     return {
+      // nosemgrep: javascript.lang.security.html-in-template-string -- plain-text reply; <goal> is a command placeholder, not HTML
       reply: `This session's workflow is ${active.state}, so there is nothing to approve. Start one with /plan <goal>.`,
     };
   }

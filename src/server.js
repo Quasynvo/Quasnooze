@@ -598,7 +598,13 @@ async function respond(req, res) {
       } catch {
         sameOrigin = false;
       }
-      if (sameOrigin) res.setHeader("access-control-allow-origin", req.headers.origin);
+      // The reflected value is built from the server's own bind address, not
+      // from the request. `sameOrigin` above is what proves the caller is this
+      // server; echoing an arbitrary Origin header would let a page choose its
+      // own CORS value.
+      const bindHost = config.host === "0.0.0.0" || config.host === "::" ? "localhost" : config.host;
+      const selfOrigin = `http://${bindHost}${config.port ? `:${config.port}` : ""}`;
+      if (sameOrigin) res.setHeader("access-control-allow-origin", selfOrigin);
     }
     res.setHeader("vary", "origin");
     res.setHeader("access-control-allow-headers", "content-type, x-quasnooze-key, x-pinch-key, x-quasnooze-session, x-pinch-session");

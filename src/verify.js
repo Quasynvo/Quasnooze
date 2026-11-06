@@ -40,72 +40,83 @@ const clip = (text, n = 120) => {
  * entry here is honestly `unverified` rather than optimistically green: a shell
  * command's exit code is the tool's own report, not the world's.
  */
-const VERIFIERS = {
-  async write_file({ path, content }) {
-    let actual;
-    try {
-      actual = await readFile(resolveInWorkspace(path), "utf8");
-    } catch (err) {
-      if (/outside the allowed workspace/i.test(String(err.message))) {
-        return bad(`the path is outside the workspace, so nothing was written there`);
+const VERIFIERS = new Map([
+  [
+    "write_file",
+    async ({ path, content }) => {
+      let actual;
+      try {
+        actual = await readFile(resolveInWorkspace(path), "utf8");
+      } catch (err) {
+        if (/outside the allowed workspace/i.test(String(err.message))) {
+          return bad(`the path is outside the workspace, so nothing was written there`);
+        }
+        return bad(`the file is not readable after the write (${err.code || err.message})`);
       }
-      return bad(`the file is not readable after the write (${err.code || err.message})`);
-    }
-    if (actual === content) {
-      return ok(`read back ${Buffer.byteLength(content, "utf8")} bytes; byte-identical`, { path });
-    }
-    return bad(
-      `the file on disk differs from what was written (${Buffer.byteLength(actual, "utf8")} bytes on disk vs ` +
-        `${Buffer.byteLength(String(content ?? ""), "utf8")} written)`,
-      { path },
-    );
-  },
+      if (actual === content) {
+        return ok(`read back ${Buffer.byteLength(content, "utf8")} bytes; byte-identical`, { path });
+      }
+      return bad(
+        `the file on disk differs from what was written (${Buffer.byteLength(actual, "utf8")} bytes on disk vs ` +
+          `${Buffer.byteLength(String(content ?? ""), "utf8")} written)`,
+        { path },
+      );
+    },
+  ],
+  [
+    "calculator",
+    async ({ expression }, _ctx, result) => {
+      let expected;
+      try {
+        expected = calculate(expression);
+      } catch {
+        return unknown("the expression could not be recomputed independently");
+      }
+      const reported = String(result.output ?? "");
+      if (reported.includes(String(expected))) {
+        return ok(`recomputed ${clip(expression, 60)} = ${expected}`);
+      }
+      return bad(`recomputation gives ${expected}, the tool reported “${clip(reported, 80)}”`);
+    },
+  ],
+  [
+    "add_task",
+    async ({ title }) => {
+      const needle = String(title ?? "").slice(0, 200).toLowerCase();
+      const hit = loadTasks().find((task) => String(task.title).toLowerCase() === needle);
+      return hit
+        ? ok(`the task list now contains “${clip(hit.title, 80)}”`)
+        : bad(`no task matching “${clip(needle, 60)}” is in the task list`);
+    },
+  ],
+  [
+    "remind",
+    async ({ text }) => {
+      const needle = String(text ?? "").slice(0, 300);
+      const hit = pendingReminders().find((reminder) => reminder.text === needle);
+      return hit
+        ? ok(`a pending reminder for “${clip(needle, 60)}” now exists`, { at: hit.at })
+        : bad(`no pending reminder for “${clip(needle, 60)}” was found after the call`);
+    },
+  ],
+  [
+    "remember",
+    async ({ fact }) => {
+      const needle = String(fact ?? "").trim().slice(0, 500).toLowerCase();
+      const hit = loadMemory().facts.find((entry) => String(entry.text).toLowerCase() === needle);
+      return hit
+        ? ok(`memory now contains “${clip(needle, 60)}”`)
+        : bad(`memory does not contain “${clip(needle, 60)}” after the call`);
+    },
+  ],
+]);
 
-  async calculator({ expression }, _ctx, result) {
-    let expected;
-    try {
-      expected = calculate(expression);
-    } catch {
-      return unknown("the expression could not be recomputed independently");
-    }
-    const reported = String(result.output ?? "");
-    if (reported.includes(String(expected))) {
-      return ok(`recomputed ${clip(expression, 60)} = ${expected}`);
-    }
-    return bad(`recomputation gives ${expected}, the tool reported “${clip(reported, 80)}”`);
-  },
-
-  async add_task({ title }) {
-    const needle = String(title ?? "").slice(0, 200).toLowerCase();
-    const hit = loadTasks().find((task) => String(task.title).toLowerCase() === needle);
-    return hit
-      ? ok(`the task list now contains “${clip(hit.title, 80)}”`)
-      : bad(`no task matching “${clip(needle, 60)}” is in the task list`);
-  },
-
-  async remind({ text }) {
-    const needle = String(text ?? "").slice(0, 300);
-    const hit = pendingReminders().find((reminder) => reminder.text === needle);
-    return hit
-      ? ok(`a pending reminder for “${clip(needle, 60)}” now exists`, { at: hit.at })
-      : bad(`no pending reminder for “${clip(needle, 60)}” was found after the call`);
-  },
-
-  async remember({ fact }) {
-    const needle = String(fact ?? "").trim().slice(0, 500).toLowerCase();
-    const hit = loadMemory().facts.find((entry) => String(entry.text).toLowerCase() === needle);
-    return hit
-      ? ok(`memory now contains “${clip(needle, 60)}”`)
-      : bad(`memory does not contain “${clip(needle, 60)}” after the call`);
-  },
-};
-
-export const VERIFIABLE = new Set(Object.keys(VERIFIERS));
+export const VERIFIABLE = new Set(VERIFIERS.keys());
 
 /** Register (or replace) a read-back, for custom tools and for tests. */
 export function registerVerifier(name, fn) {
   if (typeof fn !== "function") throw new TypeError("a verifier must be a function");
-  VERIFIERS[name] = fn;
+  VERIFIERS.set(name, fn);
   VERIFIABLE.add(name);
   return fn;
 }
@@ -121,7 +132,7 @@ export function registerVerifier(name, fn) {
  */
 export async function verifyAction(name, args, ctx, result) {
   if (!result || result.ok !== true) return null;
-  const verifier = VERIFIERS[name];
+  const verifier = VERIFIERS.get(name);
   if (!verifier) {
     return { ...unknown(`no independent read-back is defined for ${name}`), ms: 0 };
   }

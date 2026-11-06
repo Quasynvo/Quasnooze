@@ -167,6 +167,7 @@ function defaultForEnv(name) {
   const file = join(ROOT, "src", "config.js");
   if (!existsSync(file)) return { value: "", source: "unknown" };
   const src = readFileSync(file, "utf8");
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp -- name is a config key from the CLI, not a request
   const line = new RegExp(`env\\.${name}\\s*\\|\\|\\s*([^\\n]+)`).exec(src);
   if (!line) return { value: "", source: `no default in src/config.js` };
   const expr = line[1].trim().replace(/,$/, "");
@@ -201,6 +202,7 @@ function filesReading(name) {
       try {
         // Reads only — an assignment is not configuration.
         const text = readFileSync(join(abs, f), "utf8");
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp -- name is a config key from the CLI, not a request
         if (new RegExp(`env\\.${name}(?!\\s*=(?!=))`).test(text)) out.push(`${dir}/${f}`);
       } catch {
         /* unreadable is not the same as absent, but it cannot be cited either */

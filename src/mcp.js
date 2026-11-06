@@ -249,6 +249,7 @@ export function toQuasnoozeTool(client, definition) {
       const safe = String(result.output ?? "").replace(/<\/untrusted-source/gi, "<\\/untrusted-source");
       return {
         ok: result.ok,
+        // nosemgrep: javascript.lang.security.html-in-template-string -- prompt wrapper, not browser HTML
         output: `<untrusted-source tool="mcp__${client.name}__${remoteName}">\n${safe}\n</untrusted-source>`,
       };
     },

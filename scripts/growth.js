@@ -796,6 +796,7 @@ function renderProposal(chosen, ranked) {
     "Something. This repository is one person's attention; an issue that does not name its cost is asking for free work.",
     "",
     "---",
+    // nosemgrep: javascript.lang.security.html-in-template-string -- markdown issue body, not browser HTML
     `<sub>Close this if the answer is no — the fingerprint below stops it being proposed again for ${WINDOW_DAYS} days either way.</sub>`,
     `<!-- growth:fingerprint:${chosen.fingerprint} -->`,
   );

@@ -286,6 +286,7 @@ export function toTool(raw, { workspaceRoots = [], env = process.env } = {}) {
       return {
         ok: res.ok,
         code: res.code,
+        // nosemgrep: javascript.lang.security.html-in-template-string -- prompt wrapper, not browser HTML
         output: `<untrusted-source tool="${name}">\n${body}\n</untrusted-source>`,
       };
     },
