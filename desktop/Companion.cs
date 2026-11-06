@@ -145,6 +145,271 @@ public static class QuasnoozeAudio {
     }
 }
 
+// Top-level window control (list/focus/minimise/restore/close) and
+// allowlist-resolved app launching, reached only through the typed "os" op.
+// Every mutation re-validates the handle with IsWindow at action time, so a
+// window that closed mid-call is a typed CLOSED failure, never a guess.
+// Launch resolves an approved executable by NAME from a fixed known list plus
+// the user's own apps.json; the model-supplied name is only ever a dictionary
+// key — it is never concatenated into a command line, a path, or a shell.
+public static class QuasnoozeWindows {
+    public sealed class OsFailure : Exception {
+        public readonly string Code;
+        public OsFailure(string code, string message) : base(message) { Code = code; }
+    }
+    internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    internal struct User32 {
+        [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+        [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+        [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    }
+
+    const int SW_SHOW = 5, SW_MINIMIZE = 6, SW_RESTORE = 9;
+    const uint WM_CLOSE = 0x0010;
+    const int MaxWindows = 100;
+    static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
+
+    static bool Alive(IntPtr h) {
+        return User32.IsWindow(h);
+    }
+    static bool Visible(IntPtr h) {
+        return User32.IsWindowVisible(h);
+    }
+    static bool Iconic(IntPtr h) {
+        return User32.IsIconic(h);
+    }
+    static void Show(IntPtr h, int cmd) {
+        User32.ShowWindow(h, cmd);
+    }
+    static void Foreground(IntPtr h) {
+        User32.SetForegroundWindow(h);
+    }
+    static IntPtr CurrentForeground() {
+        return User32.GetForegroundWindow();
+    }
+    static void PostClose(IntPtr h) {
+        User32.PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+    }
+    static uint PidOf(IntPtr h) {
+        uint pid;
+        User32.GetWindowThreadProcessId(h, out pid);
+        return pid;
+    }
+    static string TitleOf(IntPtr h) {
+        var sb = new StringBuilder(256);
+        int len = User32.GetWindowText(h, sb, sb.Capacity);
+        return len > 0 ? sb.ToString(0, Math.Min(len, sb.Length)) : "";
+    }
+    static void EnumTopWindows(EnumWindowsProc cb) {
+        User32.EnumWindows(cb, IntPtr.Zero);
+    }
+    static string ProcessNameOf(uint pid) {
+        try {
+            using (var proc = Process.GetProcessById((int)pid)) {
+                return proc.ProcessName;
+            }
+        } catch (ArgumentException) {
+            return "";
+        } catch (InvalidOperationException) {
+            return "";
+        } catch (System.ComponentModel.Win32Exception) {
+            return "";
+        }
+    }
+    static Dictionary<string, object> BuildInfo(IntPtr h, string title) {
+        uint pid = PidOf(h);
+        var info = new Dictionary<string, object>();
+        info["handle"] = h.ToInt64().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        info["title"] = title;
+        info["process"] = ProcessNameOf(pid);
+        info["pid"] = (double)pid;
+        return info;
+    }
+    public static Dictionary<string, object> Info(IntPtr h) {
+        return BuildInfo(h, TitleOf(h));
+    }
+    public static List<Dictionary<string, object>> List() {
+        var list = new List<Dictionary<string, object>>();
+        EnumTopWindows(delegate(IntPtr h, IntPtr l) {
+            if (list.Count >= MaxWindows) return false;
+            if (!Visible(h)) return true;
+            string title = TitleOf(h);
+            if (title.Length == 0) return true;
+            list.Add(BuildInfo(h, title));
+            return true;
+        });
+        return list;
+    }
+    // A handle from a listing is a stale snapshot by the time it is used:
+    // Alive (IsWindow) is the actual gate, and a dead handle is a typed CLOSED.
+    static IntPtr ParseHandle(string text) {
+        long raw;
+        if (!Int64.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out raw) || raw == 0) {
+            throw new OsFailure("BAD_HANDLE", "The window handle was missing or malformed. No window was touched.");
+        }
+        IntPtr h = new IntPtr(raw);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "That window no longer exists - it closed before this action ran. Nothing was changed; list the windows again and pick a live one.");
+        }
+        return h;
+    }
+    public static Dictionary<string, object> Focus(string handleText) {
+        IntPtr h = ParseHandle(handleText);
+        if (Iconic(h)) Show(h, SW_RESTORE);
+        Show(h, SW_SHOW);
+        Foreground(h);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed while it was being focused. Nothing is focused now; list the windows again.");
+        }
+        var info = Info(h);
+        info["focused"] = CurrentForeground() == h;
+        return info;
+    }
+    public static Dictionary<string, object> Minimise(string handleText) {
+        IntPtr h = ParseHandle(handleText);
+        Show(h, SW_MINIMIZE);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed before it could be minimised. Nothing was changed; list the windows again.");
+        }
+        var info = Info(h);
+        info["minimised"] = Iconic(h);
+        return info;
+    }
+    public static Dictionary<string, object> Restore(string handleText) {
+        IntPtr h = ParseHandle(handleText);
+        if (Iconic(h)) Show(h, SW_RESTORE);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed before it could be restored. Nothing was changed; list the windows again.");
+        }
+        var info = Info(h);
+        info["minimised"] = Iconic(h);
+        return info;
+    }
+    public static Dictionary<string, object> Close(string handleText) {
+        IntPtr h = ParseHandle(handleText);
+        var before = Info(h);
+        string app = String.IsNullOrEmpty((string)before["process"]) ? "an application" : (string)before["process"];
+        string title = (string)before["title"];
+        string shown = title.Length > 120 ? title.Substring(0, 120) : title;
+        // Destructive: the native confirmation names the application.
+        if (!QuasnoozeCompanion.Confirm("Close the window \"" + shown + "\" (" + app + ")? Unsaved work in it may be lost. Only this one window is asked to close.")) {
+            throw new OsFailure("DENIED", "Closing " + app + " was denied at the confirmation dialog. Nothing was closed.");
+        }
+        PostClose(h);
+        System.Threading.Thread.Sleep(400);
+        bool gone = !Alive(h);
+        var info = new Dictionary<string, object>();
+        info["handle"] = before["handle"];
+        info["title"] = title;
+        info["process"] = app;
+        info["closed"] = gone;
+        if (!gone) {
+            info["note"] = "The window is still open - the application may have refused to close or is asking to save first.";
+        }
+        return info;
+    }
+
+    static string Subpath(string root, string child) {
+        char sep = Path.DirectorySeparatorChar;
+        return root.TrimEnd(sep, Path.AltDirectorySeparatorChar) + sep + child.TrimStart(sep, Path.AltDirectorySeparatorChar);
+    }
+
+    // Approved launch targets. Fixed known list first; then the user's own
+    // config at %APPDATA%\Quasnooze\apps.json, e.g.
+    //   {"apps": {"spotify": "C:\\Users\\you\\AppData\\Local\\Spotify\\Spotify.exe"}}
+    // A malformed config contributes nothing; it can never widen access.
+    static readonly Dictionary<string, string> KnownApps = BuildKnownApps();
+    static Dictionary<string, string> BuildKnownApps() {
+        string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string sys = Environment.SystemDirectory;
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!String.IsNullOrEmpty(sys)) {
+            map["calculator"] = Subpath(sys, "calc.exe");
+            map["calc"] = Subpath(sys, "calc.exe");
+            map["notepad"] = Subpath(sys, "notepad.exe");
+            map["mspaint"] = Subpath(sys, "mspaint.exe");
+            map["paint"] = Subpath(sys, "mspaint.exe");
+        }
+        if (!String.IsNullOrEmpty(windows)) {
+            map["explorer"] = Subpath(windows, "explorer.exe");
+            map["file explorer"] = Subpath(windows, "explorer.exe");
+        }
+        return map;
+    }
+    // A launch key may only be a plain name: no path separators, no shell
+    // metacharacters, no "..". It is used as a dictionary key, nothing else.
+    public static bool ValidAppKey(string key) {
+        if (String.IsNullOrEmpty(key) || key.Length > 60) return false;
+        if (key.IndexOf("..", StringComparison.Ordinal) >= 0) return false;
+        foreach (char c in key) {
+            if (!(Char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '.')) return false;
+        }
+        return true;
+    }
+    public static Dictionary<string, string> UserApps() {
+        var apps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            if (String.IsNullOrEmpty(appData)) return apps;
+            string path = Subpath(Subpath(appData, "Quasnooze"), "apps.json");
+            if (!File.Exists(path)) return apps;
+            var doc = Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
+            object raw;
+            if (doc == null || !doc.TryGetValue("apps", out raw) || !(raw is Dictionary<string, object>)) return apps;
+            foreach (var kv in (Dictionary<string, object>)raw) {
+                string value = Convert.ToString(kv.Value);
+                if (!ValidAppKey(kv.Key)) continue;
+                if (String.IsNullOrEmpty(value) || !Path.IsPathRooted(value) ||
+                    !value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(value)) continue;
+                apps[kv.Key] = value;
+            }
+        } catch (IOException) {
+            return apps;
+        } catch (UnauthorizedAccessException) {
+            return apps;
+        } catch (ArgumentException) {
+            return apps;
+        } catch (InvalidOperationException) {
+            return apps;
+        }
+        return apps;
+    }
+    public static string AvailableNames() {
+        var names = KnownApps.Keys
+            .Concat(UserApps().Keys.Where(k => !KnownApps.ContainsKey(k)))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return String.Join(", ", names);
+    }
+    public static Dictionary<string, object> LaunchApp(string name) {
+        string key = name == null ? "" : name.Trim();
+        if (!ValidAppKey(key)) throw new OsFailure("BAD_NAME", "That is not a plain application name. Nothing was started.");
+        string path;
+        if (!KnownApps.TryGetValue(key, out path) && !UserApps().TryGetValue(key, out path)) {
+            throw new OsFailure("UNKNOWN_APP", "\"" + key + "\" is not an approved application. Available: " + AvailableNames() + ". To add your own, create %APPDATA%\\Quasnooze\\apps.json with {\"apps\":{\"name\":\"C:\\\\full\\\\path\\\\App.exe\"}}. Nothing was started.");
+        }
+        if (!File.Exists(path)) throw new OsFailure("NOT_FOUND", "The approved executable registered for \"" + key + "\" was not found at its path. Nothing was started.");
+        // No arguments are ever taken from the request; the resolved absolute
+        // path is the only thing started, and never through a shell.
+        double pid = 0d;
+        using (var proc = Process.Start(new ProcessStartInfo(path) { UseShellExecute = false })) {
+            if (proc != null) pid = (double)proc.Id;
+        }
+        var result = new Dictionary<string, object>();
+        result["name"] = key;
+        result["path"] = path;
+        result["pid"] = pid;
+        return result;
+    }
+}
+
 public static class QuasnoozeCompanion {
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint key);
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
@@ -331,7 +596,7 @@ public static class QuasnoozeCompanion {
         Uri uri;
         return url.Length <= 2000 && Uri.TryCreate(url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps && String.IsNullOrEmpty(uri.UserInfo);
     }
-    static bool Confirm(string text) { return MessageBox.Show(Window, text, "Quasnooze - confirm action", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes; }
+    internal static bool Confirm(string text) { return MessageBox.Show(Window, text, "Quasnooze - confirm action", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes; }
     static void NativeAction(Dictionary<string, object> m) {
         string id = Value(m, "id"), action = Value(m, "action"), result = "";
         bool ok = false;
@@ -368,6 +633,82 @@ public static class QuasnoozeCompanion {
             ok = true;
         } catch (Exception e) { result = e.Message; }
         Emit(new { type = "result", id = id, ok = ok, text = result });
+    }
+    // Typed OS requests from the Node side: {op:"os", id, kind, ..., deadline}.
+    // Every reply carries {ok, text, code, data}; a host that cannot answer is
+    // surfaced by the Node side as UNREACHABLE, never as a silent success.
+    static void OsRequest(Dictionary<string, object> m) {
+        string id = Value(m, "id"), kind = Value(m, "kind"), result = "", code = "";
+        object data = null;
+        bool ok = false;
+        try {
+            long deadline;
+            if (!Int64.TryParse(Value(m, "deadline"), out deadline)) throw new QuasnoozeWindows.OsFailure("EXPIRED", "Missing request deadline.");
+            Func<bool> expired = () => (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalMilliseconds > deadline;
+            if (expired()) throw new QuasnoozeWindows.OsFailure("EXPIRED", "Request expired; ask again.");
+            switch (kind) {
+                case "list_windows": {
+                    var windows = QuasnoozeWindows.List();
+                    data = new Dictionary<string, object> { { "windows", windows }, { "count", (double)windows.Count } };
+                    result = windows.Count + " visible window(s).";
+                    ok = true;
+                    break;
+                }
+                case "focus_window": {
+                    var info = QuasnoozeWindows.Focus(Value(m, "handle"));
+                    data = info; ok = true;
+                    result = "Focused \"" + info["title"] + "\" (" + info["process"] + ").";
+                    break;
+                }
+                case "minimise_window": {
+                    var info = QuasnoozeWindows.Minimise(Value(m, "handle"));
+                    data = info; ok = true;
+                    result = "Minimised \"" + info["title"] + "\" (" + info["process"] + ").";
+                    break;
+                }
+                case "restore_window": {
+                    var info = QuasnoozeWindows.Restore(Value(m, "handle"));
+                    data = info; ok = true;
+                    result = "Restored \"" + info["title"] + "\" (" + info["process"] + ").";
+                    break;
+                }
+                case "close_window": {
+                    var info = QuasnoozeWindows.Close(Value(m, "handle"));
+                    data = info; ok = true;
+                    result = Convert.ToBoolean(info["closed"])
+                        ? "Closed \"" + info["title"] + "\" (" + info["process"] + ")."
+                        : "The window \"" + info["title"] + "\" (" + info["process"] + ") is still open; the application did not close it.";
+                    break;
+                }
+                case "launch_app": {
+                    var info = QuasnoozeWindows.LaunchApp(Value(m, "name"));
+                    data = info; ok = true;
+                    result = "Launched " + info["name"] + " from " + info["path"] + ".";
+                    break;
+                }
+                default:
+                    throw new QuasnoozeWindows.OsFailure("UNKNOWN_OP", "Unknown os request kind. Nothing was done.");
+            }
+        } catch (QuasnoozeWindows.OsFailure f) {
+            code = f.Code;
+            result = f.Message;
+        } catch (System.ComponentModel.Win32Exception e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (IOException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (UnauthorizedAccessException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (InvalidOperationException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (ArgumentException e) {
+            code = "FAILED";
+            result = e.Message;
+        }
+        Emit(new { type = "result", id = id, ok = ok, text = result, code = code, data = data });
     }
     static void ShowDeck() {
         // This URL is supplied only over the parent-owned pipe, never by a webpage.
@@ -417,6 +758,7 @@ public static class QuasnoozeCompanion {
                 case "approval": Approval = Value(m, "id"); ApprovalText = Value(m, "text"); Phase("permission required", ApprovalText); Allow.Visible = ApprovalText.Length <= 1000; Deny.Visible = true; if (ApprovalText.Length > 1000) Detail.Text = "Long action: review the full description and approve in the command deck. " + ApprovalText; Window.Show(); break;
                 case "reply": Reply(Value(m, "text"), Value(m, "speak").ToLowerInvariant() == "true"); break;
                 case "action": NativeAction(m); break;
+                case "os": OsRequest(m); break;
                 case "mute": if (WantWake) ToggleWake(); break;
                 case "listen": ListenOnce(); break;
                 case "stop-voice": StopSpeech(); if (WantWake && !Working) StartRecognition(false); break;
@@ -436,7 +778,9 @@ public static class QuasnoozeCompanion {
     public static string SelfTest() {
         SpeechSessionGate.SelfTest();
         if (!ValidHttps("https://example.com/") || ValidHttps("javascript:alert(1)") || ValidHttps("https://user:pass@example.com/") || ValidHttps("file:///C:/Windows")) throw new Exception("URL policy regression");
-        return "Companion compiled; URL and asynchronous speech lifecycle policies passed. No microphone or UI was opened.";
+        if (!QuasnoozeWindows.ValidAppKey("spotify") || !QuasnoozeWindows.ValidAppKey("my app 2")) throw new InvalidOperationException("App-name policy rejected a plain name");
+        if (QuasnoozeWindows.ValidAppKey("") || QuasnoozeWindows.ValidAppKey("note; echo x") || QuasnoozeWindows.ValidAppKey("../outside") || QuasnoozeWindows.ValidAppKey("sub\\app") || QuasnoozeWindows.ValidAppKey(new string('a', 61))) throw new InvalidOperationException("App-name policy accepted a path or shell string");
+        return "Companion compiled; URL, asynchronous speech lifecycle and app-launch name policies passed. No microphone or UI was opened.";
     }
     public static void Run() {
         Console.OutputEncoding = new UTF8Encoding(false); Console.InputEncoding = new UTF8Encoding(false);

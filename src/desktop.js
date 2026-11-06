@@ -128,6 +128,31 @@ export class DesktopRuntime {
     if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });
     return this.bridge.action({ action: "media", media: action, ...(level !== undefined ? { level } : {}) });
   }
+  /**
+   * Typed request/response to the companion's OS host with a timeout. A host
+   * that does not answer rejects with code UNREACHABLE — never a silent
+   * success. Resolves with the host's structured payload ({windows, title,
+   * process, handle, …} depending on the kind).
+   */
+  async os(kind, params = {}, { timeoutMs = 15_000 } = {}) {
+    if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503, code: "UNREACHABLE" });
+    return this.bridge.os({ kind, ...params }, { timeoutMs });
+  }
+  /** Visible top-level windows as [{handle, title, process}], bounded fields. */
+  async listWindows() {
+    const res = await this.os("list_windows");
+    const windows = Array.isArray(res?.windows) ? res.windows : [];
+    return windows.map((w) => ({
+      handle: String(w?.handle ?? ""),
+      title: String(w?.title ?? "").slice(0, 200),
+      process: String(w?.process ?? "").slice(0, 120),
+    })).filter((w) => w.handle && (w.title || w.process));
+  }
+  async focusWindow(handle) { return this.os("focus_window", { handle: String(handle ?? "") }); }
+  async minimiseWindow(handle) { return this.os("minimise_window", { handle: String(handle ?? "") }); }
+  async restoreWindow(handle) { return this.os("restore_window", { handle: String(handle ?? "") }); }
+  async closeWindow(handle) { return this.os("close_window", { handle: String(handle ?? "") }); }
+  async launchApp(name) { return this.os("launch_app", { name: String(name ?? "").slice(0, 120) }); }
   async request(text) {
     if (typeof text !== "string" || !text.trim() || text.length > 2000) throw Object.assign(new Error("Use a command of 1–2000 characters."), { status: 400 });
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });

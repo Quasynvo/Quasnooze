@@ -558,6 +558,107 @@ function openUrl(url) {
   child.unref();
 }
 
+/* ── window matching: fuzzy but bounded ────────────────────────────────
+ *
+ * Used by list_windows/focus_window/minimise_window/close_window. The query
+ * is never treated as a path or a command: it is bounded in length, stripped
+ * of control characters, and only ever compared against window titles and
+ * process names. More than one equally-good match is AMBIGUOUS — the caller
+ * must return the candidates instead of acting on the first one.
+ */
+export const WINDOW_QUERY_MAX = 120;
+
+function normalizeWindowText(value) {
+  return String(value ?? "").toLowerCase().replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Bounded Levenshtein for short process-name typos ("notebad" → "notepad"). */
+function editDistance(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n || Math.abs(m - n) > 3) return 99;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+/**
+ * Match a user/model-provided name against [{handle, title, process}].
+ * Returns { status: "invalid"|"none"|"unique"|"ambiguous", matches: [...] }.
+ * "unique" is the only status that authorises acting on matches[0].
+ */
+export function matchWindows(query, windows, { maxCandidates = 10 } = {}) {
+  const q = String(query ?? "").replace(/[\x00-\x1f\x7f]/g, " ").trim();
+  if (!q || q.length > WINDOW_QUERY_MAX) return { status: "invalid", matches: [] };
+  const nq = normalizeWindowText(q).replace(/\.exe$/, "");
+  const tokens = nq.split(" ").filter(Boolean);
+  const scored = [];
+  for (const w of Array.isArray(windows) ? windows : []) {
+    const title = normalizeWindowText(w?.title);
+    const proc = normalizeWindowText(w?.process).replace(/\.exe$/, "");
+    let score = 0;
+    if (title === nq || proc === nq) score = 100;
+    else if (title.startsWith(nq + " -") || title.startsWith(nq + " —") || title.startsWith(nq + " ")) score = 80;
+    else if (title.startsWith(nq) || (proc && proc.startsWith(nq))) score = 70;
+    else if (nq.length >= 3 && (title.includes(nq) || (proc && proc.includes(nq)))) score = 60;
+    else if (tokens.length > 1 && tokens.every((t) => title.includes(t) || (proc && proc.includes(t)))) score = 50;
+    else if (proc && nq.length >= 3 && editDistance(proc, nq) <= 2) score = 40;
+    if (score > 0) scored.push({ window: w, score });
+  }
+  scored.sort((a, b) => b.score - a.score || String(a.window.title).localeCompare(String(b.window.title)));
+  if (!scored.length) return { status: "none", matches: [] };
+  const top = scored[0].score;
+  const best = scored.filter((s) => s.score === top);
+  if (best.length > 1) return { status: "ambiguous", total: best.length, matches: best.slice(0, maxCandidates).map((s) => s.window) };
+  return { status: "unique", matches: [best[0].window] };
+}
+
+/** One honest line for a companion failure, including typed UNREACHABLE. */
+function companionFailure(err, verb) {
+  const code = String(err?.code || "");
+  if (code === "UNREACHABLE" || err?.status === 503) {
+    return `${verb} needs the Quasnooze Windows companion, which is unreachable right now (UNREACHABLE). ` +
+      `Start it with "npm run desktop" on Windows and try again. Nothing was changed.`;
+  }
+  return `${verb} failed${code ? ` (${code})` : ""}: ${String(err?.message || err).slice(0, 300)}`;
+}
+
+/** Shared focus-style flow: list, match, act on a unique match only. */
+async function resolveUniqueWindow(desktop, name, verb) {
+  let windows;
+  try {
+    windows = await desktop.listWindows();
+  } catch (err) {
+    return { error: { ok: false, output: companionFailure(err, verb) } };
+  }
+  const match = matchWindows(name, windows);
+  const shown = String(name ?? "").slice(0, WINDOW_QUERY_MAX);
+  if (match.status === "invalid") {
+    return { error: { ok: false, output: `Give a window name of 1–${WINDOW_QUERY_MAX} characters without control characters. Nothing was changed.` } };
+  }
+  if (match.status === "none") {
+    const open = windows.slice(0, 10).map((w) => `- "${w.title}" — ${w.process}`).join("\n");
+    return { error: { ok: false, output: `No open window matches "${shown}". Nothing was changed. Open now:\n${open || "(the companion reported no visible windows)"}` } };
+  }
+  if (match.status === "ambiguous") {
+    return {
+      error: {
+        ok: false,
+        output: `"${shown}" matches ${match.total} windows, so nothing was changed. Be more specific:\n` +
+          match.matches.map((w) => `- "${w.title}" — ${w.process}`).join("\n") +
+          (match.total > match.matches.length ? `\n(…and ${match.total - match.matches.length} more)` : ""),
+      },
+    };
+  }
+  return { windows, target: match.matches[0] };
+}
+
 export const TOOLS = [
   {
     name: "shell",
@@ -1319,6 +1420,162 @@ export const TOOLS = [
       return { ok: true, state: { level: levelPct, muted: state.muted }, output: audio };
     },
   },
+  {
+    name: "list_windows",
+    description:
+      "List the visible top-level windows on the user's Windows machine (window title and application " +
+      "name) via the Quasnooze Windows companion. Use this to see what is open before focusing, " +
+      "minimising or closing a window, or launching an app.",
+    parameters: { type: "object", properties: {} },
+    async run() {
+      const { desktop } = await import("./desktop.js");
+      let windows;
+      try {
+        windows = await desktop.listWindows();
+      } catch (err) {
+        return { ok: false, output: companionFailure(err, "Listing windows") };
+      }
+      if (!windows.length) return { ok: true, output: "The companion reported no visible windows." };
+      const lines = windows.slice(0, 50).map((w) => `- "${w.title}" — ${w.process}`);
+      return { ok: true, output: `${windows.length} visible window(s):\n${lines.join("\n")}` };
+    },
+  },
+  {
+    name: "focus_window",
+    description:
+      "Bring an open window to the front by its title or application name (for example 'Spotify' or " +
+      "'notes - Notepad'). If the name matches more than one window, the candidates are returned and " +
+      "nothing is changed. Reports the window that was actually focused.",
+    parameters: {
+      type: "object",
+      properties: { name: stringProp("Window title or application name to bring to the front") },
+      required: ["name"],
+    },
+    async run({ name }) {
+      const { desktop } = await import("./desktop.js");
+      const resolved = await resolveUniqueWindow(desktop, name, "Focusing a window");
+      if (resolved.error) return resolved.error;
+      const { target } = resolved;
+      let focused;
+      try {
+        focused = await desktop.focusWindow(target.handle);
+      } catch (err) {
+        if (err?.code === "CLOSED") {
+          return {
+            ok: false,
+            output:
+              `The window "${target.title}" (${target.process}) closed before it could be focused. ` +
+              `Nothing was focused. List the windows again and choose one that is still open.`,
+          };
+        }
+        return { ok: false, output: companionFailure(err, "Focusing the window") };
+      }
+      return {
+        ok: true,
+        output:
+          `Focused window "${String(focused?.title ?? target.title).slice(0, 200)}" ` +
+          `(${String(focused?.process ?? target.process).slice(0, 120)}). That is the window now in front.`,
+      };
+    },
+  },
+  {
+    name: "minimise_window",
+    description:
+      "Minimise an open window by its title or application name. Same matching rules as focus_window: " +
+      "ambiguous names return the candidates and nothing is changed.",
+    parameters: {
+      type: "object",
+      properties: { name: stringProp("Window title or application name to minimise") },
+      required: ["name"],
+    },
+    async run({ name }) {
+      const { desktop } = await import("./desktop.js");
+      const resolved = await resolveUniqueWindow(desktop, name, "Minimising a window");
+      if (resolved.error) return resolved.error;
+      const { target } = resolved;
+      let result;
+      try {
+        result = await desktop.minimiseWindow(target.handle);
+      } catch (err) {
+        if (err?.code === "CLOSED") {
+          return { ok: false, output: `The window "${target.title}" (${target.process}) closed before it could be minimised. Nothing was changed.` };
+        }
+        return { ok: false, output: companionFailure(err, "Minimising the window") };
+      }
+      return {
+        ok: true,
+        output: `Minimised window "${String(result?.title ?? target.title).slice(0, 200)}" (${String(result?.process ?? target.process).slice(0, 120)}).`,
+      };
+    },
+  },
+  {
+    name: "close_window",
+    dangerous: true,
+    description:
+      "Close an open window by its title or application name. Destructive: it requires approval, and the " +
+      "Windows companion asks again on the machine, naming the application. Unsaved work may be lost. " +
+      "Ambiguous names return the candidates and nothing is closed.",
+    parameters: {
+      type: "object",
+      properties: { name: stringProp("Window title or application name to close") },
+      required: ["name"],
+    },
+    async run({ name }) {
+      const { desktop } = await import("./desktop.js");
+      const resolved = await resolveUniqueWindow(desktop, name, "Closing a window");
+      if (resolved.error) return resolved.error;
+      const { target } = resolved;
+      let result;
+      try {
+        result = await desktop.closeWindow(target.handle);
+      } catch (err) {
+        if (err?.code === "DENIED") return { ok: false, output: `Closing "${target.title}" (${target.process}) was denied at the confirmation dialog. Nothing was closed.` };
+        if (err?.code === "CLOSED") return { ok: false, output: `The window "${target.title}" (${target.process}) closed before this action ran. Nothing was closed.` };
+        return { ok: false, output: companionFailure(err, "Closing the window") };
+      }
+      const title = String(result?.title ?? target.title).slice(0, 200);
+      const processName = String(result?.process ?? target.process).slice(0, 120);
+      if (result?.closed === false) {
+        return { ok: true, output: `Asked to close "${title}" (${processName}), but the window is still open — the application may have refused or is asking to save first.` };
+      }
+      return { ok: true, output: `Closed window "${title}" (${processName}).` };
+    },
+  },
+  {
+    name: "launch_app",
+    dangerous: true,
+    description:
+      "Start an application by name on the user's Windows machine (for example 'spotify', 'notepad', " +
+      "'calculator'). Only names on the companion's approved list or in the user's own " +
+      "%APPDATA%\\Quasnooze\\apps.json can start; the name is never typed into a shell or used as a path. " +
+      "Requires approval. Unknown names are refused with the available list.",
+    parameters: {
+      type: "object",
+      properties: { name: stringProp("Application name, e.g. 'spotify' — a plain name, not a path or command") },
+      required: ["name"],
+    },
+    async run({ name }) {
+      const { desktop } = await import("./desktop.js");
+      const clean = String(name ?? "").trim();
+      // Client-side bound first, mirroring the companion's ValidAppKey: a
+      // plain name only. The companion re-validates and only ever uses the
+      // name as a dictionary key into approved executables — never as a
+      // path, argument or command line.
+      if (!clean || clean.length > WINDOW_QUERY_MAX || /[^a-z0-9 \-_.]/i.test(clean) || clean.includes("..")) {
+        return { ok: false, output: "Give a plain application name (letters, digits, spaces, '-', '_', '.'), not a path or command. Nothing was started." };
+      }
+      let launched;
+      try {
+        launched = await desktop.launchApp(clean);
+      } catch (err) {
+        if (err?.code === "UNKNOWN_APP" || err?.code === "BAD_NAME" || err?.code === "NOT_FOUND") {
+          return { ok: false, output: `Cannot start "${clean}": ${String(err.message).slice(0, 400)} Nothing was started.` };
+        }
+        return { ok: false, output: companionFailure(err, "Launching the app") };
+      }
+      return { ok: true, output: `Launched ${String(launched?.name ?? clean).slice(0, 60)} (${String(launched?.path ?? "approved executable").slice(0, 240)}).` };
+    },
+  },
 ];
 
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
@@ -1360,6 +1617,11 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   open_url: "Asks OS default browser opener to open an http(s) URL without prompt.",
   screenshot: "Captures screen via argv binary (shell:false) to workspace image file.",
   system_control: "Requests OS lock/sleep via fixed literal commands; volume and media keys go through the Windows companion's Core Audio/media-key host (no shell), reporting resulting level and mute state. Shutdown is not implemented.",
+  list_windows: "Read-only enumeration of visible top-level windows (title, process, handle) via the Windows companion; a host that does not answer is a typed UNREACHABLE failure.",
+  focus_window: "Brings one uniquely matched window to the foreground via the companion (IsWindow re-checked at action time); ambiguous names return candidates and change nothing; a window that closed mid-call is a typed CLOSED failure. No shell, no command line.",
+  minimise_window: "Minimises one uniquely matched window via the companion's ShowWindow; same ambiguity and closed-mid-call semantics as focus_window.",
+  close_window: "Asks one uniquely matched window to close (WM_CLOSE) via the companion after a native confirmation naming the application; destructive, so approval-required. No shell, no command line.",
+  launch_app: "Starts only an allowlist/config-approved executable by plain name via the companion (Process.Start with UseShellExecute=false, no arguments); the model string is a dictionary key, never a command line or path. Approval-required.",
 });
 
 /**

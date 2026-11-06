@@ -42,7 +42,12 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
     function fail() {
       if (!live()) return;
       context.dead = true; clear(context.timer);
-      for (const item of context.pending.values()) { clear(item.timer); item.reject(new Error("Companion disconnected; side-effect outcome unknown. Inspect before requesting again.")); }
+      for (const item of context.pending.values()) {
+        clear(item.timer);
+        const err = new Error("Companion disconnected; side-effect outcome unknown. Inspect before requesting again.");
+        err.code = "UNREACHABLE";
+        item.reject(err);
+      }
       context.pending.clear(); runtime.detach();
       status("recovering", "Companion lost. Side-effect outcome unknown; nothing will be replayed.");
       if (context.exited || !context.child) { schedule(); return; }
@@ -65,16 +70,55 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
     }
     const bridge = { send, action(intent) {
       return new Promise((resolve, reject) => {
-        if (!live() || !context.ready) { reject(new Error("Companion unavailable; action not sent.")); return; }
+        if (!live() || !context.ready) {
+          const err = new Error("Companion unavailable; action not sent.");
+          err.code = "UNREACHABLE";
+          reject(err); return;
+        }
         const id = randomUUID(), deadline = Date.now() + 30_000;
-        const timer = later(() => { context.pending.delete(id); reject(new Error("Desktop confirmation expired; outcome unknown. Inspect before requesting again.")); }, 30_000);
+        const timer = later(() => {
+          context.pending.delete(id);
+          const err = new Error("Desktop confirmation expired; outcome unknown. Inspect before requesting again.");
+          err.code = "UNREACHABLE"; err.timeout = true;
+          reject(err);
+        }, 30_000);
         context.pending.set(id, { resolve, reject, timer });
         // media/level carry the volume/media-key subset: an enum name and an
         // integer. JSON.stringify drops them when undefined, so the wire shape
         // for clipboard/url/app actions is unchanged.
         send({ op: "action", id, action: intent.action, url: intent.url, media: intent.media, level: intent.level, deadline });
       });
-    } };
+    },
+      /**
+       * Typed request/response to the companion's OS host (windows, app
+       * launch). Carries a deadline and its own timeout: a host that does not
+       * answer rejects with code UNREACHABLE — never a silent success.
+       * Resolves with the host's structured `data` payload (plus `text`);
+       * rejects with a typed `code` (CLOSED, DENIED, UNKNOWN_APP, …).
+       */
+      os(payload, { timeoutMs = 15_000 } = {}) {
+        return new Promise((resolve, reject) => {
+          if (!live() || !context.ready) {
+            const err = new Error("Windows companion is not running; request not sent.");
+            err.code = "UNREACHABLE";
+            reject(err); return;
+          }
+          if (!payload || typeof payload.kind !== "string" || payload.kind.length > 40) {
+            const err = new Error("Invalid os request kind.");
+            err.code = "BAD_REQUEST";
+            reject(err); return;
+          }
+          const id = randomUUID(), deadline = Date.now() + timeoutMs;
+          const timer = later(() => {
+            context.pending.delete(id);
+            const err = new Error(`Windows companion did not answer "${payload.kind}" within ${timeoutMs} ms; the host is UNREACHABLE and nothing may be assumed about the machine.`);
+            err.code = "UNREACHABLE"; err.timeout = true;
+            reject(err);
+          }, timeoutMs);
+          context.pending.set(id, { resolve, reject, timer, structured: true });
+          send({ op: "os", id, ...payload, deadline });
+        });
+      } };
     try {
       const systemRoot = process.env.SystemRoot || "C:\\Windows";
       context.child = spawnChild(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-File", join(ROOT, "desktop", "windows.ps1")], {
@@ -121,8 +165,17 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         else if (event.type === "state" && ["listening", "speaking", "muting", "muted", "armed"].includes(event.phase)) runtime.update({ phase: event.phase });
         else if (event.type === "result" && context.pending.has(event.id)) {
           const item = context.pending.get(event.id); context.pending.delete(event.id); clear(item.timer);
-          if (event.ok === true && typeof event.text === "string") item.resolve(event.text.slice(0, 16_000));
-          else item.reject(new Error(String(event.text || "Desktop action failed.").slice(0, 500)));
+          if (event.ok === true && typeof event.text === "string") {
+            // Typed os requests resolve with the host's structured payload so
+            // callers can see the window that was actually focused, etc.
+            if (item.structured && event.data && typeof event.data === "object") item.resolve({ ...event.data, text: event.text.slice(0, 16_000) });
+            else item.resolve(event.text.slice(0, 16_000));
+          } else {
+            const err = new Error(String(event.text || "Desktop action failed.").slice(0, 500));
+            if (typeof event.code === "string" && event.code) err.code = event.code.slice(0, 40);
+            if (item.structured && event.data && typeof event.data === "object") err.data = event.data;
+            item.reject(err);
+          }
         }
       }
     });
@@ -136,7 +189,12 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
     stopped = true; clear(retryTimer); retryTimer = null;
     if (current) {
       clear(current.timer); clear(current.killTimer); current.dead = true;
-      for (const item of current.pending.values()) { clear(item.timer); item.reject(new Error("Companion stopped; side-effect outcome unknown.")); }
+      for (const item of current.pending.values()) {
+        clear(item.timer);
+        const err = new Error("Companion stopped; side-effect outcome unknown.");
+        err.code = "UNREACHABLE";
+        item.reject(err);
+      }
       current.pending.clear();
       try { current.child?.stdin.end(JSON.stringify({ op: "quit" }) + "\n"); } catch { /* process may already be gone */ }
       const context = current;
