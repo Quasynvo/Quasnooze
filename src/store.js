@@ -12,9 +12,10 @@
  * re-reads; writes are still synchronous and still atomic, because a debounced
  * write trades durability for a millisecond and this is someone's chat history.
  */
-import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync, unlinkSync, openSync, fsyncSync, closeSync, lstatSync, realpathSync, fstatSync, readSync, constants } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync, readdirSync, unlinkSync, openSync, fsyncSync, closeSync, lstatSync, realpathSync, fstatSync, readSync, copyFileSync, chmodSync, constants } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { config } from "./config.js";
+import { MEMORY_VERSION, memoryScope, migrateMemory, validFact, createFact } from "./memory/provenance.js";
 
 const DATA = config.dataDir;
 
@@ -108,37 +109,91 @@ export function invalidate(path) {
 
 const MEMORY_FILE = join(DATA, "memory.json");
 
-export function loadMemory() {
-  const m = readCached(MEMORY_FILE, null);
-  return m && typeof m === "object"
-    ? { facts: m.facts || [], profile: m.profile || {}, updatedAt: m.updatedAt || null }
-    : { facts: [], profile: {}, updatedAt: null };
+// Read without silently overwriting corrupt or future-version state. Invalid
+// individual records are retained on disk but excluded from recall.
+function memoryState() {
+  const raw = readCached(MEMORY_FILE, null);
+  if (raw === null && !existsSync(MEMORY_FILE)) return { version: MEMORY_VERSION, facts: [], profile: {}, updatedAt: null };
+  return migrateMemory(raw);
 }
-
-export function saveMemory(memory) {
-  memory.updatedAt = new Date().toISOString();
-  writeCached(MEMORY_FILE, memory, JSON.stringify(memory, null, 2));
-  return memory;
-}
-
-/** Remember a fact once (case-insensitive dedupe), newest kept last. */
-export function remember(text, tag = "general") {
-  const memory = loadMemory();
-  const clean = String(text || "").trim().slice(0, 500);
-  if (!clean) return memory;
-  if (!memory.facts.some((f) => f.text.toLowerCase() === clean.toLowerCase())) {
-    memory.facts.push({ text: clean, tag, at: new Date().toISOString() });
+function writeMemory(state) {
+  // Back up the exact original once, before the first legacy migration. Never
+  // overwrite an existing backup: it may be the owner's only rollback copy.
+  if (existsSync(MEMORY_FILE)) {
+    const original = readCached(MEMORY_FILE, null);
+    if (original && original.version !== MEMORY_VERSION) {
+      const backup = MEMORY_FILE + '.v1.bak';
+      try { copyFileSync(MEMORY_FILE, backup, constants.COPYFILE_EXCL); chmodSync(backup, 0o600); }
+      catch (err) { if (err.code !== 'EEXIST') throw err; }
+    }
   }
-  if (memory.facts.length > 500) memory.facts = memory.facts.slice(-500);
-  return saveMemory(memory);
+  state.version = MEMORY_VERSION;
+  state.updatedAt = new Date().toISOString();
+  writeCached(MEMORY_FILE, state, JSON.stringify(state, null, 2));
+  return state;
+}
+/** Scope comes from trusted local configuration or an owner-only caller. */
+export function loadMemory({ scope = config.memoryScope } = {}) {
+  const selected = memoryScope(scope);
+  let state;
+  try { state = memoryState(); }
+  catch { return { facts: [], profile: {}, updatedAt: null, warning: "memory.json is malformed or unsupported; it was not changed." }; }
+  return { ...state, facts: state.facts.filter(f => validFact(f) && f.scope === selected && !f.supersededBy), profile: state.profile || {}, updatedAt: state.updatedAt || null };
+}
+/** Full owner export, including other scopes and correction history. */
+export function exportMemory() { return memoryState(); }
+
+// Existing profile updates must not replace hidden scopes or correction history.
+export function saveMemory(memory) {
+  const state = memoryState();
+  state.profile = memory.profile || {};
+  writeMemory(state);
+  return loadMemory();
 }
 
-export function forget(text) {
-  const memory = loadMemory();
-  const needle = String(text || "").toLowerCase();
-  const before = memory.facts.length;
-  memory.facts = memory.facts.filter((f) => !f.text.toLowerCase().includes(needle));
-  return { memory: saveMemory(memory), removed: before - memory.facts.length };
+export function remember(text, tag = "general", { scope = config.memoryScope, source } = {}) {
+  const selected = memoryScope(scope);
+  const state = memoryState();
+  const clean = String(text || "").trim().slice(0, 500);
+  if (!clean) return loadMemory({ scope: selected });
+  if (!state.facts.some(f => validFact(f) && f.scope === selected && !f.supersededBy && f.text.toLowerCase() === clean.toLowerCase())) {
+    state.facts.push(createFact(clean, tag, selected, source));
+    writeMemory(state);
+  }
+  return loadMemory({ scope: selected });
+}
+
+/** Replace one active fact, keeping its provenance and linking its history. */
+export function correctMemory(id, text, { scope = config.memoryScope, source } = {}) {
+  const selected = memoryScope(scope), state = memoryState();
+  const original = state.facts.find(f => validFact(f) && f.scope === selected && f.id === id && !f.supersededBy);
+  if (!original) throw new Error('Active fact not found in this scope.');
+  const replacement = createFact(text, original.tag, selected, source);
+  original.supersededBy = replacement.id;
+  state.facts.push(replacement);
+  writeMemory(state);
+  return replacement;
+}
+
+export function forget(text, { scope = config.memoryScope } = {}) {
+  const selected = memoryScope(scope), state = memoryState();
+  const needle = String(text || '').trim().toLowerCase();
+  if (!needle) return { memory: loadMemory({ scope: selected }), removed: 0 };
+  // Delete the complete correction chain, including stale versions, if any
+  // member matches. Never touch another scope or opaque malformed records.
+  const records = state.facts.filter(f => validFact(f) && f.scope === selected);
+  const ids = new Set(records.filter(f => f.text.toLowerCase().includes(needle)).map(f => f.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const f of records) if (f.supersededBy && (ids.has(f.id) || ids.has(f.supersededBy))) {
+      if (!ids.has(f.id)) { ids.add(f.id); changed = true; }
+      if (!ids.has(f.supersededBy)) { ids.add(f.supersededBy); changed = true; }
+    }
+  }
+  const removed = records.filter(f => ids.has(f.id)).length;
+  if (removed) { state.facts = state.facts.filter(f => !(validFact(f) && f.scope === selected && ids.has(f.id))); writeMemory(state); }
+  return { memory: loadMemory({ scope: selected }), removed };
 }
 
 /* ──────────────────────────── sessions (chats) ─────────────────────────── */

@@ -71,6 +71,8 @@ export const config = Object.freeze({
   dataDir,
   publicDir: join(ROOT, "public"),
 
+  // Trusted local configuration, never chosen by the model or a chat message.
+  memoryScope: env.QUASNOOZE_MEMORY_SCOPE || "user",
   ownerName: env.OWNER_NAME || "friend",
   timezone: env.OWNER_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
 
