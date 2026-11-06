@@ -16,6 +16,12 @@ rules:
       # scripts/roadmap-bots.js with an issues:write token, and never
       # checks out or executes the triggering run's tree.
       - roadmap-status-bot.yml
+      # pr-growth must comment on fork PRs. It checks out only the trusted
+      # default branch, fetches the PR as Git objects without checking it out,
+      # and does not execute, install, or import PR code. Git diff/grep disable
+      # external diff and text conversion; the write token is limited to issue
+      # comments, and only bot-owned marked comments are updated.
+      - pr-growth.yml
   artipacked:
     ignore:
       # roadmap-reconcile pushes its bot branch with the job token
