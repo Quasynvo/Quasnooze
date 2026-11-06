@@ -62,7 +62,9 @@ jobs:
           # Do not overwrite a newer report when a PR changes during calculation.
           CURRENT_HEAD="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)"
           [ "$CURRENT_HEAD" = "$HEAD_SHA" ] || { echo 'PR head changed; a newer run will report it.'; exit 1; }
-          COMMENT_ID="$(gh api --paginate --slurp "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" --jq '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- pr-growth-metrics -->")))] | last | .id // empty')"
+          # gh >= 2.97 rejects `--slurp` combined with `--jq`; slurp the pages
+          # into an array with jq instead (same pattern as contributor-queue.yml).
+          COMMENT_ID="$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" | jq -s '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- pr-growth-metrics -->")))] | last | .id // empty')"
           if [ -n "$COMMENT_ID" ]; then
             gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/pr-metrics-comment.md >/dev/null
           else
