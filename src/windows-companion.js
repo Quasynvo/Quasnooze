@@ -109,6 +109,12 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
             reject(err); return;
           }
           const id = randomUUID(), deadline = Date.now() + timeoutMs;
+          const wireProbe = JSON.stringify({ op: "os", id, ...payload, deadline });
+          if (wireProbe.length > 90_000) {
+            const err = new Error("OS request payload exceeds companion wire limit.");
+            err.code = "BAD_REQUEST";
+            reject(err); return;
+          }
           const timer = later(() => {
             context.pending.delete(id);
             const err = new Error(`Windows companion did not answer "${payload.kind}" within ${timeoutMs} ms; the host is UNREACHABLE and nothing may be assumed about the machine.`);
@@ -168,7 +174,7 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
           if (event.ok === true && typeof event.text === "string") {
             // Typed os requests resolve with the host's structured payload so
             // callers can see the window that was actually focused, etc.
-            if (item.structured && event.data && typeof event.data === "object") item.resolve({ ...event.data, text: event.text.slice(0, 16_000) });
+            if (item.structured && event.data && typeof event.data === "object") item.resolve({ text: event.text.slice(0, 16_000), ...event.data });
             else item.resolve(event.text.slice(0, 16_000));
           } else {
             const err = new Error(String(event.text || "Desktop action failed.").slice(0, 500));

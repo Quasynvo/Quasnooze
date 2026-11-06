@@ -116,3 +116,64 @@ test("a tool whose read-back was contradicted does not satisfy action claims", (
   assert.match(flag.message, /contradicted/);
 });
 
+test("clipboard guard helpers block unrequested memory, scrub telemetry/traces, and audit clipboard claims", async () => {
+  const {
+    userAskedToRemember,
+    guardClipboardMemory,
+    sanitizeTelemetryEvent,
+    sanitizeTraceEntry,
+  } = await import("../src/guard.js");
+
+  assert.equal(userAskedToRemember("Summarise what I copied"), false);
+  assert.equal(userAskedToRemember("Read my clipboard, don't remember it"), false);
+  assert.equal(userAskedToRemember("Remember what I copied on my clipboard"), true);
+  assert.equal(userAskedToRemember("Please save this to memory"), true);
+
+  assert.equal(
+    guardClipboardMemory({ fact: "Copied address", userText: "Summarise what I copied", clipboardTouched: true }).allowed,
+    false,
+  );
+  assert.equal(
+    guardClipboardMemory({ fact: "Copied address", userText: "Remember what I copied", clipboardTouched: true }).allowed,
+    true,
+  );
+
+  const scrubbed = sanitizeTelemetryEvent({
+    kind: "turn",
+    ms: 12,
+    clipboard: "secret-clip",
+    output: "secret-out",
+    prompt: "secret-prompt",
+  });
+  assert.deepEqual(scrubbed, { kind: "turn", ms: 12 });
+
+  const writeTrace = sanitizeTraceEntry({
+    tool: "write_clipboard",
+    args: { text: "private-replacement" },
+    ok: true,
+    output: "Wrote 19 bytes to the system clipboard.",
+  });
+  assert.deepEqual(writeTrace.args, { bytes: 19 });
+
+  const liedCopy = auditReply({
+    reply: "I copied the summary to your clipboard.",
+    trace: [],
+    userText: "copy the summary",
+  });
+  assert.ok(liedCopy.flags.some((f) => f.code === "action-without-evidence"));
+
+  const realCopy = auditReply({
+    reply: "I copied the summary to your clipboard.",
+    trace: [ok("write_clipboard")],
+    userText: "copy the summary",
+  });
+  assert.equal(realCopy.clean, true);
+
+  const unrequestedMem = auditReply({
+    reply: "Here is the summary.",
+    trace: [ok("read_clipboard"), ok("remember")],
+    userText: "Summarise what I copied",
+  });
+  assert.ok(unrequestedMem.flags.some((f) => f.code === "clipboard-memory-unrequested"));
+});
+

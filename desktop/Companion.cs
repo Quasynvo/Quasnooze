@@ -686,6 +686,35 @@ public static class QuasnoozeCompanion {
                     result = "Launched " + info["name"] + " from " + info["path"] + ".";
                     break;
                 }
+                case "read_clipboard": {
+                    bool hasText = Clipboard.ContainsText();
+                    string raw = hasText ? Clipboard.GetText() : "";
+                    int bytes = Encoding.UTF8.GetByteCount(raw);
+                    bool wireClipped = raw.Length > 12000;
+                    int cut = 12000;
+                    if (wireClipped && char.IsHighSurrogate(raw[cut - 1])) cut -= 1;
+                    string sample = wireClipped ? raw.Substring(0, cut) : raw;
+                    data = new Dictionary<string, object> {
+                        { "hasText", hasText },
+                        { "content", sample },
+                        { "bytes", (double)bytes },
+                        { "wireClipped", wireClipped }
+                    };
+                    result = "Clipboard read (" + bytes + " bytes).";
+                    ok = true;
+                    break;
+                }
+                case "write_clipboard": {
+                    string next = Value(m, "content");
+                    if (next.Length == 0) throw new QuasnoozeWindows.OsFailure("BAD_REQUEST", "Clipboard text cannot be empty.");
+                    int bytes = Encoding.UTF8.GetByteCount(next);
+                    if (bytes > 16384) throw new QuasnoozeWindows.OsFailure("BAD_REQUEST", "Clipboard write exceeds 16384 bytes.");
+                    Clipboard.SetText(next);
+                    data = new Dictionary<string, object> { { "bytes", (double)bytes } };
+                    result = "Wrote " + bytes + " bytes to the clipboard.";
+                    ok = true;
+                    break;
+                }
                 default:
                     throw new QuasnoozeWindows.OsFailure("UNKNOWN_OP", "Unknown os request kind. Nothing was done.");
             }
@@ -693,6 +722,9 @@ public static class QuasnoozeCompanion {
             code = f.Code;
             result = f.Message;
         } catch (System.ComponentModel.Win32Exception e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (ExternalException e) {
             code = "FAILED";
             result = e.Message;
         } catch (IOException e) {

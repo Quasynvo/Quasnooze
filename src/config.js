@@ -125,6 +125,8 @@ export const config = Object.freeze({
   // Deterministic action lifecycle policy pipeline (off | standard | strict).
   // Default-off so ordinary turns stay unchanged until explicitly enabled.
   harnessEvents: String(env.PINCH_HARNESS_EVENTS || "off").trim().toLowerCase(),
+  // Clipboard read/write tools (behind per-call approval + preview). Set off to disable.
+  clipboard: !/^(0|false|off|no)$/i.test(env.PINCH_CLIPBOARD || ""),
   // Extra hostnames the panel may be reached on (reverse proxy, tailnet).
   allowedHosts: list(env.PINCH_ALLOWED_HOSTS),
   // Credential-looking env vars a build may legitimately need.

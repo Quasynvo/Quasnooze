@@ -285,3 +285,154 @@ test("a companion reply without typed state is reported as unknown, not dressed 
     assert.match(res.output, /check the device/);
   } finally { desktop.detach(); }
 });
+
+/* ── clipboard read & write behind a preview (laptop-03) ───────────────── */
+
+const {
+  CLIPBOARD_READ_MAX_BYTES,
+  CLIPBOARD_WRITE_MAX_BYTES,
+  truncateUtf8,
+  inspectClipboardSecret,
+  setClipboardAdapterForTests,
+  clearClipboardStateForTests,
+} = await import("../src/tools.js");
+
+test("read_clipboard and write_clipboard are dangerous tools and respect QUASNOOZE_CLIPBOARD=off", async () => {
+  assert.equal(DANGEROUS.has("read_clipboard"), true);
+  assert.equal(DANGEROUS.has("write_clipboard"), true);
+  assert.ok(toolSchemas().some((s) => s.function.name === "read_clipboard"));
+  assert.ok(toolSchemas().some((s) => s.function.name === "write_clipboard"));
+
+  const prev = process.env.QUASNOOZE_CLIPBOARD;
+  let touched = false;
+  setClipboardAdapterForTests({
+    read: async () => { touched = true; return "should not read"; },
+    write: async () => { touched = true; },
+  });
+  try {
+    process.env.QUASNOOZE_CLIPBOARD = "off";
+    assert.equal(toolSchemas().some((s) => s.function.name === "read_clipboard"), false);
+    assert.equal(toolSchemas().some((s) => s.function.name === "write_clipboard"), false);
+
+    const r = await TOOL_MAP.get("read_clipboard").run({});
+    assert.equal(r.ok, false);
+    assert.match(r.output, /disabled.*QUASNOOZE_CLIPBOARD=off/);
+
+    const w = await TOOL_MAP.get("write_clipboard").run({ text: "hello" });
+    assert.equal(w.ok, false);
+    assert.match(w.output, /disabled.*QUASNOOZE_CLIPBOARD=off/);
+    assert.equal(touched, false, "disabled clipboard tools must never touch the OS clipboard");
+  } finally {
+    if (prev === undefined) delete process.env.QUASNOOZE_CLIPBOARD;
+    else process.env.QUASNOOZE_CLIPBOARD = prev;
+    clearClipboardStateForTests();
+  }
+});
+
+test("read_clipboard bounds output to 4,096 UTF-8 bytes without splitting multibyte characters and reports original byte count", async () => {
+  try {
+    setClipboardAdapterForTests({ read: async () => "" });
+    const empty = await TOOL_MAP.get("read_clipboard").run({});
+    assert.equal(empty.ok, true);
+    assert.match(empty.output, /empty \(0 bytes\)/);
+
+    setClipboardAdapterForTests({ read: async () => "Quarterly planning summary: launch moved to Friday." });
+    const shortRes = await TOOL_MAP.get("read_clipboard").run({});
+    assert.equal(shortRes.ok, true);
+    assert.match(shortRes.output, /Clipboard \(51 bytes\):/);
+    assert.match(shortRes.output, /Quarterly planning summary/);
+
+    // Place a 4-byte emoji right across the 4,096-byte boundary ("a" * 4094 + "😀" * 500 = 6,094 bytes).
+    const boundaryText = "a".repeat(CLIPBOARD_READ_MAX_BYTES - 2) + "😀".repeat(500);
+    const expectedTotalBytes = Buffer.byteLength(boundaryText, "utf8");
+    assert.equal(expectedTotalBytes, 6094);
+    setClipboardAdapterForTests({ read: async () => boundaryText });
+
+    const longRes = await TOOL_MAP.get("read_clipboard").run({});
+    assert.equal(longRes.ok, true);
+    assert.match(longRes.output, /6094 bytes total; truncated to 4094 bytes/);
+    assert.equal(longRes.output.includes("\uFFFD"), false, "UTF-8 truncation must never split a code point");
+
+    const unit = truncateUtf8("a😀b", 3);
+    assert.equal(unit.text, "a");
+    assert.equal(unit.originalBytes, 6);
+    assert.equal(unit.shownBytes, 1);
+    assert.equal(unit.truncated, true);
+  } finally {
+    clearClipboardStateForTests();
+  }
+});
+
+test("read_clipboard refuses secret-shaped content with an explanation instead of silently truncating", async () => {
+  const secretSamples = [
+    ["-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmU=\n-----END OPENSSH PRIVATE KEY-----", /private-key header/],
+    ["-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAtest\n-----END RSA PRIVATE KEY-----", /private-key header/],
+    ["AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ", /private-key header/],
+    ["Tr0ub4dor&3!xK9", /password/],
+    ["kivtag-7jufPy-zabqox", /password/],
+    ["correct-horse-battery-staple-9", /passphrase|password/],
+    ["Username: alice@example.com\nPassword: SuperSecret!Password99", /password-manager|credential/],
+    ["sk-proj-1234567890abcdefghijklmnop", /API key|access token|credential/],
+    ["ghp_1234567890abcdefghijklmnopqrstuvwxyz", /API key|access token|credential/],
+    ["postgres://admin:s3cr3tPass@db.internal:5432/prod", /credentials embedded in a URL/],
+    // Secret placed PAST the 4,096-byte truncation cap: must STILL be refused, never silently truncated away!
+    [" benign note ".repeat(400) + "\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC\n-----END PRIVATE KEY-----", /private-key header/],
+  ];
+
+  try {
+    for (const [sample, expectedReason] of secretSamples) {
+      setClipboardAdapterForTests({ read: async () => sample });
+      const res = await TOOL_MAP.get("read_clipboard").run({});
+      assert.equal(res.ok, false, `expected secret refusal for ${sample.slice(0, 40)}`);
+      assert.match(res.output, /Refused to read the clipboard/);
+      assert.match(res.output, expectedReason);
+      assert.match(res.output, /not|rather than silently truncated/);
+      assert.equal(res.output.includes(sample.slice(0, 24)), false, "refusal must not echo the secret back");
+    }
+
+    // Ordinary prose, URLs, paths, hashes, and code snippets are allowed cleanly.
+    const benignSamples = [
+      "Summarise what I copied: Distributed systems trade availability and consistency under partitions.",
+      "https://github.com/Quasynvo/Quasnooze/issues/127",
+      "/Users/alice/projects/quasnooze/src/tools.js",
+      "72e74bb345090da06b5720d6774d405cb7657572",
+      "laptop-03-clipboard-preview",
+      "MAX_RETRY_COUNT_2026_DEFAULT",
+      "function verifyPassword(user, password) {\n  return hash(password) === user.digest;\n}",
+    ];
+    for (const okSample of benignSamples) {
+      assert.equal(inspectClipboardSecret(okSample).secret, false, `falsely flagged benign text: ${okSample}`);
+      setClipboardAdapterForTests({ read: async () => okSample });
+      const res = await TOOL_MAP.get("read_clipboard").run({});
+      assert.equal(res.ok, true, `benign sample should succeed: ${okSample}`);
+    }
+  } finally {
+    clearClipboardStateForTests();
+  }
+});
+
+test("write_clipboard validates input bounds and writes exact text", async () => {
+  let current = "original clipboard value";
+  setClipboardAdapterForTests({
+    read: async () => current,
+    write: async (next) => { current = next; },
+  });
+  try {
+    const empty = await TOOL_MAP.get("write_clipboard").run({ text: "" });
+    assert.equal(empty.ok, false);
+    assert.equal(current, "original clipboard value", "empty write must not clear the clipboard");
+
+    const huge = await TOOL_MAP.get("write_clipboard").run({ text: "x".repeat(CLIPBOARD_WRITE_MAX_BYTES + 1) });
+    assert.equal(huge.ok, false);
+    assert.match(huge.output, /exceeds/);
+    assert.equal(current, "original clipboard value", "oversized write must leave clipboard unchanged");
+
+    const exact = "npm test -- test/tools.test.js";
+    const ok = await TOOL_MAP.get("write_clipboard").run({ text: exact });
+    assert.equal(ok.ok, true);
+    assert.equal(current, exact);
+    assert.match(ok.output, /Wrote 30 bytes/);
+  } finally {
+    clearClipboardStateForTests();
+  }
+});

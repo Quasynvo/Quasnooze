@@ -94,6 +94,15 @@ Quasnooze is an agent with a shell. Read this before you leave it running.
   `%APPDATA%\Quasnooze\apps.json` to an absolute `.exe` path and starts it with no arguments and no
   shell, so no model text ever becomes a command line. `close_window` is destructive: it is behind
   the approval gate and the companion asks again on the machine, naming the application.
+- **Clipboard tools** (`read_clipboard`, `write_clipboard`) require per-call approval — never a
+  session grant — because reading a clipboard is a privacy event and writing replaces whatever was
+  copied. Reads cap at 4,096 UTF-8 bytes while reporting the original byte length, and refuse
+  secret-shaped content (password-manager payloads, private-key headers, API/bearer tokens,
+  credentialed URLs) with an explanation rather than silently truncating. Writes show the exact
+  replacement text in the approval preview and pass bytes over stdin or the companion's typed `os`
+  channel (no shell). Clipboard text is omitted from tool traces, never written to
+  `telemetry.ndjson`, never included in support bundles, and refused by `remember` unless you ask.
+  Set `QUASNOOZE_CLIPBOARD=off` to disable both tools completely.
 
 ## Hardening checklist
 
