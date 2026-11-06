@@ -47,6 +47,29 @@ public static class QuasnoozeSpeechDoctor {
         } catch(Exception e) { report["status"] = "synthetic audio fixture failed"; report["error"] = e.Message; }
         return new JavaScriptSerializer().Serialize(report);
     }
+    // Inventory-only path for CI and for `desktop:doctor` without --mic.
+    // SpeechRecognitionEngine.InstalledRecognizers() can block on a machine
+    // where the Windows speech service is not running, so the inventory does
+    // not call it. The microphone test still does, because it needs a real
+    // recognizer; that path is explicitly opt-in.
+    public static string RunInventory() {
+        var report = new Dictionary<string, object>();
+        report["microphoneOpened"] = false;
+        report["status"] = "inventory-only; no audio captured";
+        report["inputPolicy"] = "Windows default speech recording device; may differ from the browser microphone";
+        report["recognizers"] = new object[0];
+        report["englishRecognizerAvailable"] = false;
+        report["speechAssembly"] = typeof(SpeechRecognitionEngine).Assembly.Location;
+        foreach (var name in new [] { "microphone", "microphone\\NonPackaged" }) {
+            try {
+                using (var key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\" + name))
+                    report[name] = key == null ? "not specified; permission not verified" : Convert.ToString(key.GetValue("Value", "not specified"));
+            // codeql[cs/catch-of-all-exceptions] registry permission failures are reported, not thrown
+            } catch { report[name] = "unreadable; permission not verified"; }
+        }
+        return new JavaScriptSerializer().Serialize(report);
+    }
+
     public static string Run(bool micTest) {
         var report = new Dictionary<string, object>();
         var infos = SpeechRecognitionEngine.InstalledRecognizers();

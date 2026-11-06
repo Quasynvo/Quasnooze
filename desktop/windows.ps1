@@ -1,4 +1,4 @@
-param([switch]$CheckOnly, [switch]$Doctor, [switch]$MicTest, [switch]$AudioSelfTest)
+param([switch]$CheckOnly, [switch]$Doctor, [switch]$MicTest, [switch]$AudioSelfTest, [switch]$InventoryOnly)
 $ErrorActionPreference = 'Stop'
 # This process-only execution policy is supplied by the explicit desktop launcher.
 # No machine policy, administrator rights, Python, or cloud speech service is used.
@@ -21,6 +21,7 @@ if ($AudioSelfTest) {
     exit 0
 }
 if ($MicTest -and -not $Doctor) { throw '-MicTest requires -Doctor' }
+if ($InventoryOnly) { [QuasnoozeSpeechDoctor]::RunInventory(); exit 0 }
 if ($Doctor) { [QuasnoozeSpeechDoctor]::Run([bool]$MicTest); exit 0 }
 if ($CheckOnly) { [QuasnoozeCompanion]::SelfTest(); exit 0 }
 [QuasnoozeCompanion]::Run()
