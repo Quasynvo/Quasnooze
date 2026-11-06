@@ -170,6 +170,18 @@ test("PowerShell compilation resolves installed GAC assembly locations, not bare
 });
 
 
+test("CodeQL traces the real Windows C# build instead of scanning without type information", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/codeql.yml", import.meta.url), "utf8");
+  assert.match(workflow, /runs-on: \$\{\{ matrix\.os \}\}/);
+  assert.match(workflow, /- language: csharp\s+build-mode: manual\s+os: windows-latest/);
+
+  const initialize = workflow.indexOf("name: Initialize CodeQL");
+  const compile = workflow.indexOf("run: ./desktop/windows.ps1 -CheckOnly");
+  const analyze = workflow.indexOf("name: Perform CodeQL Analysis");
+  assert.ok(initialize >= 0 && initialize < compile && compile < analyze,
+    "the companion must compile after CodeQL initialization and before analysis");
+});
+
 test("native speech diagnostics are bounded, scoped to an attached host, and never execute rejected text", () => {
   let calls = 0;
   const runtime = new DesktopRuntime({ agent: async () => { calls++; } });
