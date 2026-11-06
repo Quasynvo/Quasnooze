@@ -60,6 +60,7 @@ those 91 tests fail against `5242ea2`.**
 | 19 | An approval could be answered by a *different* conversation on the same channel | **Medium** | Fixed + tested |
 | 20 | Pending attachments were process-global: any client could consume or evict another's | **Medium** | Fixed + tested |
 | 21 | The context window was unmanaged — on overflow Ollama drops the system prompt first | **Medium** | Fixed + tested |
+| 22 | Typed input could target the wrong window or a credential field without a fresh approval | **Critical** | Prevented by native dry-run binding, per-keystroke focus checks, credential-field refusal, mandatory fresh approval and abort counts + tested |
 
 Severity here means: *given the intended deployment — a personal assistant you message all
 day, with shell access to your machine and an LLM reading untrusted text.* Under that

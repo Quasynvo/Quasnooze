@@ -134,9 +134,16 @@ export class DesktopRuntime {
    * success. Resolves with the host's structured payload ({windows, title,
    * process, handle, …} depending on the kind).
    */
-  async os(kind, params = {}, { timeoutMs = 15_000 } = {}) {
+  async os(kind, params = {}, { timeoutMs = 15_000, signal } = {}) {
     if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503, code: "UNREACHABLE" });
-    return this.bridge.os({ kind, ...params }, { timeoutMs });
+    return this.bridge.os({ kind, ...params }, { timeoutMs, signal });
+  }
+  async previewTypeText(text, expectedWindowTitle) {
+    return this.os("preview_type_text", { text, expectedWindowTitle });
+  }
+  async typeText(text, target, { signal } = {}) {
+    // Handle/title come from the native dry run, never from model arguments.
+    return this.os("type_text", { text, handle: target.handle, approvedTitle: target.title, approvedProcess: target.process }, { timeoutMs: 120_000, signal });
   }
   /** Visible top-level windows as [{handle, title, process}], bounded fields. */
   async listWindows() {
