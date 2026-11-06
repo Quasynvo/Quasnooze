@@ -347,3 +347,34 @@ test("Companion.cs launch never concatenates model text into a command line or p
   assert.ok(cs.includes('ValidAppKey("note; echo x")'), "SelfTest rejects shell strings as app names");
   assert.ok(cs.includes('case "launch_app"'));
 });
+
+test(
+  "Companion.cs and desktop runtime handle read_clipboard and write_clipboard over the typed os channel",
+  withWindows(
+    async (bridge) => {
+      const cs = readFileSync(new URL("../desktop/Companion.cs", import.meta.url), "utf8");
+      assert.ok(cs.includes('case "read_clipboard"'), "Companion.cs must handle read_clipboard");
+      assert.ok(cs.includes('case "write_clipboard"'), "Companion.cs must handle write_clipboard");
+      assert.ok(cs.includes("Encoding.UTF8.GetByteCount"), "Companion.cs must report full UTF-8 byte length before wire capping");
+      assert.ok(cs.includes("ExternalException"), "Companion.cs must translate locked clipboard ExternalException to OsFailure");
+
+      const readRes = await TOOL_MAP.get("read_clipboard").run({});
+      assert.equal(readRes.ok, true);
+      assert.match(readRes.output, /9000 bytes total; truncated to 28 bytes/);
+
+      const writeRes = await TOOL_MAP.get("write_clipboard").run({ text: "hello companion" });
+      assert.equal(writeRes.ok, true);
+      assert.deepEqual(bridge.calls.map((c) => c.kind), ["read_clipboard", "write_clipboard"]);
+      assert.equal(bridge.calls[1].content, "hello companion");
+    },
+    (payload) => {
+      if (payload.kind === "read_clipboard") {
+        return { hasText: true, content: "Copied via Windows companion", bytes: 9000, wireClipped: true };
+      }
+      if (payload.kind === "write_clipboard") {
+        return { bytes: Buffer.byteLength(payload.content, "utf8") };
+      }
+      return {};
+    },
+  ),
+);

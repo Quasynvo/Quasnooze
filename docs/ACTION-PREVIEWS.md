@@ -20,12 +20,15 @@ Version 1 fields:
 | `redactions` | Fixed reason codes for withholding, sensitive/control text or truncation |
 
 Supported summaries cover shell execution, file writes, opening URLs, screenshots,
-and lock/sleep requests. Unknown/custom tools expose no arguments and report
+system/window/app actions, and clipboard read/write requests. Unknown/custom tools expose no arguments and report
 unknown targets/effects rather than inventing a dry run. Shell summaries describe
 the working directory and explicitly unknown side effects, **not** a parsed or
 predicted list of affected files. File-write content is never copied into metadata;
 URLs omit credentials, query and fragment. Screenshot summaries warn about visible
-personal information. A generated/default target is labelled unresolved.
+personal information. Clipboard read summaries never read or show current clipboard
+contents before approval; clipboard write summaries show the proposed replacement
+text (subject to secret/control redaction and field bounds) so you can inspect what
+would overwrite your clipboard. A generated/default target is labelled unresolved.
 
 The original human-readable description remains alongside the preview, with
 redaction and a 2,000-character limit. A preview is not an exhaustive view of a

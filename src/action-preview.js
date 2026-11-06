@@ -88,6 +88,24 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
       preview.target = String(args.name ?? 'unknown');
       preview.effectSummary = 'Close one uniquely matched window (WM_CLOSE) via the Windows companion, after a second native confirmation naming the application. Unsaved work in that window may be lost; ambiguous names change nothing.';
       break;
+    case 'read_clipboard':
+      preview.action = 'read_clipboard';
+      preview.target = 'system clipboard';
+      preview.riskRationale = 'Reading the clipboard is a privacy event: it may hold passwords, tokens or personal text. Approval applies to this single read only, never the session.';
+      preview.effectSummary = 'Read up to 4,096 UTF-8 bytes of current clipboard text and report the original byte length. Secret-shaped content is refused; clipboard text is never written to telemetry, support bundles or default memory.';
+      break;
+    case 'write_clipboard': {
+      preview.action = 'write_clipboard';
+      preview.target = 'system clipboard';
+      preview.riskRationale = 'Writing replaces whatever is currently on your clipboard and cannot be undone automatically. Review the exact text before allowing.';
+      if (typeof args.text === 'string' && args.text.length > 0) {
+        const bytes = Buffer.byteLength(args.text, 'utf8');
+        preview.effectSummary = `Overwrite the system clipboard with ${bytes} UTF-8 byte${bytes === 1 ? '' : 's'}: ${JSON.stringify(args.text)}`;
+      } else {
+        preview.effectSummary = 'Overwrite the system clipboard with invalid or empty text (will be rejected).';
+      }
+      break;
+    }
     default:
       preview.status = 'unknown'; preview.redactions.push('unsupported-arguments-withheld');
   }

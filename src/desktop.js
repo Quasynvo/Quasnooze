@@ -153,6 +153,8 @@ export class DesktopRuntime {
   async restoreWindow(handle) { return this.os("restore_window", { handle: String(handle ?? "") }); }
   async closeWindow(handle) { return this.os("close_window", { handle: String(handle ?? "") }); }
   async launchApp(name) { return this.os("launch_app", { name: String(name ?? "").slice(0, 120) }); }
+  async readClipboard() { return this.os("read_clipboard"); }
+  async writeClipboard(content) { return this.os("write_clipboard", { content: String(content ?? "") }); }
   async request(text) {
     if (typeof text !== "string" || !text.trim() || text.length > 2000) throw Object.assign(new Error("Use a command of 1–2000 characters."), { status: 400 });
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });

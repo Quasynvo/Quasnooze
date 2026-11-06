@@ -78,7 +78,7 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 |---|---|---|---|
 | 11 | Volume, mute, play/pause, next/previous | have (Windows companion; reversible, session-grantable approval) | `laptop-01` |
 | 12 | Launch an app, switch to a window, minimise it | have (`list_windows`/`focus_window`/`minimise_window`/`close_window`/`launch_app` via the Windows companion; ambiguous names return candidates, close asks twice) | `laptop-02` |
-| 13 | Read and write the clipboard safely | **missing** | `laptop-03` |
+| 13 | Read and write the clipboard safely | have (`read_clipboard`/`write_clipboard`: per-call approval + preview, bounded read with byte count, secret-shape refusal) | `laptop-03` |
 | 14 | Type dictated text into the focused app | **missing** | `laptop-04` |
 | 15 | Move, rename, trash files with undo | **missing** | `laptop-05` |
 | 16 | Find an element on screen and click it | partial (`screenshot` only) | `laptop-06` |

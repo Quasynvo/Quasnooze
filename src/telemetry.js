@@ -16,6 +16,7 @@
 import { appendFileSync, statSync, renameSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "./config.js";
+import { sanitizeTelemetryEvent } from "./guard.js";
 
 const FILE = join(config.dataDir, "telemetry.ndjson");
 const ROTATE_BYTES = 5 * 1024 * 1024;
@@ -143,10 +144,13 @@ function rotate() {
 
 /** Record one turn. Never throws: instrumentation must not break the product. */
 export function record(event) {
-  const entry = { at: new Date().toISOString(), ...event };
+  const safe = sanitizeTelemetryEvent(event);
+  const entry = { at: new Date().toISOString(), ...safe };
   // Normalise at the door. Every other layer can be careless about shape; this
   // one cannot, because this is the object that reaches the disk.
-  if (Object.hasOwn(event, "stages")) entry.stages = normalizeStages(event.stages);
+  if (event && typeof event === "object" && Object.hasOwn(event, "stages")) {
+    entry.stages = normalizeStages(event.stages);
+  }
   ring.push(entry);
   if (ring.length > RING) ring.shift();
   try {

@@ -148,3 +148,19 @@ test('system_control volume/media previews name the action and stay honest about
   // The destructive-sounding stranger still previews as unknown.
   assert.equal(buildActionPreview('system_control', { action: 'shutdown' }).effectSummary, 'unknown');
 });
+
+test('read_clipboard and write_clipboard previews disclose per-read privacy and exact replacement text', () => {
+  const readPreview = buildActionPreview('read_clipboard', {});
+  assert.equal(readPreview.status, 'supported');
+  assert.equal(readPreview.target, 'system clipboard');
+  assert.match(readPreview.riskRationale, /single read only/);
+  assert.match(readPreview.effectSummary, /4,096 UTF-8 bytes/);
+
+  const writePreview = buildActionPreview('write_clipboard', { text: 'git status --short' });
+  assert.equal(writePreview.status, 'supported');
+  assert.equal(writePreview.target, 'system clipboard');
+  assert.match(writePreview.effectSummary, /18 UTF-8 bytes: "git status --short"/);
+
+  const emptyWrite = buildActionPreview('write_clipboard', { text: '' });
+  assert.match(emptyWrite.effectSummary, /will be rejected/);
+});

@@ -26,6 +26,7 @@ import {
 import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
 import { SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
+import { guardClipboardMemory } from "./guard.js";
 
 /* ───────────────────────────── path sandboxing ─────────────────────────── */
 
@@ -347,6 +348,477 @@ export async function runFirstAvailable(candidates, opts) {
     tried.push(res.missing ? `${file} (not installed)` : `${file} (${res.stderr.trim().slice(0, 120) || `exit ${res.code}`})`);
   }
   return { ok: false, stdout: "", stderr: tried.join("; ") || "no capture tool found" };
+}
+
+/* ────────────────────── bounded clipboard & secret guard ────────────────── */
+
+export const CLIPBOARD_READ_MAX_BYTES = 4096;
+export const CLIPBOARD_WRITE_MAX_BYTES = 16_384;
+const CLIPBOARD_SCAN_MAX_BYTES = 65_536;
+const CLIPBOARD_STREAM_HARD_CAP_BYTES = 16 * 1024 * 1024;
+
+let clipboardAdapter = null;
+/** Ephemeral in-memory snippets (never persisted) so follow-up turns still block unrequested `remember`. */
+const sessionClipboardSnippets = new Map();
+
+export function isClipboardEnabled(env = process.env) {
+  const live = env?.QUASNOOZE_CLIPBOARD ?? env?.PINCH_CLIPBOARD;
+  if (live !== undefined && live !== "") {
+    return !/^(0|false|off|no)$/i.test(String(live).trim());
+  }
+  return Boolean(config.clipboard);
+}
+
+export function setClipboardAdapterForTests(adapter) {
+  clipboardAdapter = adapter || null;
+}
+
+export function clearClipboardStateForTests() {
+  clipboardAdapter = null;
+  sessionClipboardSnippets.clear();
+}
+
+function recordSessionClipboardSnippet(sessionId, text) {
+  if (!sessionId || typeof text !== "string") return;
+  const trimmed = text.trim().slice(0, 500);
+  if (!trimmed) return;
+  if (!sessionClipboardSnippets.has(sessionId)) {
+    if (sessionClipboardSnippets.size >= 64) {
+      const oldest = sessionClipboardSnippets.keys().next().value;
+      if (oldest !== undefined) sessionClipboardSnippets.delete(oldest);
+    }
+    sessionClipboardSnippets.set(sessionId, []);
+  }
+  const bucket = sessionClipboardSnippets.get(sessionId);
+  if (!bucket.includes(trimmed)) {
+    bucket.push(trimmed);
+    if (bucket.length > 4) bucket.shift();
+  }
+}
+
+function getSessionClipboardSnippets(sessionId, turnReads = []) {
+  const fromSession = sessionId ? sessionClipboardSnippets.get(sessionId) || [] : [];
+  const fromTurn = Array.isArray(turnReads) ? turnReads : [];
+  return [...new Set([...fromSession, ...fromTurn])];
+}
+
+/**
+ * Truncate a string to at most `maxBytes` UTF-8 bytes without splitting a
+ * multi-byte UTF-8 character across the boundary.
+ */
+export function truncateUtf8(input, maxBytes = CLIPBOARD_READ_MAX_BYTES) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(String(input ?? ""), "utf8");
+  const originalBytes = buf.length;
+  const cap = Math.max(0, Math.floor(maxBytes));
+  if (originalBytes <= cap) {
+    return { text: buf.toString("utf8"), originalBytes, shownBytes: originalBytes, truncated: false };
+  }
+  let end = cap;
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end -= 1;
+  return {
+    text: buf.subarray(0, end).toString("utf8"),
+    originalBytes,
+    shownBytes: end,
+    truncated: true,
+  };
+}
+
+const PRIVATE_KEY_HEADER_RE =
+  /-----BEGIN (?:[A-Z0-9]+(?: [A-Z0-9]+){0,5} )?PRIVATE KEY(?: BLOCK)?-----|\bAGE-SECRET-KEY-1[A-Z0-9]{20,}\b|^PuTTY-User-Key-File-\d+:/m;
+
+const KNOWN_SECRET_TOKEN_RE =
+  /\b(?:sk-(?:proj-|ant-|live_|test_)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|hf_[A-Za-z0-9]{20,}|npm_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|(?:AKIA|ASIA)[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/;
+
+const AUTH_HEADER_SECRET_RE =
+  /\b(?:Authorization[ \t]{0,4}:[ \t]{0,4})?(?:Bearer|Basic)[ \t]{1,8}[A-Za-z0-9._~+/=-]{16,}\b/i;
+
+const CREDENTIAL_URL_RE =
+  /\b[a-z][a-z0-9+.-]{1,15}:\/\/[^\s/:@]{1,128}:[^\s/@]{1,256}@/i;
+
+const ENV_SECRET_LINE_RE =
+  /^[ \t]{0,16}(?:export[ \t]{1,8})?[A-Z][A-Z0-9_]{0,80}(?:_KEY|_TOKEN|_SECRET|_PASSWORD|PASSWORD|SECRET|PASSPHRASE)[ \t]{0,8}=[ \t]{0,8}["']?(?!changeme\b|example\b|your[_-]|<|none\b|null\b|false\b|true\b|\.{3})[^\s"'#]{6,}/m;
+
+function charClassKind(ch) {
+  if (ch >= "a" && ch <= "z") return 1;
+  if (ch >= "A" && ch <= "Z") return 2;
+  if (ch >= "0" && ch <= "9") return 3;
+  return 4;
+}
+
+function countClassTransitions(str) {
+  let transitions = 0;
+  for (let i = 1; i < str.length; i += 1) {
+    if (charClassKind(str[i]) !== charClassKind(str[i - 1])) transitions += 1;
+  }
+  return transitions;
+}
+
+/**
+ * Detect clipboard payloads with a secret-like shape (private-key headers,
+ * API/bearer tokens, credentialed URLs, `.env` secrets, and password-manager
+ * passwords or multi-field items) so `read_clipboard` can refuse with a clear
+ * explanation instead of silently truncating or exposing them.
+ */
+export function inspectClipboardSecret(text) {
+  const raw = String(text ?? "");
+  const trimmed = raw.trim();
+  if (!trimmed) return { secret: false, kind: null, reason: null };
+
+  if (PRIVATE_KEY_HEADER_RE.test(trimmed)) {
+    return {
+      secret: true,
+      kind: "private-key",
+      reason: "it contains a private-key header",
+    };
+  }
+
+  if (KNOWN_SECRET_TOKEN_RE.test(trimmed) || AUTH_HEADER_SECRET_RE.test(trimmed)) {
+    return {
+      secret: true,
+      kind: "token",
+      reason: "it looks like an API key, access token, or authorization credential",
+    };
+  }
+
+  if (CREDENTIAL_URL_RE.test(trimmed)) {
+    return {
+      secret: true,
+      kind: "credential-url",
+      reason: "it contains credentials embedded in a URL or connection string",
+    };
+  }
+
+  if (ENV_SECRET_LINE_RE.test(trimmed)) {
+    return {
+      secret: true,
+      kind: "env-secret",
+      reason: "it contains a secret environment-variable assignment",
+    };
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  const looksLikeCode =
+    /[;{}]|^\s*(?:function|const|let|var|class|interface|type|def|import|export\s+(?:function|const|class|default))\b/m.test(
+      trimmed,
+    );
+  if (!looksLikeCode && lines.length <= 16) {
+    if (
+      /^[ \t]*(?:password|passphrase|one-time password|totp|recovery key|master password|secret key)[ \t]*[:=][ \t]*(?!<|your[_-]|changeme\b|none\b|null\b|string\b|boolean\b)\S{4,}/im.test(
+        trimmed,
+      )
+    ) {
+      return {
+        secret: true,
+        kind: "password-manager",
+        reason: "it looks like a password-manager entry or labelled credential",
+      };
+    }
+  }
+
+  // Single-token password-manager copy ("Copy Password" in 1Password, Bitwarden,
+  // KeePassXC, Apple Passwords, browser password managers).
+  if (!/\s/.test(trimmed) && trimmed.length >= 8 && trimmed.length <= 128) {
+    const benignToken =
+      /^https?:\/\//i.test(trimmed) ||
+      /^(?:~\/|\/|\.{1,2}\/|[A-Za-z]:[\\/])/.test(trimmed) ||
+      /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(trimmed) ||
+      /\.(?:txt|md|json|ya?ml|js|mjs|cjs|ts|tsx|jsx|py|cs|go|rs|java|rb|php|html?|css|svg|png|jpe?g|gif|webp|pdf|docx?|xlsx?|csv|zip|tar|gz|log|sh|ps1|toml|ini|sql)$/i.test(
+        trimmed,
+      ) ||
+      /^[\w.+-]+@[\w-]+\.[\w.]{2,}$/.test(trimmed) ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed) ||
+      /^[0-9a-f]{7,64}$/i.test(trimmed) ||
+      /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(trimmed) ||
+      /^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-._~]+$/.test(trimmed);
+
+    if (!benignToken) {
+      const hasLower = /[a-z]/.test(trimmed);
+      const hasUpper = /[A-Z]/.test(trimmed);
+      const hasDigit = /\d/.test(trimmed);
+      const hasPassphraseSymbol = /[!@#$%^&*+=?~]/.test(trimmed);
+      const hasStrongSymbol = /[!@#$%^&*()+={}[\]|\\:;"'<>,?~`]/.test(trimmed);
+
+      // Apple / Safari Strong Password format (e.g. kivtag-7jufPy-zabqox)
+      if (hasLower && hasUpper && hasDigit && /^[A-Za-z0-9]{6}-[A-Za-z0-9]{6}-[A-Za-z0-9]{6}$/.test(trimmed)) {
+        return {
+          secret: true,
+          kind: "password-manager",
+          reason: "it looks like a password-manager generated password",
+        };
+      }
+      // Diceware / password-manager passphrase (e.g. Correct-Horse-Battery-9,
+      // correct-horse-battery-staple-9, maple-river-cloud-anchor!), while
+      // leaving lowercase git/date slugs like laptop-03-clipboard-preview alone.
+      if (
+        /^(?:[a-z]{3,14}-){4,7}\d{1,4}$/.test(trimmed) ||
+        (((hasUpper && hasDigit) || hasPassphraseSymbol) &&
+          /^[A-Za-z0-9!@#$%^&*+=?~]{3,16}(?:-[A-Za-z0-9!@#$%^&*+=?~]{1,16}){3,8}$/.test(trimmed))
+      ) {
+        return {
+          secret: true,
+          kind: "password-manager",
+          reason: "it looks like a password-manager passphrase",
+        };
+      }
+      // Generated password with password symbols and >=3 character classes
+      const classCount = Number(hasLower) + Number(hasUpper) + Number(hasDigit) + Number(hasStrongSymbol);
+      if (hasStrongSymbol && classCount >= 3) {
+        return {
+          secret: true,
+          kind: "password-manager",
+          reason: "it looks like a password from a password manager",
+        };
+      }
+      // High-entropy alphanumeric password (e.g. 16+ chars with symbols disabled)
+      const digitCount = (trimmed.match(/\d/g) || []).length;
+      if (
+        trimmed.length >= 16 &&
+        hasLower &&
+        hasUpper &&
+        digitCount >= 3 &&
+        countClassTransitions(trimmed) >= 6
+      ) {
+        return {
+          secret: true,
+          kind: "password-manager",
+          reason: "it looks like a high-entropy password or secret token",
+        };
+      }
+    }
+  }
+
+  return { secret: false, kind: null, reason: null };
+}
+
+function runClipboardReadProcess(file, args, { timeoutMs = 8_000, env } = {}) {
+  return new Promise((resolvePromise) => {
+    let child;
+    try {
+      child = spawn(file, args, {
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: env || childEnv(),
+      });
+    } catch (err) {
+      return resolvePromise({
+        ok: false,
+        missing: err.code === "ENOENT",
+        sampleBuffer: Buffer.alloc(0),
+        totalBytes: 0,
+        stderr: String(err.message),
+      });
+    }
+    const kept = [];
+    let keptBytes = 0;
+    let totalBytes = 0;
+    let capped = false;
+    let stderr = "";
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+    }, timeoutMs);
+
+    child.stdout?.on("data", (chunk) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buf.length;
+      if (keptBytes < CLIPBOARD_SCAN_MAX_BYTES) {
+        const take = Math.min(buf.length, CLIPBOARD_SCAN_MAX_BYTES - keptBytes);
+        kept.push(buf.subarray(0, take));
+        keptBytes += take;
+      }
+      if (totalBytes > CLIPBOARD_STREAM_HARD_CAP_BYTES && !capped) {
+        capped = true;
+        try { child.kill("SIGKILL"); } catch {}
+      }
+    });
+    child.stderr?.on("data", (d) => {
+      if (stderr.length < 4_000) stderr += d.toString();
+    });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      resolvePromise({
+        ok: false,
+        missing: err.code === "ENOENT",
+        sampleBuffer: Buffer.concat(kept),
+        totalBytes,
+        stderr: String(err.message),
+      });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolvePromise({
+        ok: code === 0 || capped,
+        code,
+        sampleBuffer: Buffer.concat(kept),
+        totalBytes,
+        stderr,
+      });
+    });
+  });
+}
+
+function runClipboardWriteProcess(file, args, inputText, { timeoutMs = 8_000, env } = {}) {
+  return new Promise((resolvePromise) => {
+    let child;
+    try {
+      child = spawn(file, args, {
+        shell: false,
+        stdio: ["pipe", "ignore", "pipe"],
+        env: env || childEnv(),
+      });
+    } catch (err) {
+      return resolvePromise({ ok: false, missing: err.code === "ENOENT", stderr: String(err.message) });
+    }
+    let settled = false;
+    let stderr = "";
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(payload);
+    };
+    const timer = setTimeout(() => {
+      try { child.kill("SIGKILL"); } catch {}
+      finish({ ok: false, stderr: "timed out writing clipboard" });
+    }, timeoutMs);
+
+    child.stdin?.on("error", () => {});
+    child.stderr?.on("data", (d) => {
+      if (stderr.length < 4_000) stderr += d.toString();
+    });
+    child.on("error", (err) => {
+      finish({ ok: false, missing: err.code === "ENOENT", stderr: String(err.message) });
+    });
+    // `xclip`/`xsel`/`wl-copy` fork a selection-owner child that can keep
+    // inherited descriptors open; resolve cleanly once the main process exits.
+    child.on("exit", (code) => {
+      setTimeout(() => finish({ ok: code === 0, code, stderr }), 25).unref?.();
+    });
+    child.on("close", (code) => {
+      finish({ ok: code === 0, code, stderr });
+    });
+    try {
+      child.stdin?.end(Buffer.from(String(inputText ?? ""), "utf8"));
+    } catch (err) {
+      finish({ ok: false, stderr: String(err.message) });
+    }
+  });
+}
+
+async function readSystemClipboard() {
+  if (clipboardAdapter?.read) {
+    const out = await clipboardAdapter.read();
+    if (typeof out === "string") {
+      return { ok: true, text: out, totalBytes: Buffer.byteLength(out, "utf8") };
+    }
+    if (out && typeof out === "object") {
+      if (out.ok === false) return { ok: false, error: String(out.error || "Clipboard unavailable.") };
+      const text = String(out.text ?? "");
+      const totalBytes = Number.isFinite(out.totalBytes) ? out.totalBytes : Buffer.byteLength(text, "utf8");
+      return { ok: true, text, totalBytes };
+    }
+  }
+
+  try {
+    const { desktop } = await import("./desktop.js");
+    if (typeof desktop.bridge?.os === "function") {
+      const res = await desktop.readClipboard();
+      const text = String(res?.content ?? "");
+      const totalBytes = Number.isFinite(res?.bytes) ? res.bytes : Buffer.byteLength(text, "utf8");
+      return { ok: true, text, totalBytes };
+    }
+  } catch (err) {
+    if (err?.code && err.code !== "UNREACHABLE") {
+      return { ok: false, error: err.message || "Companion could not read the clipboard." };
+    }
+    /* fall back to OS clipboard utility below */
+  }
+
+  const WIN_READ =
+    "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; " +
+    "Add-Type -AssemblyName System.Windows.Forms; " +
+    "if ([System.Windows.Forms.Clipboard]::ContainsText()) { " +
+    "[Console]::Out.Write([System.Windows.Forms.Clipboard]::GetText()) }";
+
+  const candidates =
+    process.platform === "darwin"
+      ? [["pbpaste", []]]
+      : process.platform === "win32"
+        ? [["powershell", ["-NoProfile", "-NonInteractive", "-STA", "-Command", WIN_READ]]]
+        : [
+            ["wl-paste", ["--no-newline"]],
+            ["xclip", ["-selection", "clipboard", "-o"]],
+            ["xsel", ["--clipboard", "--output"]],
+          ];
+
+  const tried = [];
+  for (const [file, args] of candidates) {
+    const res = await runClipboardReadProcess(file, args);
+    if (res.ok) {
+      const sampleText =
+        res.totalBytes > res.sampleBuffer.length && res.sampleBuffer.length >= 4
+          ? truncateUtf8(res.sampleBuffer, res.sampleBuffer.length - 4).text
+          : res.sampleBuffer.toString("utf8");
+      return { ok: true, text: sampleText, totalBytes: res.totalBytes };
+    }
+    tried.push(
+      res.missing
+        ? `${file} (not installed)`
+        : `${file} (${res.stderr.trim().slice(0, 120) || `exit ${res.code}`})`,
+    );
+  }
+  return { ok: false, error: tried.join("; ") || "no clipboard utility available" };
+}
+
+async function writeSystemClipboard(text) {
+  if (clipboardAdapter?.write) {
+    const out = await clipboardAdapter.write(text);
+    if (out && typeof out === "object" && out.ok === false) {
+      return { ok: false, error: String(out.error || "Clipboard write failed.") };
+    }
+    return { ok: true };
+  }
+
+  try {
+    const { desktop } = await import("./desktop.js");
+    if (typeof desktop.bridge?.os === "function") {
+      await desktop.writeClipboard(text);
+      return { ok: true };
+    }
+  } catch (err) {
+    if (err?.code && err.code !== "UNREACHABLE") {
+      return { ok: false, error: err.message || "Companion could not write the clipboard." };
+    }
+    /* fall back to OS clipboard utility below */
+  }
+
+  const WIN_WRITE =
+    "[Console]::InputEncoding=[System.Text.Encoding]::UTF8; " +
+    "Add-Type -AssemblyName System.Windows.Forms; " +
+    "$t=[Console]::In.ReadToEnd(); " +
+    "[System.Windows.Forms.Clipboard]::SetText($t)";
+
+  const candidates =
+    process.platform === "darwin"
+      ? [["pbcopy", []]]
+      : process.platform === "win32"
+        ? [["powershell", ["-NoProfile", "-NonInteractive", "-STA", "-Command", WIN_WRITE]]]
+        : [
+            ["wl-copy", []],
+            ["xclip", ["-selection", "clipboard", "-i"]],
+            ["xsel", ["--clipboard", "--input"]],
+          ];
+
+  const tried = [];
+  for (const [file, args] of candidates) {
+    const res = await runClipboardWriteProcess(file, args, text);
+    if (res.ok) return { ok: true };
+    tried.push(
+      res.missing
+        ? `${file} (not installed)`
+        : `${file} (${res.stderr.trim().slice(0, 120) || `exit ${res.code}`})`,
+    );
+  }
+  return { ok: false, error: tried.join("; ") || "no clipboard utility available" };
 }
 
 /* ──────────────────────── tiny safe math evaluator ─────────────────────── */
@@ -867,7 +1339,8 @@ export const TOOLS = [
     name: "remember",
     description:
       "Save a durable fact about the user (preferences, names, project details, decisions) so it survives " +
-      "restarts. Use sparingly for things they would expect you to know later.",
+      "restarts. Use sparingly for things they would expect you to know later. Never store clipboard " +
+      "contents in memory unless the user explicitly asks to remember them.",
     parameters: {
       type: "object",
       properties: {
@@ -876,7 +1349,20 @@ export const TOOLS = [
       },
       required: ["fact"],
     },
-    async run({ fact, tag }) {
+    async run({ fact, tag }, ctx = {}) {
+      const check = guardClipboardMemory({
+        fact,
+        userText: ctx?.userText || "",
+        clipboardTouched: Boolean(ctx?.clipboardTouched),
+        clipboardTexts: getSessionClipboardSnippets(ctx?.sessionId, ctx?.clipboardReads),
+      });
+      if (!check.allowed) {
+        return {
+          ok: false,
+          output: `${check.reason} Nothing was saved to memory.`,
+          traceSummary: "[clipboard memory refused]",
+        };
+      }
       remember(fact, tag || "general");
       return { ok: true, output: `Remembered: ${fact}` };
     },
@@ -1576,6 +2062,147 @@ export const TOOLS = [
       return { ok: true, output: `Launched ${String(launched?.name ?? clean).slice(0, 60)} (${String(launched?.path ?? "approved executable").slice(0, 240)}).` };
     },
   },
+  {
+    name: "read_clipboard",
+    dangerous: true,
+    description:
+      "Read the current plain-text system clipboard when the user asks (for example 'summarise what I copied'). " +
+      "Requires approval on every read (never per session), truncates output to 4,096 UTF-8 bytes while reporting " +
+      "the original byte count, and refuses secret-shaped payloads (password-manager entries, private-key headers, " +
+      "tokens). Never store clipboard text in memory unless the user explicitly asks.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+    async run(_args = {}, ctx = {}) {
+      if (ctx && typeof ctx === "object") ctx.clipboardTouched = true;
+      if (!isClipboardEnabled()) {
+        return {
+          ok: false,
+          output: "Clipboard access is disabled (QUASNOOZE_CLIPBOARD=off). Nothing was read.",
+          traceSummary: "[clipboard access disabled]",
+        };
+      }
+      const readRes = await readSystemClipboard();
+      if (!readRes.ok) {
+        return {
+          ok: false,
+          output: `Could not read the system clipboard (${readRes.error}). Nothing was read.`,
+          traceSummary: "[clipboard read failed]",
+        };
+      }
+      const rawText = String(readRes.text ?? "");
+      const measuredBytes = Buffer.byteLength(rawText, "utf8");
+      const originalBytes = Math.max(
+        Number.isFinite(readRes.totalBytes) ? Math.floor(readRes.totalBytes) : measuredBytes,
+        measuredBytes,
+      );
+      if (originalBytes === 0 || !rawText.length) {
+        return {
+          ok: true,
+          output: "Clipboard is empty (0 bytes).",
+          traceSummary: "Clipboard is empty (0 bytes).",
+        };
+      }
+      // Inspect secret shapes BEFORE any truncation so secret payloads are
+      // refused with an explanation rather than silently truncated.
+      const secretCheck = inspectClipboardSecret(rawText);
+      if (secretCheck.secret) {
+        return {
+          ok: false,
+          output:
+            `Refused to read the clipboard (${originalBytes} bytes): ${secretCheck.reason}. ` +
+            `Secret-shaped clipboard content is refused rather than silently truncated. ` +
+            `Copy only the non-sensitive excerpt you want read, or paste it directly if you intend to share it.`,
+          traceSummary: `[clipboard read refused (${originalBytes} bytes): ${secretCheck.reason}]`,
+        };
+      }
+
+      const bounded = truncateUtf8(rawText, CLIPBOARD_READ_MAX_BYTES);
+      const truncated = bounded.truncated || originalBytes > bounded.shownBytes;
+      const safeBody = bounded.text.replace(/<\/?untrusted-clipboard\s*>/gi, (tag) =>
+        tag.replace(/</g, "&lt;"),
+      );
+      if (ctx && typeof ctx === "object") {
+        ctx.clipboardTouched = true;
+        if (!Array.isArray(ctx.clipboardReads)) ctx.clipboardReads = [];
+        ctx.clipboardReads.push(bounded.text.slice(0, 500));
+        recordSessionClipboardSnippet(ctx.sessionId, bounded.text);
+      }
+      const header = truncated
+        ? `Clipboard (${originalBytes} bytes total; truncated to ${bounded.shownBytes} bytes):`
+        : `Clipboard (${originalBytes} bytes):`;
+      return {
+        ok: true,
+        output: `${header}\n<untrusted-clipboard>\n${safeBody}\n</untrusted-clipboard>`,
+        traceSummary: truncated
+          ? `[clipboard read: ${originalBytes} bytes total, truncated to ${bounded.shownBytes} bytes; content omitted from trace]`
+          : `[clipboard read: ${originalBytes} bytes; content omitted from trace]`,
+      };
+    },
+  },
+  {
+    name: "write_clipboard",
+    dangerous: true,
+    description:
+      "Write exact plain text to the user's system clipboard, replacing whatever is currently copied. " +
+      "Requires approval with a preview of the exact text to be written, and can be denied.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: stringProp("Exact plain text to place on the system clipboard"),
+      },
+      required: ["text"],
+    },
+    async run({ text } = {}, ctx = {}) {
+      if (ctx && typeof ctx === "object") ctx.clipboardTouched = true;
+      if (!isClipboardEnabled()) {
+        return {
+          ok: false,
+          output: "Clipboard access is disabled (QUASNOOZE_CLIPBOARD=off). Nothing was written.",
+          traceSummary: "[clipboard access disabled]",
+        };
+      }
+      if (typeof text !== "string") {
+        return {
+          ok: false,
+          output: "write_clipboard requires a string 'text' argument. Nothing was written.",
+          traceSummary: "[clipboard write rejected: invalid text]",
+        };
+      }
+      if (!text.length) {
+        return {
+          ok: false,
+          output: "Refused to write empty text, which would clear the current clipboard. Nothing was written.",
+          traceSummary: "[clipboard write rejected: empty text]",
+        };
+      }
+      const bytes = Buffer.byteLength(text, "utf8");
+      if (bytes > CLIPBOARD_WRITE_MAX_BYTES) {
+        return {
+          ok: false,
+          output: `Clipboard write exceeds the ${CLIPBOARD_WRITE_MAX_BYTES}-byte limit (${bytes} bytes). Nothing was written.`,
+          traceSummary: `[clipboard write rejected: ${bytes} bytes exceeds limit]`,
+        };
+      }
+      const writeRes = await writeSystemClipboard(text);
+      if (!writeRes.ok) {
+        return {
+          ok: false,
+          output: `Could not write to the system clipboard (${writeRes.error}). Nothing was changed.`,
+          traceSummary: "[clipboard write failed]",
+        };
+      }
+      if (ctx && typeof ctx === "object") {
+        ctx.clipboardTouched = true;
+        if (!Array.isArray(ctx.clipboardReads)) ctx.clipboardReads = [];
+        ctx.clipboardReads.push(text.slice(0, 500));
+        recordSessionClipboardSnippet(ctx.sessionId, text);
+      }
+      const summary = `Wrote ${bytes} byte${bytes === 1 ? "" : "s"} to the system clipboard.`;
+      return { ok: true, output: summary, traceSummary: summary };
+    },
+  },
 ];
 
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
@@ -1584,10 +2211,13 @@ export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 export function toolSchemas() {
   // Derived from the map, not the array, so a tool registered at boot (an MCP
   // server, a user module) is offered to the model without touching this file.
-  return [...TOOL_MAP.values()].map((t) => ({
-    type: "function",
-    function: { name: t.name, description: t.description, parameters: t.parameters },
-  }));
+  const clipOn = isClipboardEnabled();
+  return [...TOOL_MAP.values()]
+    .filter((t) => clipOn || (t.name !== "read_clipboard" && t.name !== "write_clipboard"))
+    .map((t) => ({
+      type: "function",
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    }));
 }
 
 export const DANGEROUS = new Set(TOOLS.filter((t) => t.dangerous).map((t) => t.name));
@@ -1622,6 +2252,8 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   minimise_window: "Minimises one uniquely matched window via the companion's ShowWindow; same ambiguity and closed-mid-call semantics as focus_window.",
   close_window: "Asks one uniquely matched window to close (WM_CLOSE) via the companion after a native confirmation naming the application; destructive, so approval-required. No shell, no command line.",
   launch_app: "Starts only an allowlist/config-approved executable by plain name via the companion (Process.Start with UseShellExecute=false, no arguments); the model string is a dictionary key, never a command line or path. Approval-required.",
+  read_clipboard: "Reads up to 4,096 UTF-8 bytes of system clipboard text after per-read approval (never session-granted), reporting the original byte length; refuses secret-shaped content and never stores clipboard text in telemetry, support bundles or default memory.",
+  write_clipboard: "Overwrites system clipboard text via stdin/companion (no shell) after per-write approval with a preview of the exact text to be written.",
 });
 
 /**

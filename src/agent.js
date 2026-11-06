@@ -21,9 +21,9 @@ import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, classifySystemControl, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
 import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
-import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand } from "./tools.js";
+import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand, isClipboardEnabled } from "./tools.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
-import { auditReply, renderGuardNote } from "./guard.js";
+import { auditReply, renderGuardNote, sanitizeTraceEntry } from "./guard.js";
 import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
 import { normalizeStages, record } from "./telemetry.js";
@@ -206,6 +206,13 @@ export function describeCall(name, args) {
     return `run: ${a.command}${a.cwd ? `  (in ${a.cwd})` : ""}${outside}`;
   }
   if (name === "write_file") return `write ${a.path} (${Buffer.byteLength(a.content || "", "utf8")} bytes)`;
+  if (name === "read_clipboard") {
+    return "read_clipboard — read current system clipboard (this read only; bounded to 4,096 bytes)";
+  }
+  if (name === "write_clipboard") {
+    const raw = typeof a.text === "string" ? a.text : "";
+    return `write_clipboard (${Buffer.byteLength(raw, "utf8")} bytes): ${JSON.stringify(raw)}`;
+  }
 
   const shown = Object.entries(a)
     .map(([key, value]) => {
@@ -563,6 +570,9 @@ export async function runAgent({
             target: addressFor(channel, target),
             sessionId,
             sources: createSources(),
+            userText: text,
+            clipboardTouched: false,
+            clipboardReads: [],
           });
         } catch (err) {
           fastResult = { ok: false, output: err instanceof SafePathError ? err.message : `Tool ${fast.name} threw: ${err.message}` };
@@ -669,7 +679,15 @@ export async function runAgent({
   for (const a of attachments) {
     addSource(sources, { kind: "attachment", title: a.name, ref: a.name, snippet: (a.text || "").slice(0, 160) });
   }
-  const ctx = { channel, target: addressFor(channel, target), sessionId, sources };
+  const ctx = {
+    channel,
+    target: addressFor(channel, target),
+    sessionId,
+    sources,
+    userText: text,
+    clipboardTouched: false,
+    clipboardReads: [],
+  };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     if (signal?.aborted) {
@@ -750,6 +768,14 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+        continue;
+      }
+
+      if ((tool.name === "read_clipboard" || tool.name === "write_clipboard") && !isClipboardEnabled()) {
+        const msg = `Clipboard access is disabled (QUASNOOZE_CLIPBOARD=off). Nothing was ${tool.name === "read_clipboard" ? "read" : "written"}.`;
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "disabled" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg });
         continue;
       }
 
@@ -1015,15 +1041,19 @@ export async function runAgent({
 
       const effectiveOk = Boolean(result.ok) && verification?.status !== VERIFY_CONTRADICTED;
       toolOutputs.push(kept);
-      trace.push({
-        tool: tool.name,
-        args: call.arguments,
-        ok: result.ok,
-        output: kept.slice(0, 400),
-        ...(verification ? { verification } : {}),
-        ...(tier?.tier === TIER_READ && !policyMustAsk ? { tier: "read", auto: true } : {}),
-        ...(sessionGranted ? { sessionGrant: true } : {}),
-      });
+      const safePreview = typeof result.traceSummary === "string" ? result.traceSummary : kept;
+      trace.push(
+        sanitizeTraceEntry({
+          tool: tool.name,
+          args: call.arguments,
+          ok: result.ok,
+          output: kept.slice(0, 400),
+          traceSummary: result.traceSummary,
+          ...(verification ? { verification } : {}),
+          ...(tier?.tier === TIER_READ && !policyMustAsk ? { tier: "read", auto: true } : {}),
+          ...(sessionGranted ? { sessionGrant: true } : {}),
+        }),
+      );
       onEvent({
         type: "tool_done",
         name: tool.name,
@@ -1032,7 +1062,7 @@ export async function runAgent({
         preview:
           verification?.status === VERIFY_CONTRADICTED
             ? `contradicted — ${verification.detail}`.slice(0, 300)
-            : kept.slice(0, 300),
+            : safePreview.slice(0, 300),
       });
 
       // A contradicted action is not allowed to be described as done: the note
@@ -1123,7 +1153,8 @@ export async function runAgent({
     });
   }
 
-  appendMessage(sessionId, { role: "assistant", content: finalText, trace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
+  const storedTrace = trace.map(sanitizeTraceEntry);
+  appendMessage(sessionId, { role: "assistant", content: finalText, trace: storedTrace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
 
   const ms = Date.now() - startedAt;
   markFirstToken();
@@ -1141,7 +1172,7 @@ export async function runAgent({
     mode: social ? "conversation" : "agent",
     rounds,
     tokens,
-    tools: trace.length,
+    tools: storedTrace.length,
     auto: autoRan,
     guardFlags: guard.flags.length,
     error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
@@ -1151,7 +1182,7 @@ export async function runAgent({
     text: finalText,
     firstTextMs,
     error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
-    trace,
+    trace: storedTrace,
     sessionId,
     guard: guard.flags,
     sources: sources.items.map((s) => ({ ...s, cited: citations.cited.includes(s.id) })),

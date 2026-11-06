@@ -401,3 +401,198 @@ test('new and legacy auth headers work, but a bad/empty canonical header does no
   assert.equal(options.status,204);
   for(const header of ['x-quasnooze-key','x-pinch-key','x-quasnooze-session','x-pinch-session'])assert.ok(options.headers.get('access-control-allow-headers').includes(header));
 });
+
+/* ────────── clipboard privacy, preview, and per-read gate (#127) ───────── */
+
+test("clipboard: approval is per read (never per session), write shows exact preview and can be denied, and clipboard text never reaches telemetry, support bundles or default memory", async () => {
+  const isolated = mkdtempSync(join(tmpdir(), "pinch-clipboard-hardening-"));
+  try {
+    const script = `
+      import assert from "node:assert/strict";
+      import { readFileSync, readdirSync, existsSync } from "node:fs";
+      import { join } from "node:path";
+
+      const { runAgent, answerApproval } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/agent.js")).href)});
+      const { brain } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/brain.js")).href)});
+      const { setClipboardAdapterForTests, clearClipboardStateForTests } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/tools.js")).href)});
+      const { loadMemory } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/store.js")).href)});
+      const { record, TELEMETRY_FILE } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/telemetry.js")).href)});
+      const { prepareSupportBundle } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/support-bundle.js")).href)});
+
+      const READ_CANARY = "CLIPBOARD_READ_CANARY_8842_PRIVATE_NOTES";
+      const WRITE_CANARY = "CLIPBOARD_WRITE_CANARY_9913_EXACT_REPLACEMENT";
+      let currentClipboard = READ_CANARY;
+      let readHits = 0;
+      let writeHits = 0;
+
+      setClipboardAdapterForTests({
+        read: async () => { readHits += 1; return currentClipboard; },
+        write: async (next) => { writeHits += 1; currentClipboard = next; },
+      });
+
+      // 1) Per-read approval (not per session) + unrequested remember refusal:
+      //    Turn 1 approves read_clipboard; model also tries to call remember() without user asking.
+      let step = 0;
+      let turn1Approvals = 0;
+      brain.chat = async () => {
+        step += 1;
+        if (step === 1) {
+          return { content: "", toolCalls: [{ id: "c1", name: "read_clipboard", arguments: {} }] };
+        }
+        if (step === 2) {
+          return { content: "", toolCalls: [{ id: "c2", name: "remember", arguments: { fact: READ_CANARY } }] };
+        }
+        return { content: "Here is a short summary of your copied note.", toolCalls: [] };
+      };
+
+      await runAgent({
+        sessionId: "clip-session",
+        channel: "web",
+        text: "Summarise what I copied",
+        onEvent(ev) {
+          if (ev.type === "approval") {
+            turn1Approvals += 1;
+            assert.equal(ev.preview.tool, "read_clipboard");
+            assert.ok(!JSON.stringify(ev.preview).includes(READ_CANARY), "read preview must not pre-read clipboard");
+            answerApproval(ev.id, true);
+          }
+        },
+      });
+      assert.equal(turn1Approvals, 1);
+      assert.equal(readHits, 1);
+      assert.equal(
+        JSON.stringify(loadMemory()).includes(READ_CANARY),
+        false,
+        "clipboard content must never be stored in default memory when user did not ask",
+      );
+
+      // 2) Second read in the SAME session MUST ask again (never session-granted), and denial stops the read.
+      let turn2Approvals = 0;
+      let r2 = 0;
+      brain.chat = async () =>
+        r2++ === 0
+          ? { content: "", toolCalls: [{ id: "c3", name: "read_clipboard", arguments: {} }] }
+          : { content: "You denied reading the clipboard, so nothing was read.", toolCalls: [] };
+
+      await runAgent({
+        sessionId: "clip-session",
+        channel: "web",
+        text: "Read my clipboard again",
+        onEvent(ev) {
+          if (ev.type === "approval") {
+            turn2Approvals += 1;
+            answerApproval(ev.id, false);
+          }
+        },
+      });
+      assert.equal(turn2Approvals, 1, "second read in same session must still prompt for approval");
+      assert.equal(readHits, 1, "denied read_clipboard must not read the OS clipboard");
+
+      // 3) write_clipboard shows exact preview of what will be written, can be denied, and writes when allowed.
+      let deniedWritePreview = null;
+      let deniedWriteDesc = "";
+      let r3 = 0;
+      brain.chat = async () =>
+        r3++ === 0
+          ? { content: "", toolCalls: [{ id: "c4", name: "write_clipboard", arguments: { text: WRITE_CANARY } }] }
+          : { content: "Permission was denied, so I left your clipboard unchanged.", toolCalls: [] };
+
+      await runAgent({
+        sessionId: "clip-session",
+        channel: "web",
+        text: "Put the replacement on my clipboard",
+        onEvent(ev) {
+          if (ev.type === "approval") {
+            deniedWritePreview = ev.preview;
+            deniedWriteDesc = ev.description;
+            answerApproval(ev.id, false);
+          }
+        },
+      });
+      assert.ok(deniedWritePreview, "write_clipboard must raise an approval preview");
+      assert.match(deniedWritePreview.effectSummary, new RegExp(WRITE_CANARY));
+      assert.match(deniedWriteDesc, new RegExp(WRITE_CANARY));
+      assert.equal(writeHits, 0, "denied write_clipboard must not overwrite the clipboard");
+      assert.equal(currentClipboard, READ_CANARY);
+
+      // Now allow write_clipboard and verify exact write.
+      let r4 = 0;
+      brain.chat = async () =>
+        r4++ === 0
+          ? { content: "", toolCalls: [{ id: "c5", name: "write_clipboard", arguments: { text: WRITE_CANARY } }] }
+          : { content: "I copied that text to your clipboard.", toolCalls: [] };
+      await runAgent({
+        sessionId: "clip-session",
+        channel: "web",
+        text: "Put the replacement on my clipboard",
+        onEvent(ev) {
+          if (ev.type === "approval") answerApproval(ev.id, true);
+        },
+      });
+      assert.equal(writeHits, 1);
+      assert.equal(currentClipboard, WRITE_CANARY);
+
+      // 4) Even a direct telemetry.record call with clipboard/text fields drops them before disk.
+      record({ kind: "turn", ms: 7, clipboard: READ_CANARY, text: WRITE_CANARY, output: READ_CANARY });
+      const telemetryRaw = existsSync(TELEMETRY_FILE) ? readFileSync(TELEMETRY_FILE, "utf8") : "";
+      assert.equal(telemetryRaw.includes(READ_CANARY), false, "telemetry.ndjson leaked read clipboard canary");
+      assert.equal(telemetryRaw.includes(WRITE_CANARY), false, "telemetry.ndjson leaked write clipboard canary");
+
+      // 5) Support bundle never includes clipboard text.
+      const bundle = prepareSupportBundle({ telemetryPath: TELEMETRY_FILE });
+      assert.equal(bundle.text.includes(READ_CANARY), false, "support bundle leaked read clipboard canary");
+      assert.equal(bundle.text.includes(WRITE_CANARY), false, "support bundle leaked write clipboard canary");
+
+      // 6) Persisted session tool traces never store raw clipboard payloads (in clip-session).
+      const rawClipSession = readFileSync(join(process.env.PINCH_DATA, "sessions", "clip-session.json"), "utf8");
+      assert.equal(rawClipSession.includes(READ_CANARY), false, "session trace leaked read clipboard canary");
+      assert.equal(rawClipSession.includes(WRITE_CANARY), false, "session trace leaked write clipboard canary");
+
+      // 7) Explicit user consent ("Remember ...") DOES allow storing a requested fact in memory.
+      let r5 = 0;
+      brain.chat = async () => {
+        r5 += 1;
+        if (r5 === 1) return { content: "", toolCalls: [{ id: "c6", name: "read_clipboard", arguments: {} }] };
+        if (r5 === 2) return { content: "", toolCalls: [{ id: "c7", name: "remember", arguments: { fact: "Requested note: " + WRITE_CANARY } }] };
+        return { content: "Remembered as requested.", toolCalls: [] };
+      };
+      await runAgent({
+        sessionId: "clip-explicit-memory",
+        channel: "web",
+        text: "Read my clipboard and remember what is on it",
+        onEvent(ev) {
+          if (ev.type === "approval") answerApproval(ev.id, true);
+        },
+      });
+      assert.equal(JSON.stringify(loadMemory()).includes(WRITE_CANARY), true, "explicitly requested memory save should succeed");
+
+      clearClipboardStateForTests();
+      console.log("CLIPBOARD_HARDENING_OK");
+    `;
+
+    const stdout = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+        env: {
+          ...process.env,
+          PINCH_WORKSPACE: isolated,
+          PINCH_DATA: join(isolated, "data"),
+          PINCH_AUTO_APPROVE: "false",
+          LLM_PROVIDER: "mock",
+        },
+      });
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) reject(new Error(`clipboard hardening script exited ${code}:\n${err}\n${out}`));
+        else resolve(out);
+      });
+    });
+
+    assert.match(stdout, /CLIPBOARD_HARDENING_OK/);
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
+});

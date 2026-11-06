@@ -636,6 +636,7 @@ flags and inherited OS variables are exceptions, documented below. The ones that
 | `QUASNOOZE_NUM_CTX` | `8192` | context window in tokens; raise it to what your model supports |
 | `QUASNOOZE_NUM_PREDICT` | `2048` | tokens reserved for the reply — never counted as history |
 | `QUASNOOZE_GUARD` | `on` | post-reply honesty audit |
+| `QUASNOOZE_CLIPBOARD` | `on` | enable `read_clipboard` and `write_clipboard`; `off` disables both |
 | `QUASNOOZE_ENV_PASSTHROUGH` | — | credential names a build may see, comma-separated |
 | `QUASNOOZE_ALLOWED_HOSTS` | — | extra hostnames (proxy/tunnel), wildcards ok |
 
@@ -981,6 +982,34 @@ service. With the default local model, snippets stay on-device; if you choose a
 cloud model, retrieved snippets become part of its prompt. Searches run synchronously
 and may briefly pause the event loop on large archives; this is not a large-scale
 search service.
+
+## Clipboard access
+
+Ask **“Summarise what I copied”** or **“Copy this command to my clipboard”**. Two
+tools handle the system clipboard, and both stop for your approval every time:
+
+- **`read_clipboard`** asks for permission **per read** (never for the whole session),
+  reads at most **4,096 UTF-8 bytes**, and reports the original byte length so you can
+  see when a large selection was truncated. If the clipboard looks like a secret
+  (a password-manager password or entry, a private-key header, a secret `.env`
+  assignment, an API/bearer token, or a URL with embedded credentials), the read is
+  **refused with an explanation** instead of silently truncating or forwarding it.
+- **`write_clipboard`** asks for permission with a **preview of the exact text and byte
+  count** that will replace your current clipboard, and does nothing if you deny it.
+  Writes pass text over stdin or the local Windows companion — never through a shell.
+
+**What is stored:** reading the clipboard holds the bounded excerpt in memory for that
+turn so the model can answer your request. Raw clipboard reads and `write_clipboard`
+payloads are omitted from persisted session tool traces, never written to
+`data/telemetry.ndjson`, never included in a support bundle, and refused by `remember`
+(`data/memory.json`) unless you explicitly ask Quasnooze to remember them. As with any
+chat turn, the assistant's own reply is saved in `data/sessions/`, and if you
+deliberately select a cloud LLM provider, the turn's prompt is sent to that provider.
+
+**How to disable it:** set `QUASNOOZE_CLIPBOARD=off` (or `false` / `0` / `no`, legacy
+alias `PINCH_CLIPBOARD=off`) in `.env` or the process environment and restart. When
+disabled, `read_clipboard` and `write_clipboard` are omitted from the model's tool list
+and refuse execution immediately without touching the OS clipboard.
 
 ## Switch models without restarting
 
