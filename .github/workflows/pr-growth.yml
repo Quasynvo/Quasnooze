@@ -44,29 +44,36 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
         run: |
-          set -euo pipefail
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] || { echo 'Invalid PR number'; exit 1; }
-          gh api "repos/$REPO/pulls/$PR_NUMBER" > /tmp/pr-metrics-meta.json
-          [ "$(jq -r .state /tmp/pr-metrics-meta.json)" = open ] || { echo 'PR is not open'; exit 1; }
+          # Temporary instrumentation: every step reports through annotations so
+          # the failing command is visible without log access. Revert when done.
+          set -uo pipefail
+          step() { echo "::notice::pr-growth step $1 ok"; }
+          die() { echo "::error::pr-growth FAILED at step $1: $2"; exit 1; }
+          echo "::notice::pr-growth instrumented run; gh=$(gh --version | head -1); node=$(node --version)"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] || die 1 "invalid PR number: $PR_NUMBER"
+          OUT="$(gh api "repos/$REPO/pulls/$PR_NUMBER" 2>&1)" || die 2 "gh api pulls failed: $OUT"
+          printf '%s' "$OUT" > /tmp/pr-metrics-meta.json
+          [ "$(jq -r .state /tmp/pr-metrics-meta.json)" = open ] || die 3 "PR is not open"
           BASE_SHA="$(jq -r .base.sha /tmp/pr-metrics-meta.json)"
           HEAD_SHA="$(jq -r .head.sha /tmp/pr-metrics-meta.json)"
-          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA'; exit 1; }
-          # Authenticate only this fetch; no credentials persisted in the checkout.
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || die 4 "invalid SHAs base=$BASE_SHA head=$HEAD_SHA"
+          step 4
           AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
-            git fetch --no-tags origin "+refs/pull/$PR_NUMBER/head:refs/remotes/pr-metrics/head"
+          OUT="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" git fetch --no-tags origin "+refs/pull/$PR_NUMBER/head:refs/remotes/pr-metrics/head" 2>&1)" || die 5 "git fetch failed: $OUT"
           unset AUTH
-          [ "$(git rev-parse refs/remotes/pr-metrics/head)" = "$HEAD_SHA" ] || { echo 'PR head changed; a newer run will report it.'; exit 1; }
-          node scripts/pr-growth.js "$BASE_SHA" "$HEAD_SHA" > /tmp/pr-metrics-comment.md
-          # Do not overwrite a newer report when a PR changes during calculation.
-          CURRENT_HEAD="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)"
-          [ "$CURRENT_HEAD" = "$HEAD_SHA" ] || { echo 'PR head changed; a newer run will report it.'; exit 1; }
-          # gh (>= 2.97) rejects --slurp together with --jq, so slurp here with
-          # jq -s instead: --paginate emits one JSON array per page.
-          COMMENT_ID="$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" | jq -s '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- pr-growth-metrics -->")))] | last | .id // empty')"
+          step 5
+          [ "$(git rev-parse refs/remotes/pr-metrics/head)" = "$HEAD_SHA" ] || die 6 "PR head changed: local $(git rev-parse refs/remotes/pr-metrics/head) vs api $HEAD_SHA"
+          step 6
+          OUT="$(node scripts/pr-growth.js "$BASE_SHA" "$HEAD_SHA" 2>&1 > /tmp/pr-metrics-comment.md)" || die 7 "node pr-growth.js failed: $OUT"
+          step 7
+          CURRENT_HEAD="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha 2>&1)" || die 8 "gh api head failed: $CURRENT_HEAD"
+          [ "$CURRENT_HEAD" = "$HEAD_SHA" ] || die 9 "PR head changed during run: $CURRENT_HEAD vs $HEAD_SHA"
+          step 9
+          COMMENT_ID="$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" 2>/tmp/gh-comments.err | jq -s '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- pr-growth-metrics -->")))] | last | .id // empty')" || die 10 "comment lookup failed: $(cat /tmp/gh-comments.err)"
+          step 10
           if [ -n "$COMMENT_ID" ]; then
-            gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/pr-metrics-comment.md >/dev/null
+            OUT="$(gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/pr-metrics-comment.md 2>&1 >/dev/null)" || die 11 "comment PATCH failed id=$COMMENT_ID: $OUT"
           else
-            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@/tmp/pr-metrics-comment.md >/dev/null
+            OUT="$(gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@/tmp/pr-metrics-comment.md 2>&1 >/dev/null)" || die 12 "comment POST failed: $OUT"
           fi
+          step 12
