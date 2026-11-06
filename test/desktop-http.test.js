@@ -70,3 +70,20 @@ test("voice brand assets and the opt-in visualizer use correct MIME types", asyn
   for (const path of ["/cosmic.js", "/cosmic.css", "/brand/voice-engine.svg", "/visualizer.html", "/visualizer.js", "/audio-input.js"]) assert.equal((await fetch(base + path, { headers })).status, 200);
   assert.match(await (await fetch(base + "/", { headers })).text(), /Command Deck/);
 });
+
+test("owner memory API isolates scopes and requires the existing authentication", async () => {
+  const post = body => fetch(base + '/api/memory', { method: 'POST', headers, body: JSON.stringify(body) });
+  assert.equal((await fetch(base + '/api/memory?scope=project:sample')).status, 401);
+  assert.equal((await post({ scope: 'project:sample', fact: 'old deadline', source: 'owner' })).status, 200);
+  const selected = await (await fetch(base + '/api/memory?scope=project:sample', { headers })).json();
+  assert.equal(selected.facts.length, 1);
+  const corrected = await post({ scope: 'project:sample', correct: { id: selected.facts[0].id, fact: 'new deadline', source: 'meeting' } });
+  assert.equal(corrected.status, 200);
+  assert.equal((await corrected.json()).text, 'new deadline');
+  const user = await (await fetch(base + '/api/memory', { headers })).json();
+  assert.equal(user.facts.some(f => f.text.includes('deadline')), false);
+  assert.equal((await post({ scope: 'project:other', correct: { id: selected.facts[0].id, fact: 'wrong' } })).status, 400);
+  assert.equal((await post({ scope: 'project:sample', forget: 'old deadline' })).status, 200);
+  assert.deepEqual((await (await fetch(base + '/api/memory?scope=project:sample', { headers })).json()).facts, []);
+  assert.equal((await fetch(base + '/api/memory?scope=bad', { headers })).status, 400);
+});

@@ -15,6 +15,7 @@
  * unattended turn refuses every dangerous tool. This file only decides *when*.
  */
 import { loadSchedules as load, saveSchedule as save, removeSchedule as remove, updateSchedule as update } from "./store.js";
+import { validateScout, validScoutAddress, cancelScout } from "./agent/scout.js";
 
 const MAX_SCHEDULES = 20;
 
@@ -137,7 +138,11 @@ function zonedParts(date, timeZone) {
  * @param {{task: string, when: string, address: string, channel?: string, sessionId?: string, timeZone?: string}} spec
  * @returns {{ok: true, schedule: object} | {ok: false, output: string}}
  */
-export function addSchedule({ task, when, address, channel = "web", sessionId = null, timeZone }) {
+export function addSchedule({ task, when, address, channel = "web", sessionId = null, timeZone, scout }) {
+  if (scout !== undefined) {
+    try { validateScout(scout); } catch (err) { return { ok: false, output: err.message }; }
+    if (!validScoutAddress(address)) return { ok: false, output: "Choose an explicit supported delivery address." };
+  }
   const text = String(task || "").trim();
   if (!text) return { ok: false, output: "A scheduled task needs something to do." };
   if (text.length > 500) return { ok: false, output: "That task is too long (500 characters)." };
@@ -171,6 +176,7 @@ export function addSchedule({ task, when, address, channel = "web", sessionId = 
     lastRun: null,
     runs: 0,
     enabled: true,
+    ...(scout === undefined ? {} : { kind: "scout", scout: { enabled: true, remoteFetch: true, sources: validateScout(scout), fingerprints: {}, lastReceipt: null } }),
   };
   schedule.nextRun = nextRun(schedule, now, timeZone)?.toISOString() || null;
   save(schedule);
@@ -198,6 +204,7 @@ export function markRun(id, at = new Date(), timeZone = undefined) {
 }
 
 export function deleteSchedule(id) {
+  cancelScout(id);
   return remove(id);
 }
 

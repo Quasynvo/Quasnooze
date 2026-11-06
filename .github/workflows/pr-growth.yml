@@ -1,0 +1,70 @@
+name: PR area change metrics
+
+# pull_request_target is intentional: the privileged job checks out ONLY the
+# trusted default branch and reads PR objects with git; it never checks out,
+# imports, installs, or executes code from the PR, including fork PRs.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open PR number to refresh
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-area-metrics-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: PR area change metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - name: Compare tracked trees and update bot comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]{0,9}$ ]] || { echo 'Invalid PR number'; exit 1; }
+          gh api "repos/$REPO/pulls/$PR_NUMBER" > /tmp/pr-metrics-meta.json
+          [ "$(jq -r .state /tmp/pr-metrics-meta.json)" = open ] || { echo 'PR is not open'; exit 1; }
+          BASE_SHA="$(jq -r .base.sha /tmp/pr-metrics-meta.json)"
+          HEAD_SHA="$(jq -r .head.sha /tmp/pr-metrics-meta.json)"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA'; exit 1; }
+          # Authenticate only this fetch; no credentials persisted in the checkout.
+          AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
+            git fetch --no-tags origin "+refs/pull/$PR_NUMBER/head:refs/remotes/pr-metrics/head"
+          unset AUTH
+          [ "$(git rev-parse refs/remotes/pr-metrics/head)" = "$HEAD_SHA" ] || { echo 'PR head changed; a newer run will report it.'; exit 1; }
+          node scripts/pr-growth.js "$BASE_SHA" "$HEAD_SHA" > /tmp/pr-metrics-comment.md
+          # Do not overwrite a newer report when a PR changes during calculation.
+          CURRENT_HEAD="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .head.sha)"
+          [ "$CURRENT_HEAD" = "$HEAD_SHA" ] || { echo 'PR head changed; a newer run will report it.'; exit 1; }
+          COMMENT_ID="$(gh api --paginate --slurp "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" --jq '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains("<!-- pr-growth-metrics -->")))] | last | .id // empty')"
+          if [ -n "$COMMENT_ID" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$COMMENT_ID" -F body=@/tmp/pr-metrics-comment.md >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@/tmp/pr-metrics-comment.md >/dev/null
+          fi
