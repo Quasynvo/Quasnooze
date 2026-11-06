@@ -721,10 +721,10 @@ public static class QuasnoozeCompanion {
         } catch (QuasnoozeWindows.OsFailure f) {
             code = f.Code;
             result = f.Message;
-        } catch (ExternalException e) {
+        } catch (System.ComponentModel.Win32Exception e) {
             code = "FAILED";
             result = e.Message;
-        } catch (System.ComponentModel.Win32Exception e) {
+        } catch (ExternalException e) {
             code = "FAILED";
             result = e.Message;
         } catch (IOException e) {
