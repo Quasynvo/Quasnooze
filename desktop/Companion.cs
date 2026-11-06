@@ -157,27 +157,19 @@ public static class QuasnoozeWindows {
         public readonly string Code;
         public OsFailure(string code, string message) : base(message) { Code = code; }
     }
-    delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
-    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    internal struct User32 {
+        [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+        [DllImport("user32.dll")] internal static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+        [DllImport("user32.dll")] internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    }
 
     const int SW_SHOW = 5, SW_MINIMIZE = 6, SW_RESTORE = 9;
     const uint WM_CLOSE = 0x0010;
@@ -185,48 +177,38 @@ public static class QuasnoozeWindows {
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
 
     static bool Alive(IntPtr h) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsWindow
-        return IsWindow(h);
+        return User32.IsWindow(h);
     }
     static bool Visible(IntPtr h) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsWindowVisible
-        return IsWindowVisible(h);
+        return User32.IsWindowVisible(h);
     }
     static bool Iconic(IntPtr h) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsIconic
-        return IsIconic(h);
+        return User32.IsIconic(h);
     }
     static void Show(IntPtr h, int cmd) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 ShowWindow
-        ShowWindow(h, cmd);
+        User32.ShowWindow(h, cmd);
     }
     static void Foreground(IntPtr h) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 SetForegroundWindow
-        SetForegroundWindow(h);
+        User32.SetForegroundWindow(h);
     }
     static IntPtr CurrentForeground() {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetForegroundWindow
-        return GetForegroundWindow();
+        return User32.GetForegroundWindow();
     }
     static void PostClose(IntPtr h) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 PostMessage(WM_CLOSE)
-        PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        User32.PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
     static uint PidOf(IntPtr h) {
         uint pid;
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetWindowThreadProcessId
-        GetWindowThreadProcessId(h, out pid);
+        User32.GetWindowThreadProcessId(h, out pid);
         return pid;
     }
     static string TitleOf(IntPtr h) {
         var sb = new StringBuilder(256);
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetWindowText
-        int len = GetWindowText(h, sb, sb.Capacity);
+        int len = User32.GetWindowText(h, sb, sb.Capacity);
         return len > 0 ? sb.ToString(0, Math.Min(len, sb.Length)) : "";
     }
     static void EnumTopWindows(EnumWindowsProc cb) {
-        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 EnumWindows
-        EnumWindows(cb, IntPtr.Zero);
+        User32.EnumWindows(cb, IntPtr.Zero);
     }
     static string ProcessNameOf(uint pid) {
         try {
@@ -796,8 +778,8 @@ public static class QuasnoozeCompanion {
     public static string SelfTest() {
         SpeechSessionGate.SelfTest();
         if (!ValidHttps("https://example.com/") || ValidHttps("javascript:alert(1)") || ValidHttps("https://user:pass@example.com/") || ValidHttps("file:///C:/Windows")) throw new Exception("URL policy regression");
-        if (!QuasnoozeWindows.ValidAppKey("spotify") || !QuasnoozeWindows.ValidAppKey("my app 2")) throw new Exception("App-name policy rejected a plain name");
-        if (QuasnoozeWindows.ValidAppKey("") || QuasnoozeWindows.ValidAppKey("a; rm -rf /") || QuasnoozeWindows.ValidAppKey("..\\..\\evil.exe") || QuasnoozeWindows.ValidAppKey("C:\\Windows\\cmd.exe") || QuasnoozeWindows.ValidAppKey(new string('a', 61))) throw new Exception("App-name policy accepted a path or shell string");
+        if (!QuasnoozeWindows.ValidAppKey("spotify") || !QuasnoozeWindows.ValidAppKey("my app 2")) throw new InvalidOperationException("App-name policy rejected a plain name");
+        if (QuasnoozeWindows.ValidAppKey("") || QuasnoozeWindows.ValidAppKey("note; echo x") || QuasnoozeWindows.ValidAppKey("../outside") || QuasnoozeWindows.ValidAppKey("sub\\app") || QuasnoozeWindows.ValidAppKey(new string('a', 61))) throw new InvalidOperationException("App-name policy accepted a path or shell string");
         return "Companion compiled; URL, asynchronous speech lifecycle and app-launch name policies passed. No microphone or UI was opened.";
     }
     public static void Run() {

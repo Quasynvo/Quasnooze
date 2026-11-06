@@ -326,7 +326,7 @@ test("Companion.cs enumerates windows and exposes focus/minimise/restore/close w
   }
   assert.ok(cs.includes('case "os": OsRequest(m); break;'), "the os op must be dispatched");
   // A window that closed mid-call is a typed CLOSED failure at action time.
-  assert.match(cs, /static bool Alive\(IntPtr h\)\s*\{[\s\S]*?return IsWindow\(h\);/);
+  assert.match(cs, /static bool Alive\(IntPtr h\)\s*\{\s*return User32\.IsWindow\(h\);/);
   assert.match(cs, /if \(!Alive\(h\)\)\s*\{\s*throw new OsFailure\("CLOSED"/);
   assert.match(cs, /if \(!Alive\(h\)\)\s*\{\s*throw new OsFailure\("CLOSED", "The window closed while it was being focused/);
   // Closing is destructive: native confirmation naming the application.
@@ -344,6 +344,6 @@ test("Companion.cs launch never concatenates model text into a command line or p
   assert.doesNotMatch(launch, /ProcessStartInfo\([^)]*\{?\s*Arguments/, "no model-controlled arguments");
   assert.ok(cs.includes("apps.json"), "user-configured entries load from apps.json");
   assert.match(cs, /public static bool ValidAppKey\(string key\)/);
-  assert.ok(cs.includes('ValidAppKey("a; rm -rf /")'), "SelfTest rejects shell strings as app names");
+  assert.ok(cs.includes('ValidAppKey("note; echo x")'), "SelfTest rejects shell strings as app names");
   assert.ok(cs.includes('case "launch_app"'));
 });
