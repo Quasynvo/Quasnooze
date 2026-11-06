@@ -65,9 +65,9 @@ test('scope isolation persists across fresh processes and model settings without
   store.remember('project alpha fact', 'general', { scope: 'project:alpha' });
   store.remember('project beta fact', 'general', { scope: 'project:beta' });
   const moduleUrl = pathToFileURL(join(process.cwd(), 'src/store.js')).href;
-  const script = `globalThis.fetch = () => { throw Error('network attempted'); }; const s = await import(${JSON.stringify(moduleUrl)}); console.log(JSON.stringify(s.loadMemory().facts.map(f => f.text)));`;
+  const script = "globalThis.fetch = () => { throw Error('network attempted'); }; const s = await import(process.env.QUASNOOZE_TEST_MODULE_URL); console.log(JSON.stringify(s.loadMemory().facts.map(f => f.text)));";
   for (const [scope, model, expected] of [['user', 'model-a', 'private user fact'], ['project:alpha', 'model-b', 'project alpha fact'], ['project:beta', 'model-c', 'project beta fact']]) {
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { ...process.env, QUASNOOZE_MEMORY_SCOPE: scope, OLLAMA_MODEL: model } });
+    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', env: { ...process.env, QUASNOOZE_MEMORY_SCOPE: scope, OLLAMA_MODEL: model, QUASNOOZE_TEST_MODULE_URL: moduleUrl } });
     assert.equal(child.status, 0, child.stderr);
     assert.deepEqual(JSON.parse(child.stdout), [expected]);
   }
