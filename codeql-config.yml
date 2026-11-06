@@ -1,0 +1,3 @@
+queries:
+  - uses: security-and-quality
+  - uses: codeql/javascript-queries:AlertSuppression.ql
