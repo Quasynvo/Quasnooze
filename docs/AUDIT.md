@@ -519,8 +519,9 @@ node --test --test-force-exit test/audit.test.js test/http-surface.test.js
 git stash pop
 ```
 
-`npm run audit` is the monitor: fourteen probes, no model, no network, about two seconds.
-Against `5242ea2` it reports **7 failures of 14**; against the current tree, 14 of 14 pass.
+`npm run audit` is the monitor: the probes listed in this document, no model, no network,
+about two seconds. Against `5242ea2` it reported **7 failures of the 14 it ran then**;
+against the current tree every probe passes.
 It is the same evidence as the tests, packaged so that anyone can point it at their own
 install — and so a scheduled job can point it at `main` every night, because a guarantee
 that was true in October is not a guarantee in March.
@@ -556,6 +557,7 @@ Honesty is the feature. These are known, accepted, and documented rather than hi
 | A scheduled run acts with nobody watching | A timer is not a person; the approval prompt has no reader at 3am | Unattended turns **refuse** every dangerous tool before the approval gate, and cannot create further schedules. See *Scheduled runs: the risk is the missing human* |
 | A schedule reads untrusted text unattended | Reading documents is what makes the feature useful | With every machine-changing tool refused, injected instructions have nothing to reach; `QUASNOOZE_SCHEDULED_RUNS=0` is a one-variable kill switch |
 | A citation can name a real source that does not support the sentence | Checking that `[2]` names something the turn fetched is syntactic; checking that source 2 *says* it is a semantic judgement no cheap check makes | The registry stops invented numbers, and the footer lists only what the reply cited, so a reader can open the source and see for themselves. The reply is evidence-backed, not evidence-verified — `docs/GUIDE.md` says this in the user's words |
+| A file action could destroy the only copy, or a batch could half-run with no record of which half | A journal around `rename` is not a lock: a local process can move files between the check and the call | `move_path`/`rename_path`/`trash_path` only ever `rename()` — trash is a move into `.quasnooze-trash`, overwrite trashes the old destination first, and `src/tools.js` carries no unlink at all. Every mutation is journaled write-ahead (source, destination, timestamp, turn id, batch id) through `src/store.js`, the approval preview names every operation in the plan before it runs, cross-root moves are refused rather than copied, and `undo_last` reverses a whole batch — or a partial one — reporting exactly what it restored. Probed by `file-actions-undo` in `npm run audit` and by `test/tools.test.js` / `test/hardening.test.js` |
 
 ---
 

@@ -20,7 +20,7 @@ const ACTION_CLAIMS = [
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:sent|emailed|posted|submitted)\b/i, needs: ["shell"], allowMcp: true },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:opened|launched|started)\b/i, needs: ["shell", "open_url", "launch_app"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?copied\b[^.?!\n]{0,50}\bclipboard\b/i, needs: ["write_clipboard", "shell"] },
-  { re: /\b(?:i(?:'ve| have)?\s+)?(?:created|added|wrote|written|saved|edited|updated|deleted|removed|renamed|moved)\b/i, needs: ["shell", "write_file", "add_task", "complete_task"], clipboardWriteVerbs: /^(?:i(?:'ve| have)?\s+)?(?:wrote|written|updated)$/i },
+  { re: /\b(?:i(?:'ve| have)?\s+)?(?:created|added|wrote|written|saved|edited|updated|deleted|removed|renamed|moved|trashed|restored)\b/i, needs: ["shell", "write_file", "add_task", "complete_task", "move_path", "rename_path", "trash_path", "undo_last"], clipboardWriteVerbs: /^(?:i(?:'ve| have)?\s+)?(?:wrote|written|updated)$/i },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:ran|executed|installed|built|tested|deployed|committed|pushed)\b/i, needs: ["shell"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:scheduled|set(?: up)? (?:a )?(?:reminder|timer))\b/i, needs: ["remind"] },
   { re: /\b(?:i(?:'ve| have)?\s+)?(?:screenshot|screenshot taken|locked|slept)\b/i, needs: ["screenshot", "system_control"] },

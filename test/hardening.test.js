@@ -596,3 +596,161 @@ test("clipboard: approval is per read (never per session), write shows exact pre
     rmSync(isolated, { recursive: true, force: true });
   }
 });
+
+/* ───── file actions: one approval per plan, journal, unattended (#129) ───── */
+
+test("file actions: the approval preview names every operation, denial changes nothing, approval journals one batch, unattended is refused", async () => {
+  const isolated = mkdtempSync(join(tmpdir(), "pinch-fileactions-"));
+  try {
+    const script = `
+      import assert from "node:assert/strict";
+      import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
+      import { join } from "node:path";
+
+      const { runAgent, answerApproval } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/agent.js")).href)});
+      const { brain } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/brain.js")).href)});
+      const { loadFileJournal } = await import(${JSON.stringify(pathToFileURL(join(ROOT, "src/store.js")).href)});
+
+      const ws = process.env.PINCH_WORKSPACE;
+      const inbox = join(ws, "inbox");
+      const done = join(ws, "done");
+      mkdirSync(inbox, { recursive: true });
+      writeFileSync(join(inbox, "doc1.txt"), "one");
+      writeFileSync(join(inbox, "doc2.txt"), "two");
+
+      const operations = [
+        { from: join(inbox, "doc1.txt"), to: join(done, "doc1.txt") },
+        { from: join(inbox, "doc2.txt"), to: join(done, "doc2.txt") },
+      ];
+      const offerMove = () => ({ content: "", toolCalls: [{ id: "move-call", name: "move_path", arguments: { operations } }] });
+
+      // 1) One plan, one approval. The preview and the description name every
+      //    operation, and at approval time nothing has run yet.
+      let step = 0;
+      let approvals = 0;
+      brain.chat = async () => (step++ === 0 ? offerMove() : { content: "Planned.", toolCalls: [] });
+      await runAgent({
+        sessionId: "file-batch",
+        channel: "web",
+        text: "Tidy the inbox",
+        onEvent(ev) {
+          if (ev.type !== "approval") return;
+          approvals += 1;
+          assert.equal(ev.preview.tool, "move_path");
+          assert.match(ev.preview.effectSummary, /doc1\\.txt/);
+          assert.match(ev.preview.effectSummary, /doc2\\.txt/);
+          assert.match(ev.description, /doc1\\.txt/);
+          assert.match(ev.description, /doc2\\.txt/);
+          assert.equal(existsSync(done), false, "the preview must be shown before the batch runs");
+          answerApproval(ev.id, false);
+        },
+      });
+      assert.equal(approvals, 1, "a batch of N operations is approved once, not N times");
+      assert.equal(existsSync(join(inbox, "doc1.txt")), true, "a denied plan must move nothing");
+      assert.equal(existsSync(join(inbox, "doc2.txt")), true);
+      assert.equal(existsSync(done), false);
+      assert.equal(
+        loadFileJournal().some((e) => e.status === "applied"),
+        false,
+        "a denied plan writes no applied journal entries",
+      );
+
+      // 2) Allowed: both operations apply under one batch id, and the journal
+      //    records the turn that did it.
+      step = 0;
+      let allowApprovals = 0;
+      brain.chat = async () => (step++ === 0 ? offerMove() : { content: "Tidied.", toolCalls: [] });
+      await runAgent({
+        sessionId: "file-batch",
+        channel: "web",
+        text: "Tidy the inbox",
+        onEvent(ev) {
+          if (ev.type === "approval") {
+            allowApprovals += 1;
+            answerApproval(ev.id, true);
+          }
+        },
+      });
+      assert.equal(allowApprovals, 1);
+      assert.equal(readFileSync(join(done, "doc1.txt"), "utf8"), "one");
+      assert.equal(readFileSync(join(done, "doc2.txt"), "utf8"), "two");
+      const applied = loadFileJournal().filter((e) => e.kind === "apply" && e.status === "applied");
+      assert.equal(applied.length, 2, "every mutation is journaled");
+      assert.equal(applied[0].batchId, applied[1].batchId, "one plan, one batch id");
+      assert.ok(applied[0].turnId, "the journal records which turn performed it");
+      assert.ok(applied.every((e) => e.source && e.destination && e.at));
+
+      // 3) Unattended: a dangerous file action is refused before any approval
+      //    exists to answer, and the file is still there.
+      step = 0;
+      let unattendedApprovals = 0;
+      brain.chat = async () =>
+        step++ === 0
+          ? { content: "", toolCalls: [{ id: "trash-call", name: "trash_path", arguments: { operations: [{ path: join(done, "doc1.txt") }] } }] }
+          : { content: "Could not.", toolCalls: [] };
+      await runAgent({
+        sessionId: "file-batch",
+        channel: "web",
+        text: "Trash it",
+        autonomy: "unattended",
+        onEvent(ev) {
+          if (ev.type === "approval") unattendedApprovals += 1;
+        },
+      });
+      assert.equal(unattendedApprovals, 0, "unattended runs never reach an approval prompt");
+      assert.equal(existsSync(join(done, "doc1.txt")), true, "the unattended trash must not have run");
+
+      // 4) undo_last reverses the applied batch through the same gate.
+      step = 0;
+      brain.chat = async () =>
+        step++ === 0
+          ? { content: "", toolCalls: [{ id: "undo-call", name: "undo_last", arguments: {} }] }
+          : { content: "Reversed.", toolCalls: [] };
+      let undoApprovals = 0;
+      await runAgent({
+        sessionId: "file-batch",
+        channel: "web",
+        text: "Put it all back",
+        onEvent(ev) {
+          if (ev.type === "approval") {
+            undoApprovals += 1;
+            assert.match(ev.preview.effectSummary, /original path/);
+            answerApproval(ev.id, true);
+          }
+        },
+      });
+      assert.equal(undoApprovals, 1, "undo itself is a dangerous tool and asks once");
+      assert.equal(readFileSync(join(inbox, "doc1.txt"), "utf8"), "one");
+      assert.equal(readFileSync(join(inbox, "doc2.txt"), "utf8"), "two");
+      rmSync(done, { recursive: true, force: true });
+
+      console.log("FILE_ACTION_HARDENING_OK");
+    `;
+
+    const stdout = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+        env: {
+          ...process.env,
+          PINCH_WORKSPACE: isolated,
+          PINCH_DATA: join(isolated, "data"),
+          PINCH_AUTO_APPROVE: "false",
+          LLM_PROVIDER: "mock",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) reject(new Error(`file-action hardening script exited ${code}:\\n${err}\\n${out}`));
+        else resolve(out);
+      });
+    });
+
+    assert.match(stdout, /FILE_ACTION_HARDENING_OK/);
+  } finally {
+    rmSync(isolated, { recursive: true, force: true });
+  }
+});

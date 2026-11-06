@@ -177,3 +177,15 @@ test("clipboard guard helpers block unrequested memory, scrub telemetry/traces, 
   assert.ok(unrequestedMem.flags.some((f) => f.code === "clipboard-memory-unrequested"));
 });
 
+
+test("file-action claims need file-action evidence", () => {
+  const moved = auditReply({ reply: "I moved a.txt into archive.", trace: [ok("time_now")], userText: "tidy my files" });
+  assert.equal(moved.clean, false);
+  assert.ok(moved.flags.some((f) => f.code === "action-without-evidence"));
+
+  const backed = auditReply({ reply: "I moved a.txt into archive.", trace: [ok("move_path")], userText: "tidy my files" });
+  assert.equal(backed.clean, true, "a real move_path call is evidence of a move");
+
+  const trashed = auditReply({ reply: "I trashed the old draft and restored it.", trace: [ok("trash_path"), ok("undo_last")], userText: "clean up" });
+  assert.equal(trashed.clean, true, "trash_path and undo_last are evidence for trashed/restored");
+});

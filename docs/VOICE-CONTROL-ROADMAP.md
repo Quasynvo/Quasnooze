@@ -80,13 +80,13 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | 12 | Launch an app, switch to a window, minimise it | have (`list_windows`/`focus_window`/`minimise_window`/`close_window`/`launch_app` via the Windows companion; ambiguous names return candidates, close asks twice) | `laptop-02` |
 | 13 | Read and write the clipboard safely | have (`read_clipboard`/`write_clipboard`: per-call approval + preview, bounded read with byte count, secret-shape refusal) | `laptop-03` |
 | 14 | Type dictated text into the focused app | **missing** | `laptop-04` |
-| 15 | Move, rename, trash files with undo | **missing** | `laptop-05` |
+| 15 | Move, rename, trash files with undo | have (`move_path`/`rename_path`/`trash_path` as one approved plan, `undo_last`/`list_recent_changes` over a journaled record; trash is a rename, cross-root moves refused) | `laptop-05` |
 | 16 | Find an element on screen and click it | partial (`screenshot` only) | `laptop-06` |
 | 17 | Lock and sleep | have | — |
 | 18 | Shut down / restart | **missing, on purpose** | *not planned* |
 | 19 | Repeat a known routine in one phrase | **missing** | `laptop-07` |
 | 20 | Reminders, schedules, tasks | have | — |
-| 21 | Media/file actions that can be undone | **missing** | `laptop-05` |
+| 21 | Media/file actions that can be undone | partial (file actions are journaled and undoable; media actions are session-granted, not journaled) | `laptop-05` |
 
 ### 3.3 Judgement and trust
 
@@ -103,8 +103,8 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | 30 | The typed path is as fast as the spoken one | partial (SSE, no budget) | `voice-01` |
 | 31 | Tool arguments are shaped by the schema at sampling time, not repaired after the fact | **missing** | `reason-03-constrained-tool-arguments` |
 
-**Result:** 9 have, 4 partial, 18 missing (row 11 has since shipped as
-`laptop-01`). Eighteen roadmap entries address twenty of the missing/partial
+**Result:** 10 have, 5 partial, 16 missing (rows 11 and 15 have since shipped as
+`laptop-01` and `laptop-05`). Eighteen roadmap entries address nineteen of the missing/partial
 rows; the ones that are not covered are named explicitly in §6 rather than
 left to look forgotten.
 

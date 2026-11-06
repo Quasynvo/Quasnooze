@@ -8,9 +8,9 @@
  * anything that can mutate the machine MUST set it.
  */
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Worker } from "node:worker_threads";
-import { readFile, writeFile, readdir, stat, mkdir } from "node:fs/promises";
+import { readFile, writeFile, readdir, stat, mkdir, rename } from "node:fs/promises";
 import { SKIP_DIRS } from "./scan.js";
 import { existsSync, realpathSync, lstatSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, join, sep } from "node:path";
@@ -22,6 +22,7 @@ import { addSource } from "./sources.js";
 import {
   remember, loadMemory, forget, loadTasks, saveTask, searchSessions,
   addReminder, pendingReminders, removeReminder,
+  loadFileJournal, appendFileJournal, updateFileJournalEntry,
 } from "./store.js";
 import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
@@ -162,6 +163,504 @@ export function checkFilename(name) {
     };
   }
   return { ok: true };
+}
+
+/* ───────────────────── file actions: move, rename, trash ────────────────── */
+
+/**
+ * Reversibility is the feature (issue #129): if undo cannot restore the
+ * state, the operation is not offered. Three rules hold for everything below:
+ *
+ *   1. **Nothing unlinks.** Every mutation is a `rename()` — trash is a
+ *      rename into a per-root `.quasnooze-trash/`, overwrite moves the
+ *      existing destination to the trash before the source lands, and undo is
+ *      a rename back. These tools must never grow an unlink: a delete with no
+ *      journal entry is the failure this exists to prevent.
+ *   2. **Both ends resolve inside one workspace root.** Cross-root moves are
+ *      refused with a sentence that says so — never copied, because a copy
+ *      that half-succeeds is the two-files-and-a-lying-report outcome.
+ *   3. **The plan is validated whole, then applied in order, journaled
+ *      write-ahead.** A plan that fails validation never runs; a plan that
+ *      fails part-way stops, keeps what applied, and `undo_last` reverses
+ *      exactly that — reporting what it restored and what it could not.
+ */
+export const TRASH_DIR_NAME = ".quasnooze-trash";
+export const FILE_BATCH_MAX = 40;
+const FILE_PATH_MAX = 1000;
+
+/** Configured roots never change at runtime; canonicalise each once. */
+const canonicalRootCache = new Map();
+function canonicalRoot(root) {
+  if (!canonicalRootCache.has(root)) canonicalRootCache.set(root, canonicalise(root));
+  return canonicalRootCache.get(root);
+}
+
+/** The configured root containing `abs`, or null. Compared canonically. */
+function workspaceRootOf(abs) {
+  let canonical;
+  try {
+    canonical = canonicalise(abs);
+  } catch {
+    return null;
+  }
+  for (const root of config.workspaceRoots) {
+    if (isInside(canonicalRoot(root), canonical)) return resolve(root);
+  }
+  return null;
+}
+
+/** Existence that does not follow symlinks — a dangling link is "present". */
+function pathPresent(target) {
+  try {
+    lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hasControlChars(value) {
+  for (const ch of value) {
+    const code = ch.codePointAt(0);
+    if (code < 32 || code === 127) return true;
+  }
+  return false;
+}
+
+function showPath(abs) {
+  const rel = relative(config.workspaceRoots[0], abs);
+  return rel && !rel.startsWith("..") && !isAbsolute(rel) ? rel : abs;
+}
+
+function newBatchId() {
+  return `b_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
+}
+
+function journalEntry({ batchId, kind, action, source, destination, ctx, status = "pending" }) {
+  return {
+    id: `fj_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`,
+    batchId,
+    kind,
+    action,
+    source,
+    destination,
+    status,
+    at: new Date().toISOString(),
+    turnId: typeof ctx?.turnId === "string" ? ctx.turnId.slice(0, 80) : null,
+  };
+}
+
+function refusePlan(reason) {
+  return { ok: false, output: `Plan refused: ${reason} Nothing was changed.` };
+}
+
+/** A free name inside the trash, unique even for same-named files in one batch. */
+function uniqueTrashTarget(trashDir, abs) {
+  const stamp = Date.now().toString(36);
+  const base = basename(abs) || "item";
+  let candidate = join(trashDir, `${stamp}-${base}`);
+  let n = 0;
+  while (pathPresent(candidate)) {
+    n += 1;
+    candidate = join(trashDir, `${stamp}-${base}-${n}`);
+  }
+  return candidate;
+}
+
+/**
+ * Move `abs` into its root's trash directory. A rename, never a delete: the
+ * bytes stay on disk and the journal entry's destination is where undo finds
+ * them. Refuses the trash directory itself, anything inside it, and anything
+ * that contains it (including the workspace root).
+ */
+async function moveToTrash(abs, { batchId, ctx }) {
+  const root = workspaceRootOf(abs);
+  if (!root) return { ok: false, error: "not inside a configured workspace root" };
+  const trashDir = join(root, TRASH_DIR_NAME);
+  if (abs === trashDir || isInside(abs, trashDir)) {
+    return { ok: false, error: "that path contains the trash directory itself" };
+  }
+  if (isInside(trashDir, abs)) return { ok: false, error: "it is already in the trash" };
+
+  let target;
+  try {
+    await mkdir(trashDir, { recursive: true });
+    target = uniqueTrashTarget(trashDir, abs);
+  } catch (err) {
+    return { ok: false, error: `could not prepare the trash directory (${err.code || err.message})` };
+  }
+
+  const entry = journalEntry({ batchId, kind: "apply", action: "trash", source: abs, destination: target, ctx });
+  appendFileJournal([entry]);
+  try {
+    await rename(abs, target);
+  } catch (err) {
+    updateFileJournalEntry(entry.id, { status: "failed", error: String(err.code || err.message).slice(0, 200) });
+    return { ok: false, error: String(err.code || err.message) };
+  }
+  updateFileJournalEntry(entry.id, { status: "applied" });
+  return { ok: true, target };
+}
+
+/** One step of a plan: { kind: "move"|"rename", src, dst, overwrite } or { kind: "trash", src }. */
+async function applyFileStep(step, batchId, ctx) {
+  if (step.kind === "trash") {
+    const res = await moveToTrash(step.src, { batchId, ctx });
+    if (!res.ok) return { ok: false, line: `failed: ${showPath(step.src)} (${res.error})` };
+    return { ok: true, line: `trashed ${showPath(step.src)} → ${showPath(res.target)}` };
+  }
+
+  const action = step.kind; // "move" | "rename"
+  if (step.overwrite && pathPresent(step.dst)) {
+    // Overwrite never replaces: the existing destination goes to the trash
+    // first, so the rename below still lands on a free path and stays undoable.
+    const cleared = await moveToTrash(step.dst, { batchId, ctx });
+    if (!cleared.ok) {
+      return {
+        ok: false,
+        line: `failed: could not move the existing ${showPath(step.dst)} to the trash (${cleared.error}); the ${action} did not run`,
+      };
+    }
+  }
+
+  const entry = journalEntry({ batchId, kind: "apply", action, source: step.src, destination: step.dst, ctx });
+  appendFileJournal([entry]);
+  try {
+    await mkdir(dirname(step.dst), { recursive: true });
+    await rename(step.src, step.dst);
+  } catch (err) {
+    const why = String(err.code || err.message).slice(0, 200);
+    updateFileJournalEntry(entry.id, { status: "failed", error: why });
+    return { ok: false, line: `failed: ${showPath(step.src)} → ${showPath(step.dst)} (${why})` };
+  }
+  updateFileJournalEntry(entry.id, { status: "applied" });
+  return { ok: true, line: `${action === "rename" ? "renamed" : "moved"} ${showPath(step.src)} → ${showPath(step.dst)}` };
+}
+
+/**
+ * Apply a validated plan in order. The first failure stops the batch — a
+ * half-applied plan that is journaled and undoable beats a fully-applied
+ * plan whose later steps ran against a state we no longer understand.
+ */
+async function applyFilePlan(steps, ctx) {
+  const batchId = newBatchId();
+  const lines = [];
+  for (const step of steps) {
+    const result = await applyFileStep(step, batchId, ctx);
+    if (!result.ok) return { batchId, total: steps.length, lines, failed: result.line };
+    lines.push(result.line);
+  }
+  return { batchId, total: steps.length, lines, failed: null };
+}
+
+function filePlanResult(outcome) {
+  const { batchId, total, lines, failed } = outcome;
+  if (!failed) {
+    return {
+      ok: true,
+      output: [
+        `Applied ${lines.length} of ${total} operation${total === 1 ? "" : "s"} (batch ${batchId}):`,
+        ...lines.map((line) => `- ${line}`),
+        `Journaled (batch ${batchId}). list_recent_changes shows it; undo_last reverses the whole batch.`,
+      ].join("\n"),
+    };
+  }
+  if (!lines.length) {
+    return {
+      ok: false,
+      output: [
+        `Failed at operation 1 of ${total} (batch ${batchId}): ${failed}`,
+        `Nothing was applied. If anything was journaled anyway (an overwrite preparing the trash), ` +
+          `list_recent_changes shows it and undo_last reverses it.`,
+      ].join("\n"),
+    };
+  }
+  // Partial batches are first-class: at least one mutation landed, it is in
+  // the journal, and undo restores exactly that. Say so instead of dressing
+  // the call up as a clean success or a total failure.
+  return {
+    ok: true,
+    output: [
+      `Applied ${lines.length} of ${total} operations, then stopped (batch ${batchId}):`,
+      ...lines.map((line) => `- ${line}`),
+      `- ${failed}`,
+      `Journaled (batch ${batchId}). undo_last restores exactly what was applied and reports what it could not.`,
+    ].join("\n"),
+  };
+}
+
+/** Shared argument shape: one bounded array of operation objects. */
+function normalizeBatchArgs(args, fields) {
+  const ops = args?.operations;
+  if (!Array.isArray(ops) || ops.length < 1) {
+    return { error: "operations must be a non-empty array — pass the whole plan in one call so it can be previewed and approved once." };
+  }
+  if (ops.length > FILE_BATCH_MAX) {
+    return { error: `a plan is at most ${FILE_BATCH_MAX} operations (got ${ops.length}); split it into smaller approved batches.` };
+  }
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    if (!op || typeof op !== "object" || Array.isArray(op)) return { error: `operation ${i + 1} must be an object.` };
+    for (const field of fields) {
+      const value = op[field];
+      if (field === "overwrite") {
+        if (value !== undefined && typeof value !== "boolean") {
+          return { error: `operation ${i + 1}: overwrite must be true or false.` };
+        }
+        continue;
+      }
+      if (typeof value !== "string" || !value.trim()) {
+        return { error: `operation ${i + 1}: "${field}" must be a non-empty path string.` };
+      }
+      if (value.length > FILE_PATH_MAX) {
+        return { error: `operation ${i + 1}: ${field} is too long (${value.length} characters; max ${FILE_PATH_MAX}).` };
+      }
+    }
+  }
+  return { ops };
+}
+
+function resolveChecked(input, opIndex) {
+  try {
+    return { path: resolveInWorkspace(input) };
+  } catch (err) {
+    if (err instanceof SafePathError) return { error: `operation ${opIndex}: ${err.message}` };
+    throw err;
+  }
+}
+
+/** Shared per-operation checks for a source path that must exist and move. */
+function checkSource(src, opIndex, seen) {
+  let info;
+  try {
+    info = lstatSync(src);
+  } catch {
+    return { error: `operation ${opIndex}: source ${showPath(src)} does not exist.` };
+  }
+  const canonical = canonicalise(src);
+  for (const root of config.workspaceRoots) {
+    if (canonical === canonicalRoot(root)) {
+      return { error: `operation ${opIndex}: a workspace root cannot be moved or trashed (${showPath(src)}).` };
+    }
+  }
+  if (seen.has(canonical)) return { error: `operation ${opIndex}: ${showPath(src)} appears twice in this plan.` };
+  seen.add(canonical);
+  if (info.isDirectory() && isInside(src, join(src, TRASH_DIR_NAME))) {
+    // `src` contains the trash (or is an ancestor of it): moving it would
+    // move the trash too, and every recovery path with it.
+    return { error: `operation ${opIndex}: ${showPath(src)} contains the trash directory and cannot be moved.` };
+  }
+  return { info };
+}
+
+function checkDestination(dst, opIndex, overwrite) {
+  if (pathPresent(dst) && !overwrite) {
+    return {
+      error:
+        `operation ${opIndex}: destination ${showPath(dst)} already exists — pass overwrite: true to move the existing ` +
+        `item into the local trash first (nothing is deleted), or choose another destination.`,
+    };
+  }
+  return {};
+}
+
+function planMoves(ops) {
+  const steps = [];
+  const seen = new Set();
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    const index = i + 1;
+    const src = resolveChecked(op.from, index);
+    if (src.error) return { error: src.error };
+    const dst = resolveChecked(op.to, index);
+    if (dst.error) return { error: dst.error };
+
+    const srcRoot = workspaceRootOf(src.path);
+    const dstRoot = workspaceRootOf(dst.path);
+    if (!srcRoot || !dstRoot || canonicalRoot(srcRoot) !== canonicalRoot(dstRoot)) {
+      return {
+        error:
+          `operation ${index}: cross-root move refused — ${showPath(src.path)} and ${showPath(dst.path)} are in ` +
+          `different workspace roots. Cross-root moves are refused, not copied.`,
+      };
+    }
+    if (canonicalise(src.path) === canonicalise(dst.path)) {
+      return { error: `operation ${index}: source and destination are the same path.` };
+    }
+    const source = checkSource(src.path, index, seen);
+    if (source.error) return { error: source.error };
+    if (source.info.isDirectory() && isInside(src.path, dst.path)) {
+      return { error: `operation ${index}: destination is inside the folder being moved.` };
+    }
+    const dest = checkDestination(dst.path, index, op.overwrite);
+    if (dest.error) return { error: dest.error };
+
+    steps.push({ kind: "move", src: src.path, dst: dst.path, overwrite: op.overwrite === true });
+  }
+  return { steps };
+}
+
+function planRenames(ops) {
+  const steps = [];
+  const seen = new Set();
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    const index = i + 1;
+    const name = op.new_name;
+    if (name.length > 200) return { error: `operation ${index}: new_name must be at most 200 characters.` };
+    if (name.includes("/") || name.includes("\\")) {
+      return { error: `operation ${index}: new_name must be a plain name, not a path (no slashes). Use move_path to change folders.` };
+    }
+    if (name === "." || name === ".." || hasControlChars(name)) {
+      return { error: `operation ${index}: that is not a usable file name.` };
+    }
+    const src = resolveChecked(op.path, index);
+    if (src.error) return { error: src.error };
+    const dst = resolveChecked(join(dirname(src.path), name), index);
+    if (dst.error) return { error: dst.error };
+
+    const source = checkSource(src.path, index, seen);
+    if (source.error) return { error: source.error };
+    if (canonicalise(src.path) === canonicalise(dst.path)) {
+      return { error: `operation ${index}: ${showPath(src.path)} is already named "${name}".` };
+    }
+    const dest = checkDestination(dst.path, index, op.overwrite);
+    if (dest.error) return { error: dest.error };
+
+    steps.push({ kind: "rename", src: src.path, dst: dst.path, overwrite: op.overwrite === true });
+  }
+  return { steps };
+}
+
+function planTrash(ops) {
+  const steps = [];
+  const seen = new Set();
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    const index = i + 1;
+    const src = resolveChecked(op.path, index);
+    if (src.error) return { error: src.error };
+    const root = workspaceRootOf(src.path);
+    if (!root) return { error: `operation ${index}: ${showPath(src.path)} is not inside a workspace root.` };
+    const trashDir = join(root, TRASH_DIR_NAME);
+    if (isInside(trashDir, src.path)) return { error: `operation ${index}: ${showPath(src.path)} is already in the trash.` };
+    const source = checkSource(src.path, index, seen);
+    if (source.error) return { error: source.error };
+    steps.push({ kind: "trash", src: src.path });
+  }
+  return { steps };
+}
+
+/**
+ * Reverse the newest batch that still has applied (or write-ahead pending)
+ * entries. Restores run in reverse order — a batch may move a file twice —
+ * and every restore is journaled as its own "undo" batch, so the report can
+ * name exactly what was restored and what was not.
+ */
+async function undoLastBatch(ctx) {
+  const journal = loadFileJournal();
+  const restorable = (entry) => entry.kind === "apply" && (entry.status === "applied" || entry.status === "pending");
+  let batchId = null;
+  for (let i = journal.length - 1; i >= 0; i--) {
+    if (restorable(journal[i])) {
+      batchId = journal[i].batchId;
+      break;
+    }
+  }
+  if (!batchId) {
+    return { ok: true, output: "Nothing to undo: no applied file-action batch is waiting to be reversed." };
+  }
+
+  const batch = journal.filter((entry) => entry.batchId === batchId);
+  const neverApplied = batch.filter((entry) => entry.status === "failed");
+  const targets = batch.filter(restorable).reverse();
+  const undoBatchId = newBatchId();
+  const restored = [];
+  const problems = [];
+
+  for (const entry of targets) {
+    const current = entry.destination;
+    const original = entry.source;
+    const currentHere = pathPresent(current);
+    const originalHere = pathPresent(original);
+
+    // A write-ahead entry that never became a rename: say so, never guess.
+    if (entry.status === "pending") {
+      if (!currentHere && originalHere) {
+        const why = "write-ahead entry; the rename never happened";
+        updateFileJournalEntry(entry.id, { status: "failed", error: why });
+        neverApplied.push({ ...entry, error: why });
+        continue;
+      }
+      if (!currentHere && !originalHere) {
+        const why = "neither path exists any more; the state cannot be verified";
+        updateFileJournalEntry(entry.id, { status: "failed", error: why });
+        problems.push({ original, current, reason: why });
+        continue;
+      }
+      if (originalHere) {
+        const why = `both paths exist (${showPath(original)} is occupied), so restoring would overwrite`;
+        updateFileJournalEntry(entry.id, { status: "failed", error: why });
+        problems.push({ original, current, reason: why });
+        continue;
+      }
+      // currentHere && !originalHere — applied but never marked; fall through.
+    } else {
+      if (!currentHere) {
+        const why = `no longer at ${showPath(current)}`;
+        updateFileJournalEntry(entry.id, { status: "failed", error: `applied, but ${why}` });
+        problems.push({ original, current, reason: why });
+        continue;
+      }
+      if (originalHere) {
+        const why = `${showPath(original)} is occupied`;
+        updateFileJournalEntry(entry.id, { status: "failed", error: `applied, but ${why}` });
+        problems.push({ original, current, reason: why });
+        continue;
+      }
+    }
+
+    const undoEntry = journalEntry({
+      batchId: undoBatchId,
+      kind: "undo",
+      action: entry.action,
+      source: current,
+      destination: original,
+      ctx,
+    });
+    appendFileJournal([undoEntry]);
+    try {
+      await rename(current, original);
+    } catch (err) {
+      const why = String(err.code || err.message).slice(0, 200);
+      updateFileJournalEntry(undoEntry.id, { status: "failed", error: why });
+      problems.push({ original, current, reason: why });
+      continue;
+    }
+    updateFileJournalEntry(undoEntry.id, { status: "applied" });
+    updateFileJournalEntry(entry.id, { status: "undone", undoneAt: new Date().toISOString() });
+    restored.push({ original, current });
+  }
+
+  const nl = "\n";
+  const lines = [
+    `Undid batch ${batchId}: restored ${restored.length} of ${targets.length} applied operation${targets.length === 1 ? "" : "s"}.`,
+  ];
+  if (restored.length) {
+    lines.push("Restored:");
+    for (const item of restored) lines.push(`- ${showPath(item.original)} (from ${showPath(item.current)})`);
+  }
+  if (problems.length) {
+    lines.push(`Not restored (${problems.length}):`);
+    for (const item of problems) lines.push(`- ${showPath(item.original)}: ${item.reason}`);
+  }
+  if (neverApplied.length) {
+    lines.push(`Never applied in this batch (${neverApplied.length}):`);
+    for (const entry of neverApplied) {
+      lines.push(`- ${showPath(entry.source)} → ${showPath(entry.destination)}: ${entry.error || "failed"}`);
+    }
+  }
+  return { ok: restored.length > 0, output: lines.join(nl) };
 }
 
 /* ─────────────────────────── catastrophic command guard ────────────────── */
@@ -1226,6 +1725,155 @@ export const TOOLS = [
       await writeFile(abs, content, "utf8");
       const bytes = Buffer.byteLength(content, "utf8");
       return { ok: true, output: `Wrote ${bytes} bytes to ${relative(config.workspaceRoots[0], abs) || abs}` };
+    },
+  },
+  {
+    name: "move_path",
+    dangerous: true,
+    description:
+      "Move files or folders inside the workspace as ONE approved plan: pass every operation in a single call so " +
+      "the whole batch is previewed and approved once. Both paths must be in the same workspace root — cross-root " +
+      "moves are refused, never copied. An existing destination is refused unless overwrite:true, which moves it to " +
+      "the local trash first; nothing is ever deleted. Each mutation is journaled under one batch id; " +
+      "list_recent_changes shows the record and undo_last reverses the whole batch.",
+    parameters: {
+      type: "object",
+      properties: {
+        operations: {
+          type: "array",
+          description: `1-${FILE_BATCH_MAX} operations to run as one approved, journaled batch`,
+          items: {
+            type: "object",
+            properties: {
+              from: stringProp("Source path inside the workspace"),
+              to: stringProp("Destination path inside the same workspace root"),
+              overwrite: {
+                type: "boolean",
+                description: "Default false: refuse an existing destination. true: move the existing item to the local trash first (never delete)",
+              },
+            },
+            required: ["from", "to"],
+          },
+        },
+      },
+      required: ["operations"],
+    },
+    async run(args, ctx = {}) {
+      const shape = normalizeBatchArgs(args, ["from", "to", "overwrite"]);
+      if (shape.error) return refusePlan(shape.error);
+      const plan = planMoves(shape.ops);
+      if (plan.error) return refusePlan(plan.error);
+      return filePlanResult(await applyFilePlan(plan.steps, ctx));
+    },
+  },
+  {
+    name: "rename_path",
+    dangerous: true,
+    description:
+      "Rename files or folders in place as one approved plan: operations is an array of {path, new_name, overwrite?}. " +
+      "new_name is a plain name (no slashes) replacing the final component — use move_path to change folders. An " +
+      "existing destination is refused unless overwrite:true (the existing item goes to the local trash first; " +
+      "nothing is deleted). Journaled per batch; undo_last reverses it.",
+    parameters: {
+      type: "object",
+      properties: {
+        operations: {
+          type: "array",
+          description: `1-${FILE_BATCH_MAX} renames to run as one approved, journaled batch`,
+          items: {
+            type: "object",
+            properties: {
+              path: stringProp("Existing path inside the workspace"),
+              new_name: stringProp("New plain file name (no slashes), e.g. 'report-final.pdf'"),
+              overwrite: {
+                type: "boolean",
+                description: "Default false: refuse an existing destination. true: move the existing item to the local trash first (never delete)",
+              },
+            },
+            required: ["path", "new_name"],
+          },
+        },
+      },
+      required: ["operations"],
+    },
+    async run(args, ctx = {}) {
+      const shape = normalizeBatchArgs(args, ["path", "new_name", "overwrite"]);
+      if (shape.error) return refusePlan(shape.error);
+      const plan = planRenames(shape.ops);
+      if (plan.error) return refusePlan(plan.error);
+      return filePlanResult(await applyFilePlan(plan.steps, ctx));
+    },
+  },
+  {
+    name: "trash_path",
+    dangerous: true,
+    description:
+      "Move files or folders to the local trash directory (.quasnooze-trash inside their workspace root) as one " +
+      "approved plan: operations is an array of {path}. This is never a delete — the bytes stay on disk, the " +
+      "journal records where they went, and undo_last restores every original path.",
+    parameters: {
+      type: "object",
+      properties: {
+        operations: {
+          type: "array",
+          description: `1-${FILE_BATCH_MAX} paths to move into the local trash in one approved, journaled batch`,
+          items: {
+            type: "object",
+            properties: { path: stringProp("Path inside the workspace to move to the trash") },
+            required: ["path"],
+          },
+        },
+      },
+      required: ["operations"],
+    },
+    async run(args, ctx = {}) {
+      const shape = normalizeBatchArgs(args, ["path"]);
+      if (shape.error) return refusePlan(shape.error);
+      const plan = planTrash(shape.ops);
+      if (plan.error) return refusePlan(plan.error);
+      return filePlanResult(await applyFilePlan(plan.steps, ctx));
+    },
+  },
+  {
+    name: "undo_last",
+    dangerous: true,
+    description:
+      "Reverse the most recent file-action batch from the journal (move_path, rename_path or trash_path), restoring " +
+      "every applied operation to its original path, newest first. Reports exactly what was restored and what could " +
+      "not be. Use list_recent_changes first if you need to see what is pending.",
+    parameters: { type: "object", properties: {} },
+    async run(_args, ctx = {}) {
+      return undoLastBatch(ctx);
+    },
+  },
+  {
+    name: "list_recent_changes",
+    description:
+      "Read the file-action journal: recent move, rename, trash and undo entries with source, destination, " +
+      "timestamp, status and batch id, newest first. Read-only; changes nothing. Shows what undo_last would reverse.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", minimum: 1, maximum: 50, description: "How many entries to show (default 10)" },
+      },
+    },
+    async run({ limit } = {}) {
+      const count = Number.isInteger(limit) ? Math.min(50, Math.max(1, limit)) : 10;
+      const journal = loadFileJournal();
+      const recent = journal.slice(-count).reverse();
+      if (!recent.length) {
+        return { ok: true, output: "The file-action journal is empty: no moves, renames, trashes or undos yet." };
+      }
+      const lines = recent.map(
+        (entry) =>
+          `${entry.at} · ${entry.kind === "undo" ? `undo-${entry.action}` : entry.action} · ` +
+          `${showPath(entry.source)} → ${showPath(entry.destination)} · ${entry.status} · batch ${entry.batchId}` +
+          (entry.turnId ? ` · turn ${entry.turnId}` : ""),
+      );
+      return {
+        ok: true,
+        output: `${journal.length} journal entr${journal.length === 1 ? "y" : "ies"} total; newest first:\n${lines.join("\n")}`,
+      };
     },
   },
   {
@@ -2302,6 +2950,11 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   shell: "Scrubbed child shell; allowlisted workspace reads skip prompt when riskTiers=true, command screen blocks catastrophes, other commands ask.",
   read_file: "Reads workspace text files after canonical path and protected-credential checks; not OS-sandboxed.",
   write_file: "Creates or overwrites workspace files after canonical path and protected-credential checks.",
+  move_path: "Renames both ends inside one configured workspace root (cross-root refused, never copied), refuses overwrite without the flag, journals every mutation write-ahead, and only ever rename()s — no unlink, no shell.",
+  rename_path: "Renames in place inside the workspace with a plain new name; an existing destination is refused unless overwrite:true moves it to the local trash first. Journaled and undoable; no unlink, no shell.",
+  trash_path: "rename()s into a per-root .quasnooze-trash directory — never deletes; the journal's destination is where undo restores from. No unlink, no shell.",
+  undo_last: "Walks the file-action journal and rename()s each applied mutation back to its original path, reporting exactly what was restored and what could not be. Refuses to guess on unverifiable state.",
+  list_recent_changes: "Reads data/file-journal.json and prints recent move/rename/trash/undo entries; changes nothing.",
   list_dir: "Lists workspace directory entries (omitting .env*); confined by workspace path checks.",
   grep: "Regex workspace content search inside a 3s worker thread; confined by workspace path checks.",
   scan_project: "Summarises workspace project tree and README header; confined by workspace path checks.",

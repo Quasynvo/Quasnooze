@@ -56,6 +56,45 @@ export function buildActionPreview(name, args = {}, { risk, preparation, secrets
       preview.target = args.path || 'unknown';
       preview.effectSummary = `Create or replace this file with ${Buffer.byteLength(String(args.content || ''), 'utf8')} bytes. Parent folders may be created. Contents are withheld.`;
       preview.redactions.push('content-withheld'); break;
+    case 'move_path':
+    case 'rename_path':
+    case 'trash_path': {
+      // The whole plan, before it runs: every operation the approval covers
+      // is named here, because an approval that shows one item of N is not
+      // an approval of the batch (issue #129).
+      const ops = Array.isArray(args.operations) ? args.operations : [];
+      const describeOp = (op) =>
+        name === 'move_path' ? `${op?.from ?? '?'} → ${op?.to ?? '?'}`
+        : name === 'rename_path' ? `${op?.path ?? '?'} → ${op?.new_name ?? '?'}`
+        : String(op?.path ?? '?');
+      const shown = ops.slice(0, 4).map(describeOp).join('; ');
+      const more = ops.length > 4 ? ` (+${ops.length - 4} more)` : '';
+      preview.action = name;
+      preview.target = ops.length === 1 ? describeOp(ops[0]) : `${ops.length} operations (each listed below)`;
+      if (name === 'move_path') {
+        preview.riskRationale = 'Moving files changes where they live; this exact plan runs only after you approve it. Cross-root moves are refused; an existing destination needs the explicit overwrite flag.';
+        preview.effectSummary = `Move ${ops.length} item(s) inside the workspace: ${shown}${more}. Nothing is deleted (an overwritten destination goes to the local trash first); every operation is journaled and undo_last reverses this batch.`;
+      } else if (name === 'rename_path') {
+        preview.riskRationale = 'Renaming changes the name other files reference; this exact plan runs only after you approve it. An existing destination needs the explicit overwrite flag.';
+        preview.effectSummary = `Rename ${ops.length} item(s) in place: ${shown}${more}. Nothing is deleted (an overwritten destination is trashed first); every operation is journaled and undo_last reverses this batch.`;
+      } else {
+        preview.riskRationale = 'Trashing moves files out of sight without deleting them; approval shows every path, and undo_last restores them.';
+        preview.effectSummary = `Move ${ops.length} item(s) to the local .quasnooze-trash directory: ${shown}${more}. Never deleted — the bytes stay on disk, the journal records the move, and undo_last restores every original path.`;
+      }
+      break;
+    }
+    case 'undo_last':
+      preview.action = 'undo_last';
+      preview.target = 'most recent file-action batch';
+      preview.riskRationale = 'Undo renames files back to their original paths. It reverses only what the journal recorded and reports anything it cannot restore.';
+      preview.effectSummary = 'Reverse the newest file-action batch: rename every applied move, rename or trash back to its original path, newest first. Reports exactly what was restored; changes nothing else.';
+      break;
+    case 'list_recent_changes':
+      preview.action = 'list_recent_changes';
+      preview.target = 'file-action journal';
+      preview.riskRationale = 'Read-only: this reads the local journal and changes nothing.';
+      preview.effectSummary = 'List recent move, rename, trash and undo journal entries with source, destination, timestamp and status. Read-only.';
+      break;
     case 'open_url':
       try { const url = new URL(args.url); preview.target = url.origin + url.pathname; }
       catch { preview.target = 'unknown'; }
