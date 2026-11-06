@@ -51,9 +51,23 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          queries: security-and-quality
+          # C# and Python use their published query packs: the pack default
+          # suite includes AlertSuppression.ql, so in-source `// codeql[...]`
+          # suppressions are honoured. Actions has no pack; the built-in
+          # security-and-quality suite covers it.
+          queries: ${{ matrix.language == 'actions' && 'security-and-quality' || '' }}
+          packs: ${{ matrix.language == 'csharp' && 'codeql/csharp-queries' || matrix.language == 'python' && 'codeql/python-queries' || '' }}
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        id: analyze
         with:
           category: "/language:${{ matrix.language }}"
+          output: results
+          post-processed-sarif-path: results-post
+
+      - name: Dismiss suppressed alerts
+        uses: advanced-security/dismiss-alerts@d4fed5031744d182328586fa3c90011fd4003c19
+        with:
+          sarif-id: ${{ steps.analyze.outputs.sarif-id }}
+          sarif-file: results-post

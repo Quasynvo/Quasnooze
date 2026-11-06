@@ -17,6 +17,7 @@ with sync_playwright() as p:
   if path=='events':return route.fulfill(status=200,content_type='text/event-stream',body=': browser fixture\n\n')
   result=health if path=='health' else native if path=='desktop' else [] if path=='sessions' else {'facts':[]} if path=='memory' else {}
   route.fulfill(status=200,content_type='application/json',body=json.dumps(result))
+  return
  page.route('**/api/**',api)
  page.goto(base+'/desktop.html');expect(page.locator('#connection')).to_have_text('LOCAL SERVICE CONNECTED');expect(page.locator('#micState')).to_have_text('OFF');assert not page.evaluate('document.documentElement.scrollWidth>innerWidth');assert page.locator('a[href="/cosmic.html"]').count()>0;page.screenshot(path=str(out/'command-deck.png'),full_page=True)
  page.goto(base+'/index.html');expect(page.locator('#liveText')).to_have_text('online');page.locator('#newChat').click();expect(page.locator('#thread')).to_contain_text('same orbit');assert page.locator('#thread .who img').count()==1;assert page.locator('a[href="/cosmic.html"]').count()>0;page.screenshot(path=str(out/'Quasnooze-Advanced-Chat.png'),full_page=True)

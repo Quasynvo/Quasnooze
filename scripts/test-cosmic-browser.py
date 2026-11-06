@@ -1,5 +1,5 @@
 # Optional browser validation: requires Python Playwright + Chromium, not a runtime dependency.
-import threading,time,json,tempfile
+import threading,json,tempfile
 from pathlib import Path
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 from playwright.sync_api import sync_playwright,expect
@@ -15,7 +15,7 @@ class Handler(SimpleHTTPRequestHandler):
   if self.path.startswith('/api/'):
    if state['auth'] and (self.headers.get('x-quasnooze-key') or self.headers.get('x-pinch-key'))!='test-only-key':return self.reply({},401)
    return self.reply({'provider':'mock','model':'browser-fixture'} if self.path=='/api/health' else state['native'])
-  super().do_GET()
+  return super().do_GET()
  def do_POST(self):
   body=json.loads(self.rfile.read(int(self.headers.get('content-length','0'))));state['posts'].append((self.path,body))
   if self.path=='/api/approve':state['approved']=body;state['event'].set();return self.reply({'ok':True})
@@ -28,6 +28,7 @@ class Handler(SimpleHTTPRequestHandler):
   elif text=='broken':send('step',{'type':'status','message':'fixture'});return
   else:
    send('step',{'type':'delta','text':'Hello 🌌'});send('final',{'text':'Hello 🌌 <img src=x onerror=window.injected=1>'})
+  return
 server=ThreadingHTTPServer(('127.0.0.1',0),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
 base='http://127.0.0.1:'+str(server.server_address[1])
 results=[]
@@ -47,6 +48,8 @@ with sync_playwright() as p:
  state['native']={'available':True,'phase':'speaking','mic':False,'busy':False,'recent':[]};expect(page.locator('body')).to_have_attribute('data-state','speaking',timeout=5000);expect(page.locator('#stopVoice')).to_be_enabled();page.locator('#stopVoice').click();page.wait_for_timeout(150);assert state['posts'][-1][1]=={'control':'stop-voice'};passed('Native speaking state and stop-voice control use existing desktop API')
  state['native']={'available':False,'phase':'not-running','mic':False,'busy':False,'recent':[]};state['auth']=True;page.goto(base+'/cosmic.html');expect(page.locator('#send')).to_be_disabled();page.locator('#settings').click();page.locator('#accessKey').fill('test-only-key');page.locator('#connect').click();expect(page.locator('#connection')).to_contain_text('CONNECTED');assert page.evaluate('localStorage.length')==0;assert page.evaluate('sessionStorage.length')==0;assert 'key=' not in page.url;passed('Authentication remains memory-only and can reconnect')
  assert not errors,errors;passed('No browser JavaScript exceptions across all scenarios');b.close()
-server.shutdown();open(output/'results.json','w').write(json.dumps(results,indent=2));print(len(results),'browser scenarios passed')
+server.shutdown()
+with open(output/'results.json','w') as f: f.write(json.dumps(results,indent=2))
+print(len(results),'browser scenarios passed')
 
 print("Browser artifacts:",output)

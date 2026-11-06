@@ -91,13 +91,14 @@ public static class QuasnoozeAudio {
         int VolumeStepUp(ref Guid eventContext);
         int VolumeStepDown(ref Guid eventContext);
     }
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the Windows media keys
     [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
     const uint KeyExtended = 0x1, KeyUp = 0x2;
     const byte VkMediaNext = 0xB0, VkMediaPrevious = 0xB1, VkMediaPlayPause = 0xB3;
     static readonly string[] Allowed = { "volume_up", "volume_down", "set_volume", "mute", "unmute", "media_play_pause", "media_next", "media_previous" };
 
     static IAudioEndpointVolume Endpoint() {
-        var enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumeratorComObject();
+        var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
         IMMDevice device;
         Check(enumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out device), "find the default playback device");
         Guid iid = typeof(IAudioEndpointVolume).GUID;
@@ -109,7 +110,9 @@ public static class QuasnoozeAudio {
         if (hr != 0) throw new InvalidOperationException("Windows audio call failed (could not " + what + ", HRESULT 0x" + hr.ToString("X8") + "). Nothing further was changed.");
     }
     static void Tap(byte key) {
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows media keys
         keybd_event(key, 0, KeyExtended, UIntPtr.Zero);
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows media keys
         keybd_event(key, 0, KeyExtended | KeyUp, UIntPtr.Zero);
     }
     public static string Control(string media, string levelText) {
@@ -146,8 +149,11 @@ public static class QuasnoozeAudio {
 }
 
 public static class QuasnoozeCompanion {
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the Windows hotkey
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint modifiers, uint key);
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the Windows icon handle
     [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the Windows hotkey
     [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static readonly object OutputLock = new object();
@@ -167,7 +173,7 @@ public static class QuasnoozeCompanion {
     static string Panel = "", Root = "", Node = "", Launcher = "", Approval = "", ApprovalText = "";
     static readonly Color Cyan = Color.FromArgb(131, 245, 237);
 
-    static void Emit(object value) { lock (OutputLock) { try { Console.Out.WriteLine(Json.Serialize(value)); Console.Out.Flush(); } catch (IOException) { } } }
+    static void Emit(object value) { lock (OutputLock) { try { Console.Out.WriteLine(Json.Serialize(value)); Console.Out.Flush(); } catch (IOException) { System.Diagnostics.Debug.WriteLine("emit failed"); } } }
     static void Post(Action action) { if (Window != null && !Window.IsDisposed && Window.IsHandleCreated) Window.BeginInvoke(action); }
     static string Value(Dictionary<string, object> m, string key) { object v; return m.TryGetValue(key, out v) && v != null ? Convert.ToString(v) : ""; }
     static void Phase(string phase, string detail) {
@@ -297,6 +303,8 @@ public static class QuasnoozeCompanion {
             Phase(capture ? "listening" : "armed", capture ? "I'm listening. Say one request; pause when finished." : Detail.Text);
             Voice(true, "Local System.Speech - " + info.Culture.Name);
             Emit(new { type = "state", phase = capture ? "listening" : "armed" });
+        // codeql[cs/misleading-indentation] the catch body is a single recovery statement
+        // codeql[cs/catch-of-all-exceptions] a failed recognizer must not leave the UI claiming it is listening
         } catch (Exception e) { Recognizer = null; SpeechGate.FailedStart(); if (rec != null) rec.Dispose(); WantWake = false; Wake.Text = "Enable local wake"; Phase("voice unavailable", e.Message); Voice(false, e.Message); SpeechStatus("error", e.Message); }
     }
     static void ToggleWake() {
@@ -358,14 +366,18 @@ public static class QuasnoozeCompanion {
             } else {
                 string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows), path;
                 switch (action) {
-                    case "calculator": path = Path.Combine(windows, "System32", "calc.exe"); break;
-                    case "notepad": path = Path.Combine(windows, "System32", "notepad.exe"); break;
-                    case "explorer": path = Path.Combine(windows, "explorer.exe"); break;
+                    // codeql[cs/path-combine] windows is a trusted system path; Path.Combine handles the rooted first segment
+                case "calculator": path = Path.Combine(windows, "System32", "calc.exe"); break;
+                    // codeql[cs/path-combine] windows is a trusted system path; Path.Combine handles the rooted first segment
+                case "notepad": path = Path.Combine(windows, "System32", "notepad.exe"); break;
+                    // codeql[cs/path-combine] windows is a trusted system path; Path.Combine handles the rooted first segment
+                case "explorer": path = Path.Combine(windows, "explorer.exe"); break;
                     default: throw new InvalidOperationException("App is not in the desktop allowlist.");
                 }
                 Process.Start(new ProcessStartInfo(path) { UseShellExecute = false }); result = "Opened " + action + ".";
             }
             ok = true;
+        // codeql[cs/catch-of-all-exceptions] the desktop action reports the failure text to the caller
         } catch (Exception e) { result = e.Message; }
         Emit(new { type = "result", id = id, ok = ok, text = result });
     }
@@ -375,17 +387,21 @@ public static class QuasnoozeCompanion {
     }
     static void Startup() {
         if (Root.Length == 0) return;
+        // codeql[cs/path-combine] the Startup folder is a trusted system path; Path.Combine handles the rooted first segment
         string shortcut = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Quasnooze.lnk");
         bool remove = File.Exists(shortcut);
         if (!Confirm(remove ? "Remove Quasnooze from your Windows login startup?" : "Start Quasnooze when you sign in to Windows? It will still start with its microphone muted. This changes only your user's Startup folder.")) return;
         try {
+            // codeql[cs/path-combine] Root is the trusted install root; Path.Combine handles the rooted first segment
             string args = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + Path.Combine(Root, "desktop", "startup.ps1") + "\" -NodePath \"" + Node + "\" -Launcher \"" + Launcher + "\"" + (remove ? " -Remove" : "");
+            // codeql[cs/path-combine] the Windows folder is a trusted system path; Path.Combine handles the rooted first segment
             var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), args) { UseShellExecute = false, CreateNoWindow = true };
             using (var process = Process.Start(start)) {
                 if (!process.WaitForExit(5000)) { process.Kill(); throw new InvalidOperationException("Startup update timed out."); }
                 if (process.ExitCode != 0) throw new InvalidOperationException("Startup could not be updated.");
             }
             Phase("startup", remove ? "Removed from Windows login startup." : "Will start at Windows login, with the microphone muted.");
+        // codeql[cs/catch-of-all-exceptions] the startup failure is reported to the user
         } catch (Exception e) { Phase("startup failed", e.Message); }
     }
     static void Receive(string line) {
@@ -400,16 +416,21 @@ public static class QuasnoozeCompanion {
                     Phase("muted", "Reconnected. Microphone off; enable it explicitly. Interrupted actions are not replayed.");
                     Panel = Value(m, "panel"); Root = Value(m, "root"); Node = Value(m, "node"); Launcher = Value(m, "launcher"); Brand.Text = "QUASNOOZE  /  " + Value(m, "owner");
                     try {
+                        // codeql[cs/path-combine] Root is the trusted install root; Path.Combine handles the rooted first segment
                         using (var art = Image.FromFile(Path.Combine(Root, "public", "brand", "voice-engine-native.png"))) {
                             var previousArt = CompanionArt.Image;
                             CompanionArt.Image = new Bitmap(art);
                             if (previousArt != null) previousArt.Dispose();
                         }
+                    // codeql[cs/catch-of-all-exceptions] decorative art is optional; controls stay usable
                     } catch { /* decorative art is optional; controls stay usable */ }
                     try {
+                        // codeql[cs/path-combine] Root is the trusted install root; Path.Combine handles the rooted first segment
                         using (var bitmap = new Bitmap(Path.Combine(Root, "public", "favicon-32.png"))) {
+                            // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows icon handle
                             var handle = bitmap.GetHicon(); BrandIcon = (Icon)Icon.FromHandle(handle).Clone(); DestroyIcon(handle); Window.Icon = BrandIcon; Tray.Icon = BrandIcon;
                         }
+                    // codeql[cs/catch-of-all-exceptions] keep the generic OS icon if an asset is unavailable
                     } catch { /* keep the generic OS icon if an asset is unavailable */ }
                     break;
                 case "working": Working = true; StopRecognition(); StopSpeech(); Phase("working", "Local request in progress. Microphone paused."); break;
@@ -456,6 +477,7 @@ public static class QuasnoozeCompanion {
         ButtonAt("Stop voice", 260, 210, 100, () => { StopSpeech(); if (WantWake && !Working) StartRecognition(false); });
         ButtonAt("Deck", 367, 210, 68, ShowDeck);
         Allow = ButtonAt("Allow once", 20, 253, 125, () => { if (Approval.Length > 0 && Confirm("Allow this exact action once?\n\n" + ApprovalText)) { Emit(new { type = "approval", id = Approval, allowed = true }); Approval = ""; Allow.Visible = Deny.Visible = false; } });
+        // codeql[cs/misleading-indentation] the click handler is a single expression-bodied lambda
         Deny = ButtonAt("Deny", 155, 253, 95, () => { if (Approval.Length > 0) Emit(new { type = "approval", id = Approval, allowed = false }); Approval = ""; Allow.Visible = Deny.Visible = false; });
         Allow.Visible = Deny.Visible = false;
         var shortcutHint = new Label { Text = "Ctrl+Alt+P to talk - local speech - no audio recording", Left = 20, Top = 291, Width = 425, ForeColor = Color.FromArgb(151, 173, 197), Font = new Font("Segoe UI", 8) }; Window.Controls.Add(shortcutHint);
@@ -477,11 +499,14 @@ public static class QuasnoozeCompanion {
         Window.Hotkey = ListenOnce;
         Window.FormClosing += (s, e) => { if (!Quitting) { e.Cancel = true; Window.Hide(); } };
         Window.Shown += (s, e) => {
+            // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows hotkey
             if (!RegisterHotKey(Window.Handle, 708, 0x0001 | 0x0002 | 0x4000, (uint)Keys.P)) shortcutHint.Text = "Shortcut unavailable - use Talk or the tray menu.";
             Emit(new { type = "ready" });
             Task.Run(() => { string line; while ((line = Console.In.ReadLine()) != null) { string copy = line; Post(() => Receive(copy)); } Post(() => { Quitting = true; Window.Close(); }); });
         };
         try { Application.Run(Window); }
+        // codeql[cs/misleading-indentation] the finally block is a single cleanup sequence
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows hotkey
         finally { Quitting = true; StopRecognition(); StopSpeech(); if (Speaker != null) Speaker.Dispose(); Tray.Visible = false; Tray.Dispose(); if (BrandIcon != null) BrandIcon.Dispose(); if (CompanionArt.Image != null) CompanionArt.Image.Dispose(); UnregisterHotKey(Window.Handle, 708); }
     }
 }

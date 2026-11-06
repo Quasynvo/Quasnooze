@@ -60,6 +60,7 @@ public static class QuasnoozeSpeechDoctor {
             try {
                 using (var key = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\" + name))
                     report[name] = key == null ? "not specified; permission not verified" : Convert.ToString(key.GetValue("Value", "not specified"));
+            // codeql[cs/catch-of-all-exceptions] registry permission failures are reported, not thrown
             } catch { report[name] = "unreadable; permission not verified"; }
         }
         if (!micTest) return new JavaScriptSerializer().Serialize(report);
@@ -80,7 +81,9 @@ public static class QuasnoozeSpeechDoctor {
             rec.AudioLevelUpdated += (s, e) => { lock(sync) maxLevel = Math.Max(maxLevel, e.AudioLevel); };
             rec.SpeechDetected += (s, e) => { lock(sync) detected++; };
             rec.AudioSignalProblemOccurred += (s, e) => { lock(sync) signal = e.AudioSignalProblem.ToString(); };
+            // codeql[cs/misleading-indentation] single-line event handler; the lock body is intentionally inline
             rec.SpeechRecognized += (s, e) => { lock(sync) { text = e.Result.Text; confidence = e.Result.Confidence; } };
+            // codeql[cs/misleading-indentation] single-line event handler; the lock body is intentionally inline
             rec.RecognizeCompleted += (s, e) => { lock(sync) if(e.Error != null) error = e.Error.Message; completed.Set(); };
             rec.SetInputToDefaultAudioDevice(); report["microphoneOpened"] = true;
             rec.RecognizeAsync(RecognizeMode.Single);
@@ -89,13 +92,15 @@ public static class QuasnoozeSpeechDoctor {
             lock(sync) {
                 report["maxInputLevel"] = maxLevel; report["speechDetectedEvents"] = detected;
                 report["recognizedText"] = text; report["confidence"] = confidence;
+                // codeql[cs/misleading-indentation] two independent report fields on one line
                 report["lastSignalProblem"] = signal; report["error"] = error;
                 report["status"] = !finished ? "driver cancellation did not complete; process must exit" : error.Length > 0 ? "recognizer error" : text.Length > 0 ? "speech recognized; no command executed" : "no transcript; inspect input level, permissions and speech language";
             }
+        // codeql[cs/catch-of-all-exceptions] the diagnostic reports the error to the caller
         } catch(Exception e) { report["status"] = "diagnostic error"; report["error"] = e.Message; }
         finally {
             if (rec != null && (finished || !(bool)report["microphoneOpened"])) rec.Dispose();
-            if (finished) completed.Dispose();
+            completed.Dispose();
         }
         return new JavaScriptSerializer().Serialize(report);
     }

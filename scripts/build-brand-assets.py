@@ -109,7 +109,7 @@ def build():
     logo.save(ROOT/'site/assets/quasynvo-logo.png',optimize=True)
     font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';bold_path='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
     font=lambda size,bold=False:ImageFont.truetype(bold_path if bold else font_path,size)
-    def banner(state,phase,level):
+    def render_banner(state,phase,level):
         im=Image.new('RGB',(1200,440),'#080d19');d=ImageDraw.Draw(im)
         # Subtle backglow, hairline frame, and a glass state readout.
         glow=Image.new('RGB',im.size,'#080d19');gd=ImageDraw.Draw(glow)
@@ -127,7 +127,7 @@ def build():
         art=engine(440,state,phase,level);im.paste(art,(704,0),art)
         d.text((785,405),'THREE RIBBONS. ONE SIGNAL.',font=font(9),fill='#9aadc6')
         return im
-    frames=[banner(state,2.4+i*.17,.2+.22*(math.sin(i*.5)+1)) for state in STATES for i in range(15)]
+    frames=[render_banner(state,2.4+i*.17,.2+.22*(math.sin(i*.5)+1)) for state in STATES for i in range(15)]
     palette=frames[0].quantize(colors=128)
     animation=[frame.quantize(palette=palette,dither=Image.Dither.NONE) for frame in frames]
     animation[0].save(ROOT/'assets/quasnooze-showcase.gif',save_all=True,append_images=animation[1:],duration=100,loop=0,optimize=True,disposal=1)
