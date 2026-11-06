@@ -19,7 +19,7 @@ import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaM
   buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
-import { classifyCommand, classifySystemControl, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
+import { classifyCommand, classifySystemControl, classifyToolAction, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
 import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
 import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand } from "./tools.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
@@ -753,6 +753,21 @@ export async function runAgent({
         continue;
       }
 
+      // Side-effect-free preparation can capture the real target for a dry-run
+      // approval. Its result is trusted tool state, never model-writable args.
+      let actionPreparation;
+      if (typeof tool.prepare === "function") {
+        try {
+          actionPreparation = await tool.prepare(call.arguments || {}, { ...ctx, signal });
+        } catch (err) {
+          const why = String(err?.message || err).slice(0, 600);
+          messages.push({ role: "tool", name: tool.name, toolCallId: call.id, content: why });
+          trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: err?.code || "preview-failed" });
+          onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why.slice(0, 200) });
+          continue;
+        }
+      }
+
       const classifiedShell =
         tool.name === "shell" && (config.riskTiers || activeHarness)
           ? classifyCommand(call.arguments?.command, {
@@ -892,8 +907,9 @@ export async function runAgent({
         continue;
       }
 
+      const toolRisk = classifyToolAction(tool.name);
       const baselineMustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ && !sessionGranted;
-      const policyMustAsk =
+      const policyMustAsk = toolRisk.freshApproval ||
         policyDecision === POLICY_DECISIONS.ASK ||
         (commitProposal.isCommit && (!config.autoApprove || Boolean(activeHarness)));
 
@@ -910,7 +926,7 @@ export async function runAgent({
       const mustAsk = baselineMustAsk || policyMustAsk;
       if (mustAsk) {
         const secrets = turnSecrets();
-        const preview = buildActionPreview(tool.name, call.arguments, { risk: tier || classifiedShell, secrets });
+        const preview = buildActionPreview(tool.name, call.arguments, { risk: tier || classifiedShell || toolRisk, preparation: actionPreparation, secrets });
         // The scope of a yes is part of the question: a session-grantable
         // approval says so in the prompt itself, never retroactively.
         const description = approvalDescription(
@@ -959,7 +975,7 @@ export async function runAgent({
         // Let evidence-producing tools avoid registering passages the model
         // cannot see because the remaining tool-output budget is exhausted.
         ctx.toolOutputLimit = Math.min(12_000, Math.max(0, toolBudget));
-        result = await tool.run(call.arguments || {}, ctx);
+        result = await tool.run(call.arguments || {}, { ...ctx, signal, ...(actionPreparation !== undefined ? { actionPreparation } : {}) });
       } catch (err) {
         result = {
           ok: false,

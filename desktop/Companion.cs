@@ -13,6 +13,7 @@ using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
+using System.Windows.Automation;
 
 public sealed class QuasnoozeWindow : Form {
     public Action Hotkey;
@@ -147,6 +148,111 @@ public static class QuasnoozeAudio {
 
 // Top-level window control (list/focus/minimise/restore/close) and
 // allowlist-resolved app launching, reached only through the typed "os" op.
+// Unicode typed input. Every send is bound to the window captured by the
+// side-effect-free preview, and every character rechecks focus and cancellation.
+public static class QuasnoozeTyping {
+    const uint INPUT_KEYBOARD = 1, KEYEVENTF_UNICODE = 0x0004, KEYEVENTF_KEYUP = 0x0002;
+    const int MaxCharacters = 4000, DelayMs = 20;
+    [StructLayout(LayoutKind.Sequential)] struct KEYBDINPUT {
+        public ushort wVk, wScan; public uint dwFlags, time; public UIntPtr dwExtraInfo;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct MOUSEINPUT {
+        public int dx, dy; public uint mouseData, dwFlags, time; public UIntPtr dwExtraInfo;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct HARDWAREINPUT { public uint uMsg; public ushort wParamL, wParamH; }
+    [StructLayout(LayoutKind.Explicit)] struct InputUnion {
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public InputUnion U; }
+    [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+    static volatile string AbortId;
+
+    // Called directly on the console-reader thread: the UI thread is busy sending.
+    public static void Abort(string id) { if (!String.IsNullOrEmpty(id)) AbortId = id; }
+
+    static void RefuseCredentialField() {
+        try {
+            var field = AutomationElement.FocusedElement;
+            if (field == null) throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be inspected. Nothing was typed.");
+            object raw = field.GetCurrentPropertyValue(ValuePattern.IsPasswordProperty, true);
+            bool password = raw != AutomationElement.NotSupported && raw is bool && (bool)raw;
+            string name = field.Current.Name ?? "";
+            string cls = field.Current.ClassName ?? "";
+            bool namedPassword = new[] { "password", "passcode", "passphrase", "secret code" }
+                .Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0 || cls.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
+            if (password || namedPassword) throw new QuasnoozeWindows.OsFailure("CREDENTIAL_FIELD", "The focused field looks like a password or credential field. Typed input is refused; nothing was sent.");
+        } catch (QuasnoozeWindows.OsFailure) { throw; }
+        catch (Exception) {
+            // If the safety check itself is unavailable, typing is not safe.
+            throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be checked for credential input. Nothing was typed.");
+        }
+    }
+
+    static Dictionary<string, object> TargetInfo(IntPtr h) {
+        var info = QuasnoozeWindows.Info(h);
+        info["dryRun"] = true;
+        return info;
+    }
+
+    public static Dictionary<string, object> Preview(string text, string expectedTitle) {
+        if (text == null || text.Length == 0 || text.Length > MaxCharacters)
+            throw new QuasnoozeWindows.OsFailure("BAD_TEXT", "Text must contain 1-" + MaxCharacters + " UTF-16 characters. Nothing was typed.");
+        IntPtr h = QuasnoozeWindows.User32.GetForegroundWindow();
+        if (h == IntPtr.Zero || !QuasnoozeWindows.User32.IsWindow(h))
+            throw new QuasnoozeWindows.OsFailure("NO_TARGET", "There is no usable foreground window. Nothing was typed.");
+        string title = QuasnoozeWindows.Info(h)["title"].ToString();
+        if (!String.IsNullOrEmpty(expectedTitle) && !String.Equals(title, expectedTitle, StringComparison.Ordinal))
+            throw new QuasnoozeWindows.OsFailure("TARGET_CHANGED", "The foreground window title does not match the expected title. Nothing was typed.");
+        RefuseCredentialField();
+        var info = TargetInfo(h);
+        info["keystrokes"] = (double)text.Length;
+        info["delayMs"] = (double)DelayMs;
+        return info;
+    }
+
+    static INPUT Key(char c, bool up) {
+        return new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT {
+            wVk = 0, wScan = c, dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0), time = 0, dwExtraInfo = UIntPtr.Zero
+        } } };
+    }
+
+    public static Dictionary<string, object> Type(string id, string text, string handleText, string approvedTitle, string approvedProcess) {
+        var preview = Preview(text, approvedTitle);
+        IntPtr expected = new IntPtr(Int64.Parse(handleText, System.Globalization.CultureInfo.InvariantCulture));
+        IntPtr current = QuasnoozeWindows.User32.GetForegroundWindow();
+        var currentInfo = QuasnoozeWindows.Info(current);
+        string currentTitle = currentInfo["title"].ToString();
+        if (current != expected || !String.Equals(currentTitle, approvedTitle, StringComparison.Ordinal) || !String.Equals(currentInfo["process"].ToString(), approvedProcess, StringComparison.Ordinal)) {
+            AbortId = null;
+            throw new QuasnoozeWindows.OsFailure("TARGET_CHANGED", "The foreground window changed after approval. Nothing was typed; preview and approve the new target.");
+        }
+        AbortId = null;
+        int sent = 0;
+        string failure = "", code = "";
+        foreach (char c in text) {
+            if (AbortId == id) { code = "ABORTED"; failure = "Typing was aborted."; break; }
+            if (QuasnoozeWindows.User32.GetForegroundWindow() != expected) { code = "TARGET_CHANGED"; failure = "The foreground window changed during typing."; break; }
+            var inputs = new[] { Key(c, false), Key(c, true) };
+            if (SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT))) != 2) {
+                code = "SEND_FAILED"; failure = "Windows refused a keystroke."; break;
+            }
+            sent++;
+            if (sent < text.Length) Thread.Sleep(DelayMs);
+        }
+        AbortId = null;
+        var result = TargetInfo(expected);
+        result["dryRun"] = false;
+        result["sent"] = (double)sent;
+        result["keystrokes"] = (double)text.Length;
+        result["aborted"] = code == "ABORTED";
+        result["code"] = code;
+        result["detail"] = failure;
+        return result;
+    }
+}
+
 // Every mutation re-validates the handle with IsWindow at action time, so a
 // window that closed mid-call is a typed CLOSED failure, never a guess.
 // Launch resolves an approved executable by NAME from a fixed known list plus
@@ -686,6 +792,22 @@ public static class QuasnoozeCompanion {
                     result = "Launched " + info["name"] + " from " + info["path"] + ".";
                     break;
                 }
+                case "preview_type_text": {
+                    var info = QuasnoozeTyping.Preview(Value(m, "text"), Value(m, "expectedWindowTitle"));
+                    data = info; ok = true;
+                    result = "Dry run only: " + info["keystrokes"] + " keystrokes would go to \"" + info["title"] + "\" (" + info["process"] + "). Nothing was typed.";
+                    break;
+                }
+                case "type_text": {
+                    var info = QuasnoozeTyping.Type(id, Value(m, "text"), Value(m, "handle"), Value(m, "approvedTitle"), Value(m, "approvedProcess"));
+                    data = info;
+                    code = info["code"].ToString();
+                    ok = code.Length == 0;
+                    result = ok
+                        ? "Typed " + info["sent"] + " characters into \"" + info["title"] + "\" (" + info["process"] + ")."
+                        : info["detail"] + " Sent " + info["sent"] + " of " + info["keystrokes"] + " characters; no further characters will be sent.";
+                    break;
+                }
                 default:
                     throw new QuasnoozeWindows.OsFailure("UNKNOWN_OP", "Unknown os request kind. Nothing was done.");
             }
@@ -823,7 +945,19 @@ public static class QuasnoozeCompanion {
         Window.Shown += (s, e) => {
             if (!RegisterHotKey(Window.Handle, 708, 0x0001 | 0x0002 | 0x4000, (uint)Keys.P)) shortcutHint.Text = "Shortcut unavailable - use Talk or the tray menu.";
             Emit(new { type = "ready" });
-            Task.Run(() => { string line; while ((line = Console.In.ReadLine()) != null) { string copy = line; Post(() => Receive(copy)); } Post(() => { Quitting = true; Window.Close(); }); });
+            Task.Run(() => {
+                string line;
+                while ((line = Console.In.ReadLine()) != null) {
+                    string copy = line;
+                    // Cancellation must not queue behind SendInput on the UI thread.
+                    try {
+                        var incoming = Json.Deserialize<Dictionary<string, object>>(copy);
+                        if (Value(incoming, "op") == "abort_type") { QuasnoozeTyping.Abort(Value(incoming, "id")); continue; }
+                    } catch { /* Receive applies the normal malformed-message policy. */ }
+                    Post(() => Receive(copy));
+                }
+                Post(() => { Quitting = true; Window.Close(); });
+            });
         };
         try { Application.Run(Window); }
         finally { Quitting = true; StopRecognition(); StopSpeech(); if (Speaker != null) Speaker.Dispose(); Tray.Visible = false; Tray.Dispose(); if (BrandIcon != null) BrandIcon.Dispose(); if (CompanionArt.Image != null) CompanionArt.Image.Dispose(); UnregisterHotKey(Window.Handle, 708); }

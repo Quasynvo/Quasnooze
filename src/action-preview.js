@@ -40,7 +40,7 @@ export function sanitizeActionPreview(input = {}, secrets = []) {
   return Object.freeze(out);
 }
 
-export function buildActionPreview(name, args = {}, { risk, secrets = previewSecrets() } = {}) {
+export function buildActionPreview(name, args = {}, { risk, preparation, secrets = previewSecrets() } = {}) {
   const preview = { tool: name, action: name, target: 'unknown', status: 'supported',
     riskRationale: 'This tool requires explicit approval under the current tool policy.',
     effectSummary: 'unknown — no supported effect preview is available.', redactions: [] };
@@ -88,6 +88,20 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
       preview.target = String(args.name ?? 'unknown');
       preview.effectSummary = 'Close one uniquely matched window (WM_CLOSE) via the Windows companion, after a second native confirmation naming the application. Unsaved work in that window may be lost; ambiguous names change nothing.';
       break;
+    case 'type_text': {
+      const text = String(args.text ?? '');
+      const escaped = JSON.stringify(text).slice(1, -1);
+      const shown = escaped.length > 140 ? escaped.slice(0, 140) + '…' : escaped;
+      preview.action = 'type_text';
+      preview.target = preparation?.target
+        ? `${preparation.target.title} — ${preparation.target.process}`
+        : 'foreground window (dry run unavailable)';
+      preview.riskRationale = 'Keystrokes can submit forms, send messages or trigger shortcuts. This exact target needs fresh approval; password fields are refused.';
+      preview.effectSummary = preparation?.target
+        ? `Text (${text.length} UTF-16 characters total): ${shown}\nKeystrokes: ${preparation.keystrokes}; per-character delay: ${preparation.delayMs} ms. Dry run sent nothing.`
+        : 'No keystrokes have been sent. A native dry run is required before approval.';
+      break;
+    }
     default:
       preview.status = 'unknown'; preview.redactions.push('unsupported-arguments-withheld');
   }

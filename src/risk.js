@@ -708,6 +708,18 @@ export function describeTier(result) {
   return `needs approval — ${result.why}`;
 }
 
+/* ─────────────────────── tools that always need fresh consent ─────────────
+ * Typed input can submit forms or trigger shortcuts in arbitrary applications.
+ * No global auto-approve, demo mode, remembered grant or policy "allow" may
+ * bypass this gate. The dry-run target is revalidated by the native host too.
+ */
+export function classifyToolAction(name) {
+  if (name === "type_text") {
+    return { tier: ACT, why: "typed input can submit forms or trigger shortcuts and always needs fresh approval", freshApproval: true };
+  }
+  return { tier: ACT, why: "this action follows the standard tool approval policy", freshApproval: false };
+}
+
 /* ─────────────────────── system_control classification ────────────────────
  *
  * Volume and media-transport actions are the one place where "ask every

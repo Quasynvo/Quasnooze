@@ -43,7 +43,7 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
       if (!live()) return;
       context.dead = true; clear(context.timer);
       for (const item of context.pending.values()) {
-        clear(item.timer);
+        clear(item.timer); item.cleanup?.();
         const err = new Error("Companion disconnected; side-effect outcome unknown. Inspect before requesting again.");
         err.code = "UNREACHABLE";
         item.reject(err);
@@ -96,8 +96,13 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
        * Resolves with the host's structured `data` payload (plus `text`);
        * rejects with a typed `code` (CLOSED, DENIED, UNKNOWN_APP, …).
        */
-      os(payload, { timeoutMs = 15_000 } = {}) {
+      os(payload, { timeoutMs = 15_000, signal } = {}) {
         return new Promise((resolve, reject) => {
+          if (signal?.aborted) {
+            const err = new Error("Action aborted before it was sent to the Windows companion. Nothing was sent.");
+            err.code = "ABORTED";
+            reject(err); return;
+          }
           if (!live() || !context.ready) {
             const err = new Error("Windows companion is not running; request not sent.");
             err.code = "UNREACHABLE";
@@ -109,13 +114,20 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
             reject(err); return;
           }
           const id = randomUUID(), deadline = Date.now() + timeoutMs;
+          const cleanup = () => { if (signal && abort) signal.removeEventListener("abort", abort); };
           const timer = later(() => {
-            context.pending.delete(id);
+            context.pending.delete(id); cleanup();
             const err = new Error(`Windows companion did not answer "${payload.kind}" within ${timeoutMs} ms; the host is UNREACHABLE and nothing may be assumed about the machine.`);
             err.code = "UNREACHABLE"; err.timeout = true;
             reject(err);
           }, timeoutMs);
-          context.pending.set(id, { resolve, reject, timer, structured: true });
+          const abort = () => {
+            // Keep the request pending until the native host reports exactly
+            // how many characters were sent. It checks this flag per character.
+            send({ op: "abort_type", id });
+          };
+          context.pending.set(id, { resolve, reject, timer, structured: true, cleanup });
+          if (signal) signal.addEventListener("abort", abort, { once: true });
           send({ op: "os", id, ...payload, deadline });
         });
       } };
@@ -164,7 +176,7 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         else if (event.type === "voice" && typeof event.mic === "boolean") runtime.update({ ...(event.mic ? {} : { audioLevel: null, audioUpdatedAt: null }), mic: event.mic, voice: String(event.detail || "").slice(0, 200) });
         else if (event.type === "state" && ["listening", "speaking", "muting", "muted", "armed"].includes(event.phase)) runtime.update({ phase: event.phase });
         else if (event.type === "result" && context.pending.has(event.id)) {
-          const item = context.pending.get(event.id); context.pending.delete(event.id); clear(item.timer);
+          const item = context.pending.get(event.id); context.pending.delete(event.id); clear(item.timer); item.cleanup?.();
           if (event.ok === true && typeof event.text === "string") {
             // Typed os requests resolve with the host's structured payload so
             // callers can see the window that was actually focused, etc.
@@ -190,7 +202,7 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
     if (current) {
       clear(current.timer); clear(current.killTimer); current.dead = true;
       for (const item of current.pending.values()) {
-        clear(item.timer);
+        clear(item.timer); item.cleanup?.();
         const err = new Error("Companion stopped; side-effect outcome unknown.");
         err.code = "UNREACHABLE";
         item.reject(err);
