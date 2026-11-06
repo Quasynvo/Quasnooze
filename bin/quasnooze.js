@@ -54,6 +54,7 @@ ${c.coral("✦ quasnooze")} — local, private, yours
   ${c.bold("quasnooze retention-plan")}  preview retention metadata; never deletes data
   ${c.bold("quasnooze providers")}       every brain preset, local and cloud, and what each needs
   ${c.bold("quasnooze tools")}           read-only capability and trust inventory; no plugin execution
+  ${c.bold("quasnooze scout")}           opt-in scheduled source briefings
   ${c.bold("quasnooze export")}          write everything Quasnooze knows to one JSON file
   ${c.bold("quasnooze cost")}            what the last 30 days of turns would have cost
 
@@ -75,6 +76,9 @@ switch (command) {
     break;
   case "retention-plan":
     run("scripts/retention-plan.js", rest);
+    break;
+  case "scout":
+    run("src/cli.js", ["scout", ...rest]);
     break;
   case "providers":
     run("src/cli.js", ["providers", ...rest]);
