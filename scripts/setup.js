@@ -192,7 +192,8 @@ async function checkTelegram(token) {
     // encode it so a stray "/", "?", "#" or space cannot reshape the request
     // to the provider — the shape regex above is a courtesy, this is the
     // actual confinement.
-    const { body } = await jsonFetch(`https://api.telegram.org/bot${encodeURIComponent(candidate)}/getMe`); // codeql[js/file-access-to-http] -- sent only to the issuing provider; literal host, encoded token
+    // codeql[js/file-access-to-http] sent only to the issuing provider; literal host, encoded token
+    const { body } = await jsonFetch(`https://api.telegram.org/bot${encodeURIComponent(candidate)}/getMe`);
     if (!body?.ok) return { ok: false, error: body?.description || "invalid token" };
     return { ok: true, label: `@${body.result.username}` };
   } catch (err) {

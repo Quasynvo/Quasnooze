@@ -9,7 +9,8 @@ import { answerApproval, pendingApprovalsFor } from "../agent.js";
 import { registerSender } from "../outbound.js";
 import { formatIncomingTelegramText } from "./telegram-reply.js";
 
-const API = (method) => `https://api.telegram.org/bot${encodeURIComponent(config.telegram.token)}/${method}`; // codeql[js/file-access-to-http] -- sent only to the issuing provider; literal host, encoded token
+// codeql[js/file-access-to-http] sent only to the issuing provider; literal host, encoded token
+const API = (method) => `https://api.telegram.org/bot${encodeURIComponent(config.telegram.token)}/${method}`;
 
 async function call(method, payload) {
   const res = await fetch(API(method), {

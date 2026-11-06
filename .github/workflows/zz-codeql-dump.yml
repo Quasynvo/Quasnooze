@@ -25,13 +25,19 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          queries: security-and-quality
+          queries: security-and-quality,codeql/javascript-queries:AlertSuppression.ql
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+        id: analyze
         with:
           category: "/language:${{ matrix.language }}"
-          upload: never
+          upload: true
           output: results
           post-processed-sarif-path: results-post
+      - name: Dismiss suppressed alerts
+        uses: advanced-security/dismiss-alerts@d4fed5031744d182328586fa3c90011fd4003c19
+        with:
+          sarif-id: ${{ steps.analyze.outputs.sarif-id }}
+          sarif-file: results-post
       - name: Write summary and commit
         run: |
           set -e
