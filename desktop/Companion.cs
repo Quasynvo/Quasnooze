@@ -93,6 +93,27 @@ public static class QuasnoozeAudio {
     }
     // codeql[cs/unmanaged-code] intentional P/Invoke for the Windows media keys
     [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
+    // SendInput-based typing for the approved type_text action. The foreground
+    // window, process and password style are checked immediately before the
+    // first keystroke, and the action can be aborted between characters.
+    [StructLayout(LayoutKind.Sequential)]
+    struct INPUT { public uint type; public InputUnion U; }
+    [StructLayout(LayoutKind.Explicit)]
+    struct InputUnion { [FieldOffset(0)] public KEYBDINPUT ki; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+    // codeql[cs/unmanaged-code] intentional P/Invoke for SendInput and the foreground-window checks
+    [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the password-field check
+    [DllImport("user32.dll")] static extern IntPtr GetFocus();
+    // codeql[cs/unmanaged-code] intentional P/Invoke for the password-field check
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     const uint KeyExtended = 0x1, KeyUp = 0x2;
     const byte VkMediaNext = 0xB0, VkMediaPrevious = 0xB1, VkMediaPlayPause = 0xB3;
     static readonly string[] Allowed = { "volume_up", "volume_down", "set_volume", "mute", "unmute", "media_play_pause", "media_next", "media_previous" };
@@ -114,6 +135,47 @@ public static class QuasnoozeAudio {
         keybd_event(key, 0, KeyExtended, UIntPtr.Zero);
         // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the Windows media keys
         keybd_event(key, 0, KeyExtended | KeyUp, UIntPtr.Zero);
+    }
+
+    static string WindowTitle(IntPtr hWnd) {
+        var sb = new StringBuilder(512);
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the foreground-window title
+        GetWindowText(hWnd, sb, sb.Capacity);
+        return sb.ToString();
+    }
+
+    static string ProcessName(IntPtr hWnd) {
+        try {
+            // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the foreground-window process
+            uint pid;
+            GetWindowThreadProcessId(hWnd, out pid);
+            return Process.GetProcessById((int)pid).ProcessName;
+        } catch { return ""; }
+    }
+
+    static bool IsPasswordField(IntPtr hWnd) {
+        // A password field is a focused edit control with ES_PASSWORD (0x0020).
+        // The style is checked on the focused window, not the top-level window.
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the password-field check
+        IntPtr focus = GetFocus();
+        if (focus != IntPtr.Zero) hWnd = focus;
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the password-field check
+        int style = GetWindowLong(hWnd, -16); // GWL_STYLE
+        return (style & 0x0020) != 0;
+    }
+
+    static uint SendChar(char ch) {
+        INPUT[] inputs = new INPUT[2];
+        inputs[0].type = 1; // INPUT_KEYBOARD
+        inputs[0].U.ki.wVk = 0;
+        inputs[0].U.ki.wScan = ch;
+        inputs[0].U.ki.dwFlags = 0x0008; // KEYEVENTF_UNICODE
+        inputs[1].type = 1;
+        inputs[1].U.ki.wVk = 0;
+        inputs[1].U.ki.wScan = ch;
+        inputs[1].U.ki.dwFlags = 0x0008 | 0x0002; // KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+        // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for SendInput
+        return SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
     }
     public static string Control(string media, string levelText) {
         if (Array.IndexOf(Allowed, media) < 0) throw new InvalidOperationException("Media action is not in the allowlist. Nothing was changed.");
@@ -157,6 +219,7 @@ public static class QuasnoozeCompanion {
     [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
     static readonly object OutputLock = new object();
+    static readonly HashSet<string> AbortedActions = new HashSet<string>();
     static QuasnoozeWindow Window;
     static Label State, Detail, Brand;
     static TextBox Input;
@@ -363,6 +426,30 @@ public static class QuasnoozeCompanion {
                 // through the agent's (session-grantable) approval gate. The
                 // resulting state goes back so the reply can say what is true now.
                 result = QuasnoozeAudio.Control(Value(m, "media"), Value(m, "level"));
+            } else if (action == "type_text") {
+                // The most dangerous tool in the set: it sends keystrokes to
+                // whatever window is focused. The expected window/process are
+                // checked again here, a password field is refused, and the
+                // action can be aborted between characters.
+                string text = Value(m, "text");
+                string expectedWindow = Value(m, "window");
+                string expectedProcess = Value(m, "process");
+                if (text.Length == 0 || text.Length > 2000) throw new InvalidOperationException("type_text needs 1-2000 characters. Nothing was sent.");
+                IntPtr foreground = GetForegroundWindow();
+                string title = WindowTitle(foreground);
+                string process = ProcessName(foreground);
+                if (expectedWindow.Length > 0 && !String.Equals(title, expectedWindow, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The foreground window changed since the preview; nothing was sent.");
+                if (expectedProcess.Length > 0 && !String.Equals(process, expectedProcess, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The foreground process changed since the preview; nothing was sent.");
+                if (IsPasswordField(foreground)) throw new InvalidOperationException("The focused field looks like a password field; typing is refused.");
+                int sent = 0;
+                for (int i = 0; i < text.Length; i++) {
+                    if (AbortedActions.Contains(id)) break;
+                    if (SendChar(text[i]) != 2) break;
+                    sent++;
+                    Thread.Sleep(8);
+                }
+                AbortedActions.Remove(id);
+                result = new JavaScriptSerializer().Serialize(new { sent = sent, total = text.Length, aborted = sent < text.Length, window = title, process = process });
             } else {
                 string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows), path;
                 switch (action) {
@@ -438,6 +525,7 @@ public static class QuasnoozeCompanion {
                 case "approval": Approval = Value(m, "id"); ApprovalText = Value(m, "text"); Phase("permission required", ApprovalText); Allow.Visible = ApprovalText.Length <= 1000; Deny.Visible = true; if (ApprovalText.Length > 1000) Detail.Text = "Long action: review the full description and approve in the command deck. " + ApprovalText; Window.Show(); break;
                 case "reply": Reply(Value(m, "text"), Value(m, "speak").ToLowerInvariant() == "true"); break;
                 case "action": NativeAction(m); break;
+                case "abort": AbortedActions.Add(Value(m, "id")); break;
                 case "mute": if (WantWake) ToggleWake(); break;
                 case "listen": ListenOnce(); break;
                 case "stop-voice": StopSpeech(); if (WantWake && !Working) StartRecognition(false); break;

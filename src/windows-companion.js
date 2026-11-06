@@ -74,6 +74,21 @@ export function startWindowsCompanion({ onQuit = () => process.emit("SIGINT"), l
         // for clipboard/url/app actions is unchanged.
         send({ op: "action", id, action: intent.action, url: intent.url, media: intent.media, level: intent.level, deadline });
       });
+    }, typeText(intent) {
+      // Typing is the one action that can take long enough to need its own
+      // deadline and an abort between keystrokes. The returned promise carries
+      // an abort() that sends the companion's abort message for this action id.
+      let actionId = null;
+      const promise = new Promise((resolve, reject) => {
+        if (!live() || !context.ready) { reject(new Error("Companion unavailable; action not sent.")); return; }
+        actionId = randomUUID();
+        const deadline = Date.now() + 60_000;
+        const timer = later(() => { context.pending.delete(actionId); reject(new Error("Desktop typing timed out; outcome unknown. Inspect before requesting again.")); }, 60_000);
+        context.pending.set(actionId, { resolve, reject, timer });
+        send({ op: "action", id: actionId, action: "type_text", text: intent.text, window: intent.window, process: intent.process, deadline });
+      });
+      promise.abort = () => { if (actionId) send({ op: "abort", id: actionId }); };
+      return promise;
     } };
     try {
       const systemRoot = process.env.SystemRoot || "C:\\Windows";

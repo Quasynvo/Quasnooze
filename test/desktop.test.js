@@ -22,7 +22,17 @@ after(async () => { await rm(root, { recursive: true, force: true }); await rm(o
 
 function bridge() {
   const messages = [], actions = [];
-  return { messages, actions, send: (m) => messages.push(m), action: async (a) => { actions.push(a); return "Action confirmed by native host."; } };
+  return {
+    messages, actions,
+    send: (m) => messages.push(m),
+    action: async (a) => { actions.push(a); return "Action confirmed by native host."; },
+    typeText: (a) => {
+      actions.push(a);
+      const promise = Promise.resolve(JSON.stringify({ sent: a.text.length, total: a.text.length, aborted: false, window: "Untitled - Notepad", process: "notepad" }));
+      promise.abort = () => { actions.push({ abort: true }); };
+      return promise;
+    },
+  };
 }
 
 test("setup resolves menu numbers to installed names and rejects invalid numeric choices", () => {
@@ -325,6 +335,54 @@ test("media() forwards only an enum and an integer over the bridge, omitting lev
     { action: "media", media: "volume_up" },
     { action: "media", media: "set_volume", level: 30 },
   ]);
+});
+
+test("typeText() without a companion rejects with a typed 503 so callers can degrade honestly", async () => {
+  const runtime = new DesktopRuntime();
+  await assert.rejects(
+    () => runtime.typeText({ text: "hello" }),
+    (err) => err.status === 503 && /companion is not running/i.test(err.message),
+  );
+});
+
+test("typeText() forwards the text, window and process over the bridge and parses the result", async () => {
+  const runtime = new DesktopRuntime();
+  const b = bridge();
+  runtime.attach(b);
+  const result = await runtime.typeText({ text: "hello world", windowTitle: "Untitled - Notepad", processName: "notepad" });
+  assert.equal(result.ok, true);
+  assert.equal(result.sent, 11);
+  assert.equal(result.total, 11);
+  assert.equal(result.aborted, false);
+  assert.equal(result.process, "notepad");
+  assert.deepEqual(b.actions[0], { text: "hello world", window: "Untitled - Notepad", process: "notepad" });
+});
+
+test("typeText() aborts the companion action when the signal is aborted", async () => {
+  const runtime = new DesktopRuntime();
+  const b = bridge();
+  runtime.attach(b);
+  const controller = new AbortController();
+  const pending = runtime.typeText({ text: "hello", windowTitle: "Untitled - Notepad", processName: "notepad", signal: controller.signal });
+  controller.abort();
+  const result = await pending;
+  assert.equal(result.ok, true);
+  assert.ok(b.actions.some((a) => a.abort === true), "the bridge must receive an abort for the action");
+});
+
+test("Companion.cs implements the approved type_text action with a fresh foreground check", () => {
+  const cs = readFileSync(new URL("../desktop/Companion.cs", import.meta.url), "utf8");
+  assert.ok(cs.includes('action == "type_text"'), "the action dispatcher must route type_text");
+  assert.ok(cs.includes("SendInput"), "type_text must use SendInput");
+  assert.ok(cs.includes("GetForegroundWindow"), "type_text must check the foreground window");
+  assert.ok(cs.includes("IsPasswordField"), "type_text must refuse password fields");
+  assert.ok(cs.includes("AbortedActions"), "type_text must support an abort between keystrokes");
+  assert.match(cs, /expectedWindow\.Length > 0/);
+  assert.match(cs, /expectedProcess\.Length > 0/);
+  const companion = readFileSync(new URL("../src/windows-companion.js", import.meta.url), "utf8");
+  assert.match(companion, /typeText\(intent\)/);
+  assert.match(companion, /action: "type_text"/);
+  assert.match(companion, /promise\.abort/);
 });
 
 test("Companion.cs implements the media allowlist natively, matching the JS wire protocol", () => {

@@ -25,7 +25,7 @@ import {
 } from "./store.js";
 import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
-import { SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
+import { NEVER_AUTO_APPROVE, SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
 
 /* ───────────────────────────── path sandboxing ─────────────────────────── */
 
@@ -1323,6 +1323,55 @@ export const TOOLS = [
       return { ok: true, state: { level: levelPct, muted: state.muted }, output: audio };
     },
   },
+  {
+    name: "type_text",
+    dangerous: true,
+    description:
+      "Type exact text into the focused application, only after a fresh explicit approval. " +
+      "The approval preview shows the text, the target window title and process, and the keystroke count. " +
+      "The foreground window is checked again immediately before the first keystroke; if it changed, " +
+      "or the focused field looks like a password field, nothing is sent. Use this for dictation into " +
+      "another application, never for secrets or credentials.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: stringProp("The exact text to type, 1-2000 characters"),
+        windowTitle: stringProp("Optional expected foreground window title; the send fails if it changed since the preview"),
+        processName: stringProp("Optional expected foreground process name; the send fails if it changed since the preview"),
+      },
+      required: ["text"],
+    },
+    async run({ text, windowTitle, processName }, ctx = {}) {
+      const value = String(text ?? "");
+      if (!value || value.length > 2000) {
+        return { ok: false, output: "type_text needs 1-2000 characters. Nothing was sent." };
+      }
+      // Imported lazily so the tool table does not drag in the desktop runtime
+      // at module load, exactly like system_control.
+      const { desktop } = await import("./desktop.js");
+      let result;
+      try {
+        result = await desktop.typeText({ text: value, windowTitle, processName, signal: ctx.signal });
+      } catch (err) {
+        return {
+          ok: false,
+          output:
+            `Refused: ${String(err?.message || "the target window or field was not acceptable").slice(0, 300)}. ` +
+            `Nothing was sent.`,
+        };
+      }
+      if (!result?.ok) {
+        return { ok: false, output: `Refused: ${result?.error || "the target window or field was not acceptable"}. Nothing was sent.` };
+      }
+      const target = `${result.process || "the focused window"}${result.window ? ` (${result.window})` : ""}`;
+      return {
+        ok: true,
+        output:
+          `Typed ${result.sent} of ${result.total} characters into ${target}.` +
+          (result.aborted ? " The send was aborted; the remaining characters were not sent." : ""),
+      };
+    },
+  },
 ];
 
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
@@ -1382,11 +1431,14 @@ export function describeBuiltinTools({
       : tool.name === "shell" && riskTiers
         ? "conditional-shell-risk-tiers"
         : "approval-required";
+    const neverAuto = NEVER_AUTO_APPROVE.has(tool.name);
     const effectiveInteractivePolicy = !dangerous
       ? "no-prompt"
-      : autoApprove
-        ? "auto-approved-by-config"
-        : approvalPolicy;
+      : neverAuto
+        ? "approval-required"
+        : autoApprove
+          ? "auto-approved-by-config"
+          : approvalPolicy;
     const unattendedPolicy = dangerous ? "refused" : "allowed";
     const parameters = Object.freeze(Object.keys(tool.parameters?.properties || {}));
     return Object.freeze({

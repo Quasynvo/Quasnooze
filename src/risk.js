@@ -735,6 +735,27 @@ export const SESSION_GRANTABLE_SYSTEM_CONTROL = Object.freeze([
 export const SYSTEM_CONTROL_GRANT = "system_control:volume-media";
 
 /**
+ * Tools that must never be auto-approved, even when the rest of the session is
+ * in demo/auto-approve mode. type_text sends keystrokes to whatever window is
+ * focused; a single mistaken approval can submit a form or send a message.
+ * There is no session grant and no demo bypass: every send asks again.
+ */
+export const NEVER_AUTO_APPROVE = new Set(["type_text"]);
+
+/**
+ * Classify a type_text request. It is always `act` and never auto-approved.
+ * The companion re-checks the foreground window, process and password-field
+ * style immediately before the first keystroke; this is the policy half.
+ */
+export function classifyTypeText() {
+  return {
+    tier: ACT,
+    why: "type_text sends keystrokes to the focused application; it always requires a fresh explicit approval",
+    neverAutoApprove: true,
+  };
+}
+
+/**
  * Classify a system_control action. Everything is `act` (a human approves);
  * `sessionGrantable` marks the reversible, non-destructive audio/media subset
  * whose approval may be remembered for the rest of the session.

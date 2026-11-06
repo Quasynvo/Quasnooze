@@ -19,7 +19,7 @@ import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaM
   buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
-import { classifyCommand, classifySystemControl, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
+import { classifyCommand, classifySystemControl, describeTier, detectCommitProposal, NEVER_AUTO_APPROVE, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
 import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
 import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand } from "./tools.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
@@ -894,7 +894,12 @@ export async function runAgent({
         continue;
       }
 
-      const baselineMustAsk = DANGEROUS.has(tool.name) && !config.autoApprove && tier?.tier !== TIER_READ && !sessionGranted;
+      const neverAuto = NEVER_AUTO_APPROVE.has(tool.name);
+      const baselineMustAsk =
+        (DANGEROUS.has(tool.name) || neverAuto) &&
+        (!config.autoApprove || neverAuto) &&
+        tier?.tier !== TIER_READ &&
+        !sessionGranted;
       const policyMustAsk =
         policyDecision === POLICY_DECISIONS.ASK ||
         (commitProposal.isCommit && (!config.autoApprove || Boolean(activeHarness)));
@@ -961,7 +966,7 @@ export async function runAgent({
         // Let evidence-producing tools avoid registering passages the model
         // cannot see because the remaining tool-output budget is exhausted.
         ctx.toolOutputLimit = Math.min(12_000, Math.max(0, toolBudget));
-        result = await tool.run(call.arguments || {}, ctx);
+        result = await tool.run(call.arguments || {}, { ...ctx, signal });
       } catch (err) {
         result = {
           ok: false,

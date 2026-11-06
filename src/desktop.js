@@ -128,6 +128,40 @@ export class DesktopRuntime {
     if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });
     return this.bridge.action({ action: "media", media: action, ...(level !== undefined ? { level } : {}) });
   }
+  /**
+   * Approved keystroke sending. The companion re-checks the foreground window
+   * and process, refuses password fields, and can abort between characters.
+   * The optional signal is the agent's cancellation signal: aborting it sends
+   * the companion's abort message, so a cancelled turn stops within one
+   * keystroke instead of finishing the text.
+   */
+  async typeText({ text, windowTitle, processName, signal } = {}) {
+    if (!this.bridge) throw Object.assign(new Error("Windows companion is not running."), { status: 503 });
+    const action = this.bridge.typeText({ text, window: windowTitle, process: processName });
+    const abort = () => { try { action.abort?.(); } catch { /* already finished */ } };
+    if (signal) {
+      if (signal.aborted) abort();
+      else signal.addEventListener("abort", abort, { once: true });
+    }
+    try {
+      const raw = await action;
+      let parsed = null;
+      try { parsed = JSON.parse(String(raw)); } catch { /* handled below */ }
+      if (!parsed || typeof parsed !== "object") {
+        throw new Error(`The companion did not report a typing result: ${String(raw).slice(0, 200)}`);
+      }
+      return {
+        ok: true,
+        sent: Number(parsed.sent) || 0,
+        total: Number(parsed.total) || 0,
+        aborted: Boolean(parsed.aborted),
+        window: String(parsed.window || ""),
+        process: String(parsed.process || ""),
+      };
+    } finally {
+      if (signal) signal.removeEventListener("abort", abort);
+    }
+  }
   async request(text) {
     if (typeof text !== "string" || !text.trim() || text.length > 2000) throw Object.assign(new Error("Use a command of 1–2000 characters."), { status: 400 });
     if (this.busy) throw Object.assign(new Error("Finish or deny the current request first."), { status: 409 });

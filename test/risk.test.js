@@ -12,7 +12,7 @@ process.env.PINCH_DATA = dataDir;
 process.env.LLM_PROVIDER = "mock";
 process.env.PINCH_GUARD = "off";
 
-import { classifyCommand, detectCommitProposal, READ, ACT, BLOCKED } from "../src/risk.js";
+import { classifyCommand, classifyTypeText, detectCommitProposal, NEVER_AUTO_APPROVE, READ, ACT, BLOCKED } from "../src/risk.js";
 
 /**
  * The tier classifier decides what runs without a prompt, so every test here is
@@ -25,6 +25,14 @@ const WS = "/home/user/workspace";
 const opts = { workspaceRoots: [WS] };
 
 const tier = (cmd, extra = {}) => classifyCommand(cmd, { ...opts, ...extra }).tier;
+
+test("type_text is always act and never auto-approved, including in demo mode", () => {
+  assert.ok(NEVER_AUTO_APPROVE.has("type_text"), "type_text must be in the never-auto-approve set");
+  const result = classifyTypeText();
+  assert.equal(result.tier, ACT);
+  assert.equal(result.neverAutoApprove, true);
+  assert.match(result.why, /always requires a fresh explicit approval/);
+});
 
 /* ───────────────────────── what may run unprompted ─────────────────────── */
 

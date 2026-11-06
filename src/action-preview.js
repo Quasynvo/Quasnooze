@@ -1,5 +1,5 @@
 /** Display-only, ephemeral approval metadata. Never used to authorize/execute a tool. */
-export const PREVIEW_LIMITS = Object.freeze({ tool: 80, action: 80, target: 240, riskRationale: 320, effectSummary: 320 });
+export const PREVIEW_LIMITS = Object.freeze({ tool: 80, action: 80, target: 240, riskRationale: 320, effectSummary: 320, text: 2000 });
 
 export function redactPreviewText(value, secrets = []) {
   let text = String(value ?? '').replace(/[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/g, ' ');
@@ -64,6 +64,16 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
     case 'screenshot':
       preview.target = args.path || 'generated screenshot path (not yet resolved)';
       preview.effectSummary = 'Capture the screen and save an image. Visible personal information may be included.'; break;
+    case 'type_text': {
+      const text = typeof args.text === 'string' ? args.text : '';
+      preview.action = 'type_text';
+      preview.target = `${args.processName || 'unknown process'}${args.windowTitle ? ` — ${args.windowTitle}` : ' — focused window'}`;
+      preview.effectSummary =
+        `Type ${text.length} characters (${text.length} keystrokes) into the target window. ` +
+        `The foreground window, process and password-field style are checked again immediately before sending.`;
+      preview.text = text.slice(0, 2000);
+      break;
+    }
     case 'system_control': {
       const machine = ['lock', 'sleep'];
       const media = ['volume_up', 'volume_down', 'set_volume', 'mute', 'unmute', 'media_play_pause', 'media_next', 'media_previous'];
@@ -86,5 +96,5 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
 
 export function formatActionPreview(preview) {
   if (!preview) return '';
-  return `Tool/action: ${preview.tool} / ${preview.action}\nTarget: ${preview.target}\nRisk: ${preview.riskRationale}\nExpected effect: ${preview.effectSummary}\nPreview: ${preview.status}\nRedactions: ${preview.redactions.join(', ') || 'none detected (not a guarantee)'}`;
+  return `Tool/action: ${preview.tool} / ${preview.action}\nTarget: ${preview.target}\nRisk: ${preview.riskRationale}\nExpected effect: ${preview.effectSummary}\nPreview: ${preview.status}\nRedactions: ${preview.redactions.join(', ') || 'none detected (not a guarantee)'}` + (preview.text ? `\nText: ${preview.text}` : '');
 }
