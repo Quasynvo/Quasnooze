@@ -157,88 +157,157 @@ public static class QuasnoozeWindows {
         public readonly string Code;
         public OsFailure(string code, string message) : base(message) { Code = code; }
     }
-    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
-    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    // codeql[cs/unmanaged-code] -- user32 Win32 windowing API; no managed .NET equivalent
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
     const int SW_SHOW = 5, SW_MINIMIZE = 6, SW_RESTORE = 9;
     const uint WM_CLOSE = 0x0010;
     const int MaxWindows = 100;
     static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
 
+    static bool Alive(IntPtr h) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsWindow
+        return IsWindow(h);
+    }
+    static bool Visible(IntPtr h) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsWindowVisible
+        return IsWindowVisible(h);
+    }
+    static bool Iconic(IntPtr h) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 IsIconic
+        return IsIconic(h);
+    }
+    static void Show(IntPtr h, int cmd) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 ShowWindow
+        ShowWindow(h, cmd);
+    }
+    static void Foreground(IntPtr h) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 SetForegroundWindow
+        SetForegroundWindow(h);
+    }
+    static IntPtr CurrentForeground() {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetForegroundWindow
+        return GetForegroundWindow();
+    }
+    static void PostClose(IntPtr h) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 PostMessage(WM_CLOSE)
+        PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+    }
+    static uint PidOf(IntPtr h) {
+        uint pid;
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetWindowThreadProcessId
+        GetWindowThreadProcessId(h, out pid);
+        return pid;
+    }
     static string TitleOf(IntPtr h) {
-        int len = GetWindowTextLength(h);
-        if (len <= 0) return "";
-        var sb = new StringBuilder(len + 1);
-        GetWindowText(h, sb, sb.Capacity);
-        return sb.ToString();
+        var sb = new StringBuilder(256);
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 GetWindowText
+        int len = GetWindowText(h, sb, sb.Capacity);
+        return len > 0 ? sb.ToString(0, Math.Min(len, sb.Length)) : "";
+    }
+    static void EnumTopWindows(EnumWindowsProc cb) {
+        // codeql[cs/call-to-unmanaged-code] -- thin managed wrapper over user32 EnumWindows
+        EnumWindows(cb, IntPtr.Zero);
     }
     static string ProcessNameOf(uint pid) {
-        try { return Process.GetProcessById((int)pid).ProcessName; }
-        catch { return ""; }
+        try {
+            using (var proc = Process.GetProcessById((int)pid)) {
+                return proc.ProcessName;
+            }
+        } catch (ArgumentException) {
+            return "";
+        } catch (InvalidOperationException) {
+            return "";
+        } catch (System.ComponentModel.Win32Exception) {
+            return "";
+        }
     }
-    public static Dictionary<string, object> Info(IntPtr h) {
-        uint pid;
-        GetWindowThreadProcessId(h, out pid);
+    static Dictionary<string, object> BuildInfo(IntPtr h, string title) {
+        uint pid = PidOf(h);
         var info = new Dictionary<string, object>();
         info["handle"] = h.ToInt64().ToString(System.Globalization.CultureInfo.InvariantCulture);
-        info["title"] = TitleOf(h);
+        info["title"] = title;
         info["process"] = ProcessNameOf(pid);
         info["pid"] = (double)pid;
         return info;
     }
+    public static Dictionary<string, object> Info(IntPtr h) {
+        return BuildInfo(h, TitleOf(h));
+    }
     public static List<Dictionary<string, object>> List() {
         var list = new List<Dictionary<string, object>>();
-        EnumWindows(delegate(IntPtr h, IntPtr l) {
+        EnumTopWindows(delegate(IntPtr h, IntPtr l) {
             if (list.Count >= MaxWindows) return false;
-            if (!IsWindowVisible(h) || GetWindowTextLength(h) <= 0) return true;
-            list.Add(Info(h));
+            if (!Visible(h)) return true;
+            string title = TitleOf(h);
+            if (title.Length == 0) return true;
+            list.Add(BuildInfo(h, title));
             return true;
-        }, IntPtr.Zero);
+        });
         return list;
     }
     // A handle from a listing is a stale snapshot by the time it is used:
-    // IsWindow is the actual gate, and a dead handle is a typed CLOSED.
+    // Alive (IsWindow) is the actual gate, and a dead handle is a typed CLOSED.
     static IntPtr ParseHandle(string text) {
         long raw;
-        if (!Int64.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out raw) || raw == 0)
+        if (!Int64.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out raw) || raw == 0) {
             throw new OsFailure("BAD_HANDLE", "The window handle was missing or malformed. No window was touched.");
+        }
         IntPtr h = new IntPtr(raw);
-        if (!IsWindow(h)) throw new OsFailure("CLOSED", "That window no longer exists - it closed before this action ran. Nothing was changed; list the windows again and pick a live one.");
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "That window no longer exists - it closed before this action ran. Nothing was changed; list the windows again and pick a live one.");
+        }
         return h;
     }
     public static Dictionary<string, object> Focus(string handleText) {
         IntPtr h = ParseHandle(handleText);
-        if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
-        ShowWindow(h, SW_SHOW);
-        SetForegroundWindow(h);
-        if (!IsWindow(h)) throw new OsFailure("CLOSED", "The window closed while it was being focused. Nothing is focused now; list the windows again.");
+        if (Iconic(h)) Show(h, SW_RESTORE);
+        Show(h, SW_SHOW);
+        Foreground(h);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed while it was being focused. Nothing is focused now; list the windows again.");
+        }
         var info = Info(h);
-        info["focused"] = GetForegroundWindow() == h;
+        info["focused"] = CurrentForeground() == h;
         return info;
     }
     public static Dictionary<string, object> Minimise(string handleText) {
         IntPtr h = ParseHandle(handleText);
-        ShowWindow(h, SW_MINIMIZE);
-        if (!IsWindow(h)) throw new OsFailure("CLOSED", "The window closed before it could be minimised. Nothing was changed; list the windows again.");
+        Show(h, SW_MINIMIZE);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed before it could be minimised. Nothing was changed; list the windows again.");
+        }
         var info = Info(h);
-        info["minimised"] = IsIconic(h);
+        info["minimised"] = Iconic(h);
         return info;
     }
     public static Dictionary<string, object> Restore(string handleText) {
         IntPtr h = ParseHandle(handleText);
-        if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
-        if (!IsWindow(h)) throw new OsFailure("CLOSED", "The window closed before it could be restored. Nothing was changed; list the windows again.");
+        if (Iconic(h)) Show(h, SW_RESTORE);
+        if (!Alive(h)) {
+            throw new OsFailure("CLOSED", "The window closed before it could be restored. Nothing was changed; list the windows again.");
+        }
         var info = Info(h);
-        info["minimised"] = IsIconic(h);
+        info["minimised"] = Iconic(h);
         return info;
     }
     public static Dictionary<string, object> Close(string handleText) {
@@ -248,16 +317,26 @@ public static class QuasnoozeWindows {
         string title = (string)before["title"];
         string shown = title.Length > 120 ? title.Substring(0, 120) : title;
         // Destructive: the native confirmation names the application.
-        if (!QuasnoozeCompanion.Confirm("Close the window \"" + shown + "\" (" + app + ")? Unsaved work in it may be lost. Only this one window is asked to close."))
+        if (!QuasnoozeCompanion.Confirm("Close the window \"" + shown + "\" (" + app + ")? Unsaved work in it may be lost. Only this one window is asked to close.")) {
             throw new OsFailure("DENIED", "Closing " + app + " was denied at the confirmation dialog. Nothing was closed.");
-        PostMessage(h, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        }
+        PostClose(h);
         System.Threading.Thread.Sleep(400);
-        bool gone = !IsWindow(h);
+        bool gone = !Alive(h);
         var info = new Dictionary<string, object>();
-        info["handle"] = before["handle"]; info["title"] = title; info["process"] = app;
+        info["handle"] = before["handle"];
+        info["title"] = title;
+        info["process"] = app;
         info["closed"] = gone;
-        if (!gone) info["note"] = "The window is still open - the application may have refused to close or is asking to save first.";
+        if (!gone) {
+            info["note"] = "The window is still open - the application may have refused to close or is asking to save first.";
+        }
         return info;
+    }
+
+    static string Subpath(string root, string child) {
+        char sep = Path.DirectorySeparatorChar;
+        return root.TrimEnd(sep, Path.AltDirectorySeparatorChar) + sep + child.TrimStart(sep, Path.AltDirectorySeparatorChar);
     }
 
     // Approved launch targets. Fixed known list first; then the user's own
@@ -267,14 +346,19 @@ public static class QuasnoozeWindows {
     static readonly Dictionary<string, string> KnownApps = BuildKnownApps();
     static Dictionary<string, string> BuildKnownApps() {
         string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string sys = Environment.SystemDirectory;
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        map["calculator"] = Path.Combine(windows, "System32", "calc.exe");
-        map["calc"] = Path.Combine(windows, "System32", "calc.exe");
-        map["notepad"] = Path.Combine(windows, "System32", "notepad.exe");
-        map["explorer"] = Path.Combine(windows, "explorer.exe");
-        map["file explorer"] = Path.Combine(windows, "explorer.exe");
-        map["mspaint"] = Path.Combine(windows, "System32", "mspaint.exe");
-        map["paint"] = Path.Combine(windows, "System32", "mspaint.exe");
+        if (!String.IsNullOrEmpty(sys)) {
+            map["calculator"] = Subpath(sys, "calc.exe");
+            map["calc"] = Subpath(sys, "calc.exe");
+            map["notepad"] = Subpath(sys, "notepad.exe");
+            map["mspaint"] = Subpath(sys, "mspaint.exe");
+            map["paint"] = Subpath(sys, "mspaint.exe");
+        }
+        if (!String.IsNullOrEmpty(windows)) {
+            map["explorer"] = Subpath(windows, "explorer.exe");
+            map["file explorer"] = Subpath(windows, "explorer.exe");
+        }
         return map;
     }
     // A launch key may only be a plain name: no path separators, no shell
@@ -282,14 +366,17 @@ public static class QuasnoozeWindows {
     public static bool ValidAppKey(string key) {
         if (String.IsNullOrEmpty(key) || key.Length > 60) return false;
         if (key.IndexOf("..", StringComparison.Ordinal) >= 0) return false;
-        foreach (char c in key)
+        foreach (char c in key) {
             if (!(Char.IsLetterOrDigit(c) || c == ' ' || c == '-' || c == '_' || c == '.')) return false;
+        }
         return true;
     }
     public static Dictionary<string, string> UserApps() {
         var apps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try {
-            string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Quasnooze", "apps.json");
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            if (String.IsNullOrEmpty(appData)) return apps;
+            string path = Subpath(Subpath(appData, "Quasnooze"), "apps.json");
             if (!File.Exists(path)) return apps;
             var doc = Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
             object raw;
@@ -301,32 +388,42 @@ public static class QuasnoozeWindows {
                     !value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(value)) continue;
                 apps[kv.Key] = value;
             }
-        } catch { /* unreadable or malformed user config adds nothing */ }
+        } catch (IOException) {
+            return apps;
+        } catch (UnauthorizedAccessException) {
+            return apps;
+        } catch (ArgumentException) {
+            return apps;
+        } catch (InvalidOperationException) {
+            return apps;
+        }
         return apps;
     }
     public static string AvailableNames() {
-        var names = new List<string>(KnownApps.Keys);
-        foreach (var k in UserApps().Keys)
-            if (!KnownApps.ContainsKey(k)) names.Add(k);
-        names.Sort(StringComparer.OrdinalIgnoreCase);
-        return String.Join(", ", names.ToArray());
+        var names = KnownApps.Keys
+            .Concat(UserApps().Keys.Where(k => !KnownApps.ContainsKey(k)))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return String.Join(", ", names);
     }
     public static Dictionary<string, object> LaunchApp(string name) {
         string key = name == null ? "" : name.Trim();
         if (!ValidAppKey(key)) throw new OsFailure("BAD_NAME", "That is not a plain application name. Nothing was started.");
         string path;
-        if (!KnownApps.TryGetValue(key, out path)) {
-            if (!UserApps().TryGetValue(key, out path))
-                throw new OsFailure("UNKNOWN_APP", "\"" + key + "\" is not an approved application. Available: " + AvailableNames() + ". To add your own, create %APPDATA%\\Quasnooze\\apps.json with {\"apps\":{\"name\":\"C:\\\\full\\\\path\\\\App.exe\"}}. Nothing was started.");
+        if (!KnownApps.TryGetValue(key, out path) && !UserApps().TryGetValue(key, out path)) {
+            throw new OsFailure("UNKNOWN_APP", "\"" + key + "\" is not an approved application. Available: " + AvailableNames() + ". To add your own, create %APPDATA%\\Quasnooze\\apps.json with {\"apps\":{\"name\":\"C:\\\\full\\\\path\\\\App.exe\"}}. Nothing was started.");
         }
         if (!File.Exists(path)) throw new OsFailure("NOT_FOUND", "The approved executable registered for \"" + key + "\" was not found at its path. Nothing was started.");
         // No arguments are ever taken from the request; the resolved absolute
         // path is the only thing started, and never through a shell.
-        var proc = Process.Start(new ProcessStartInfo(path) { UseShellExecute = false });
+        double pid = 0d;
+        using (var proc = Process.Start(new ProcessStartInfo(path) { UseShellExecute = false })) {
+            if (proc != null) pid = (double)proc.Id;
+        }
         var result = new Dictionary<string, object>();
         result["name"] = key;
         result["path"] = path;
-        result["pid"] = proc != null ? (double)proc.Id : 0d;
+        result["pid"] = pid;
         return result;
     }
 }
@@ -610,8 +707,25 @@ public static class QuasnoozeCompanion {
                 default:
                     throw new QuasnoozeWindows.OsFailure("UNKNOWN_OP", "Unknown os request kind. Nothing was done.");
             }
-        } catch (QuasnoozeWindows.OsFailure f) { code = f.Code; result = f.Message; }
-        catch (Exception e) { if (code.Length == 0) code = "FAILED"; result = e.Message; }
+        } catch (QuasnoozeWindows.OsFailure f) {
+            code = f.Code;
+            result = f.Message;
+        } catch (System.ComponentModel.Win32Exception e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (IOException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (UnauthorizedAccessException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (InvalidOperationException e) {
+            code = "FAILED";
+            result = e.Message;
+        } catch (ArgumentException e) {
+            code = "FAILED";
+            result = e.Message;
+        }
         Emit(new { type = "result", id = id, ok = ok, text = result, code = code, data = data });
     }
     static void ShowDeck() {

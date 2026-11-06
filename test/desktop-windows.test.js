@@ -326,8 +326,9 @@ test("Companion.cs enumerates windows and exposes focus/minimise/restore/close w
   }
   assert.ok(cs.includes('case "os": OsRequest(m); break;'), "the os op must be dispatched");
   // A window that closed mid-call is a typed CLOSED failure at action time.
-  assert.match(cs, /if \(!IsWindow\(h\)\) throw new OsFailure\("CLOSED"/);
-  assert.match(cs, /if \(!IsWindow\(h\)\) throw new OsFailure\("CLOSED", "The window closed while it was being focused/);
+  assert.match(cs, /static bool Alive\(IntPtr h\)\s*\{[\s\S]*?return IsWindow\(h\);/);
+  assert.match(cs, /if \(!Alive\(h\)\)\s*\{\s*throw new OsFailure\("CLOSED"/);
+  assert.match(cs, /if \(!Alive\(h\)\)\s*\{\s*throw new OsFailure\("CLOSED", "The window closed while it was being focused/);
   // Closing is destructive: native confirmation naming the application.
   assert.ok(cs.includes("Confirm(") && cs.includes("Close the window") && cs.includes("+ app + "), "the confirmation dialog names the window title and application");
   assert.match(cs, /OsFailure\("DENIED"/);
