@@ -70,8 +70,44 @@ async function runProvidersCli(args) {
   console.log(json ? JSON.stringify(rows, null, 2) : renderProviderCatalogue(rows));
 }
 
+const SCOUT_USAGE = `quasnooze scout add --when "every 30m" --address web:main --source https://example.com/feed --allow-remote
+quasnooze scout list
+quasnooze scout delete <id>
+Owner-only configuration. Remote GETs and the selected delivery channel create network egress; sources are untrusted. See docs/SCOUT.md.`;
+async function runScoutCli(args) {
+  if (!args.length || args.includes('--help') || args.includes('-h')) { console.log(SCOUT_USAGE); return; }
+  const { ensureData } = await import('./store.js');
+  const { addSchedule, listSchedules, deleteSchedule } = await import('./schedules.js');
+  ensureData();
+  const [action, ...rest] = args;
+  if (action === 'list' && !rest.length) {
+    const rows = listSchedules().filter(s => s.kind === 'scout');
+    console.log(JSON.stringify(rows, null, 2)); return;
+  }
+  if (action === 'delete' && rest.length === 1) {
+    if (!listSchedules().some(s => s.kind === 'scout' && s.id === rest[0])) throw new Error('Scout not found.');
+    deleteSchedule(rest[0]); console.log('Scout deleted.'); return;
+  }
+  if (action !== 'add') throw new Error('Invalid scout command. Use scout --help.');
+  const opts = { sources: [], remote: false };
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg === '--allow-remote' && !opts.remote) { opts.remote = true; continue; }
+    if (!['--source', '--when', '--address'].includes(arg) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error('Invalid scout option. Use scout --help.');
+    const value = rest[++i];
+    if (arg === '--source') opts.sources.push(value);
+    else if (opts[arg.slice(2)] !== undefined) throw new Error('Duplicate scout option.');
+    else opts[arg.slice(2)] = value;
+  }
+  if (!opts.remote) throw new Error('No scout created: explicitly pass --allow-remote to permit HTTPS source requests.');
+  const result = addSchedule({ task: 'Owner-configured source briefing', when: opts.when, address: opts.address, scout: { enabled: true, remoteFetch: true, sources: opts.sources } });
+  if (!result.ok) throw new Error(result.output);
+  console.log(JSON.stringify(result.schedule, null, 2));
+}
+
 async function main() {
   const [mode, ...rest] = process.argv.slice(2);
+  if (mode === "scout") { await runScoutCli(rest); return; }
   if (mode === "providers") { await runProvidersCli(rest); return; }
   if (mode === "tools" || mode === "tool-inventory") {
     await runToolsInventoryCli(rest);

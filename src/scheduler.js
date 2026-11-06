@@ -6,7 +6,8 @@
  * it fires on the next tick and says it was late rather than pretending the
  * time is still then.
  */
-import { pendingReminders, updateReminder } from "./store.js";
+import { pendingReminders, updateReminder, loadSchedules, updateSchedule } from "./store.js";
+import { runScout, formatScoutDigest } from "./agent/scout.js";
 import { dueSchedules, markRun } from "./schedules.js";
 import { sendTo } from "./outbound.js";
 import { formatClock } from "./timeparse.js";
@@ -20,7 +21,7 @@ let log = console;
 
 let inFlight = false;
 
-export async function tick(now = new Date()) {
+export async function tick(now = new Date(), { scoutFetch } = {}) {
   // setInterval does not wait for the previous tick. A channel that takes
   // longer than 15 s to accept a message (a Telegram retry, a WhatsApp
   // reconnect) used to let the next tick see the same reminder still pending —
@@ -28,15 +29,15 @@ export async function tick(now = new Date()) {
   if (inFlight) return 0;
   inFlight = true;
   try {
-    return await deliverDue(now);
+    return await deliverDue(now, { scoutFetch });
   } finally {
     inFlight = false;
   }
 }
 
-async function deliverDue(now) {
+async function deliverDue(now, { scoutFetch } = {}) {
   const reminders = await deliverReminders(now);
-  const runs = await runSchedules(now);
+  const runs = await runSchedules(now, { scoutFetch });
   return reminders + runs;
 }
 
@@ -48,11 +49,16 @@ async function deliverDue(now) {
  * so "what did it do at 3am" has an answer, and the answer is delivered to the
  * channel the schedule was created from.
  */
-async function runSchedules(now) {
+async function runSchedules(now, { scoutFetch } = {}) {
   if (config.scheduledRuns === false) return 0;
   let ran = 0;
 
   for (const schedule of dueSchedules(now)) {
+    if (schedule.kind === "scout") {
+      await runScheduledScout(schedule, now, scoutFetch);
+      ran++;
+      continue;
+    }
     const sessionId = `sched-${schedule.id}`;
     const started = Date.now();
     let report;
@@ -91,6 +97,32 @@ async function runSchedules(now) {
     ran++;
   }
   return ran;
+}
+
+// Scout never calls the agent, tools, MCP or a model. Delivery is the only
+// write outside local state, and goes only to the exact owner-selected address.
+async function runScheduledScout(schedule, now, fetchSource) {
+  const isCurrent = () => {
+    const current = loadSchedules().find(s => s.id === schedule.id);
+    return Boolean(current && current.enabled !== false && current.address === schedule.address && JSON.stringify(current.scout) === JSON.stringify(schedule.scout));
+  };
+  const result = await runScout(schedule, { ...(fetchSource ? { fetchSource } : {}), isCurrent });
+  const current = loadSchedules().find(s => s.id === schedule.id);
+  // A deletion/disable/configuration change during I/O must not send or commit.
+  if (!isCurrent() || result.status === 'cancelled') return;
+  let delivery = null;
+  if (result.updates.length || result.failures.length) delivery = await sendTo(current.address, formatScoutDigest(result, now));
+  const still = loadSchedules().find(s => s.id === schedule.id);
+  if (!isCurrent()) return;
+  const delivered = delivery?.ok === true;
+  const receipt = { at: now.toISOString(), status: delivery && !delivered ? 'delivery_failed' : result.status, fetched: Object.keys(result.fingerprints).length, updates: result.updates.length, failures: result.failures.length, egress: result.status === 'disabled' ? 'none' : 'remote HTTPS GET', delivered };
+  const state = still.scout && typeof still.scout === 'object' && !Array.isArray(still.scout) ? still.scout : {};
+  const fingerprints = (!result.updates.length || delivered) ? { ...(state.fingerprints || {}), ...result.fingerprints } : (state.fingerprints || {});
+  // Keep only hashes for currently configured endpoints.
+  const sources = Array.isArray(state.sources) ? state.sources.slice(0, 5) : [];
+  const bounded = Object.fromEntries(sources.filter(url => typeof url === 'string' && typeof fingerprints[url] === 'string').map(url => [url, fingerprints[url]]));
+  updateSchedule(still.id, { scout: { ...state, fingerprints: bounded, lastReceipt: receipt } });
+  markRun(still.id, now, still.timeZone);
 }
 
 async function deliverReminders(now) {
