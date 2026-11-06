@@ -7,6 +7,16 @@
 
 ---
 
+## Follow-up: dangling workspace symlinks
+
+`resolveInWorkspace` now refuses dangling or unresolvable symlinks instead of
+interpreting them as missing path components. Previously `write_file` could
+follow a dangling link to create a file outside the workspace. Regression
+coverage exercises the write tool and a dangling intermediate component. This
+is still path-based validation, not an OS sandbox: a local process racing to
+replace path components between validation and use remains a residual risk.
+This hardening does not implement the reversible file actions in issue #129.
+
 ## Why this document exists
 
 The repository shipped with 35 passing tests and a green CI run. Then I stopped trusting

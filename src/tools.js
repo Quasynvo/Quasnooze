@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { readFile, writeFile, readdir, stat, mkdir } from "node:fs/promises";
 import { SKIP_DIRS } from "./scan.js";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, lstatSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { homedir } from "node:os";
@@ -45,6 +45,17 @@ function canonicalise(target) {
   let current = target;
   const missing = [];
   while (!existsSync(current)) {
+    // existsSync follows symlinks, so a dangling link looks like a missing
+    // path. Treating it as literal would let write_file follow it outside the
+    // workspace when it creates the target.
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        throw new SafePathError(`Blocked: ${current} is a dangling or inaccessible symlink.`);
+      }
+    } catch (error) {
+      if (error instanceof SafePathError) throw error;
+      if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw error;
+    }
     const parent = dirname(current);
     if (parent === current) break;
     missing.unshift(basename(current));
@@ -53,8 +64,8 @@ function canonicalise(target) {
   let real;
   try {
     real = realpathSync(current);
-  } catch {
-    real = current;
+  } catch (error) {
+    throw new SafePathError(`Blocked: cannot resolve ${current}: ${error.message}`);
   }
   return missing.length ? resolve(real, ...missing) : real;
 }
