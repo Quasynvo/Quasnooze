@@ -64,6 +64,27 @@ test("workspace sandbox allows paths inside and blocks escapes", () => {
   assert.throws(() => resolveInWorkspace("~/../../etc/passwd"), SafePathError);
 });
 
+test("dangling symlinks cannot redirect workspace writes outside the sandbox", async (t) => {
+  const outside = mkdtempSync(join(tmpdir(), "pinch-outside-"));
+  const link = join(sandbox, "dangling-write");
+  const target = join(outside, "created.txt");
+  try {
+    try { symlinkSync(target, link, "file"); }
+    catch (error) {
+      if (["EPERM", "EACCES", "ENOSYS"].includes(error.code)) return t.skip("symlinks unavailable");
+      throw error;
+    }
+    const { TOOL_MAP } = await import("../src/tools.js");
+    await assert.rejects(TOOL_MAP.get("write_file").run({ path: link, content: "escape" }), SafePathError);
+    assert.equal(existsSync(target), false);
+    assert.throws(() => resolveInWorkspace(join(link, "child")), SafePathError);
+    assert.equal(resolveInWorkspace("new-file.txt"), join(sandbox, "new-file.txt"));
+  } finally {
+    rmSync(link, { force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 test("splitForLimit never loses characters and respects the limit", () => {
   const text = Array.from({ length: 200 }, (_, i) => `line ${i} of something reasonably long`).join("\n");
   const parts = splitForLimit(text, 400);
