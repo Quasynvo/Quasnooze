@@ -41,7 +41,14 @@ export function loadEnv(root = ROOT) {
   assertNoLegacyState(root, paths);
   const file = paths.envPath;
   const fromFile = existsSync(file) ? parseEnv(readFileSync(file, "utf8")) : {};
-  return { ...normalizeBrandEnv(fromFile), ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
+  const normalizedFile = normalizeBrandEnv(fromFile);
+  // Make the file values visible through the normal environment interface as
+  // well. A real environment variable still wins; this only fills the ones the
+  // file provides, so callers can read process.env without re-reading the file.
+  for (const [key, value] of Object.entries(normalizedFile)) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+  return { ...normalizedFile, ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
 }
 
 const env = loadEnv();
