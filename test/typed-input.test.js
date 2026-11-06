@@ -229,8 +229,10 @@ test("bridge abort interrupts the pending native send and waits for its sent-cou
 
 test("native host uses Unicode SendInput, credential inspection, focus checks and immediate abort", () => {
   const cs = readFileSync(new URL("../desktop/Companion.cs", import.meta.url), "utf8");
-  for (const needle of ["SendInput", "KEYEVENTF_UNICODE", "ValuePattern.IsPasswordProperty", "GetForegroundWindow", "abort_type", "AbortId == id", "Thread.Sleep(DelayMs)", 'case "preview_type_text"', 'case "type_text"']) {
+  for (const needle of ["SendInput", "KEYEVENTF_UNICODE", "AutomationElement.IsPasswordProperty", "GetForegroundWindow", "abort_type", "AbortId == id", "Thread.Sleep(DelayMs)", 'case "preview_type_text"', 'case "type_text"']) {
     assert.ok(cs.includes(needle), `missing native safeguard: ${needle}`);
   }
+  assert.match(cs, /if \(!\(raw is bool\)\) throw new QuasnoozeWindows\.OsFailure\("FIELD_UNKNOWN"/);
+  assert.match(cs, /if \(SendInput\(2, inputs, Marshal\.SizeOf\(typeof\(INPUT\)\)\) != 2\)/);
   assert.ok(cs.indexOf('op") == "abort_type"') < cs.indexOf("Post(() => Receive(copy))"), "abort must be handled before the UI queue");
 });

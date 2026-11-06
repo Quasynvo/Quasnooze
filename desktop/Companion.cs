@@ -179,8 +179,9 @@ public static class QuasnoozeTyping {
         try {
             var field = AutomationElement.FocusedElement;
             if (field == null) throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be inspected. Nothing was typed.");
-            object raw = field.GetCurrentPropertyValue(ValuePattern.IsPasswordProperty, true);
-            bool password = !object.ReferenceEquals(raw, AutomationElement.NotSupported) && raw is bool && (bool)raw;
+            object raw = field.GetCurrentPropertyValue(AutomationElement.IsPasswordProperty, true);
+            if (!(raw is bool)) throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be checked for credential input. Nothing was typed.");
+            bool password = (bool)raw;
             string name = field.Current.Name ?? "";
             string cls = field.Current.ClassName ?? "";
             bool namedPassword = new[] { "password", "passcode", "passphrase", "secret code" }
@@ -245,9 +246,8 @@ public static class QuasnoozeTyping {
         foreach (char c in text) {
             if (AbortId == id) { code = "ABORTED"; failure = "Typing was aborted."; break; }
             if (QuasnoozeWindows.User32.GetForegroundWindow() != expected) { code = "TARGET_CHANGED"; failure = "The foreground window changed during typing."; break; }
-            try {
-                SendKeys.SendWait(SendKeys.Escape(c.ToString()));
-            } catch {
+            var inputs = new[] { Key(c, false), Key(c, true) };
+            if (SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT))) != 2) {
                 code = "SEND_FAILED"; failure = "Windows refused a keystroke."; break;
             }
             sent++;
