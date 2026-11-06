@@ -143,6 +143,37 @@ await check("documents-symlink", "document search refuses cached symlink escapes
   return "cached file replacement and external target refused";
 });
 
+await check("file-actions-undo", "file actions are journaled, reversible and never unlink", async () => {
+  const { loadFileJournal } = await import(join(root, "src", "store.js"));
+  // Source-level first: the file-action tools must not carry a delete
+  // primitive at all. A trash that can unlink is a delete with extra steps.
+  const toolsSrc = readFileSync(join(root, "src", "tools.js"), "utf8");
+  if (/unlink\s*\(|unlinkSync|rmSync|rmdirSync/.test(toolsSrc)) {
+    throw new Error("src/tools.js contains a delete primitive — file actions may only rename");
+  }
+
+  const sample = join(workspace, "undo-probe.txt");
+  writeFileSync(sample, "undo-probe-canary");
+  const trashed = await TOOL_MAP.get("trash_path").run({ operations: [{ path: sample }] });
+  if (!trashed.ok) throw new Error(`trash_path failed: ${trashed.output}`);
+  if (existsSync(sample)) throw new Error("trash_path left the original path in place");
+
+  const entry = loadFileJournal().filter((e) => e.kind === "apply" && e.action === "trash").at(-1);
+  if (!entry || entry.status !== "applied" || !entry.destination.includes(".quasnooze-trash")) {
+    throw new Error("the trash was not journaled with a trash destination");
+  }
+  if (readFileSync(entry.destination, "utf8") !== "undo-probe-canary") {
+    throw new Error("the trashed bytes are gone — trash must never delete");
+  }
+
+  const undone = await TOOL_MAP.get("undo_last").run({});
+  if (!undone.ok || !/restored 1 of 1/.test(undone.output)) throw new Error(`undo failed: ${undone.output}`);
+  if (!existsSync(sample) || readFileSync(sample, "utf8") !== "undo-probe-canary") {
+    throw new Error("undo did not restore the original path");
+  }
+  return "trash is a rename, undo restored the original path, src/tools.js never unlinks";
+});
+
 await check("document-expansion", "compressed document expansion is bounded", async () => {
   const { extract, MAX_EXTRACTED_BYTES } = await import(join(root, "src", "attachments.js"));
   const compressed = deflateSync(Buffer.alloc(MAX_EXTRACTED_BYTES + 1, 65));

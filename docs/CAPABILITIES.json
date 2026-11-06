@@ -1,7 +1,7 @@
 {
   "$comment": "Quasnooze's capability inventory. Every entry claims evidence \u2014 a file or symbol a reader can open. scripts/market.js refuses to credit a capability it cannot prove, and refuses to propose one marked out-of-scope however unanimous the market is. Update this file when a capability lands or dies; a stale inventory makes every comparison wrong in the flattering direction.",
   "$policy": "in-scope may be proposed. settled has been decided and is only shown so the decision stays visible. out-of-scope contradicts the product identity in .github/prompts/self-improvement.md; the researcher reports it and the proposer is forbidden from acting on it.",
-  "updated": "2026-11-05",
+  "updated": "2026-11-06",
   "capabilities": [
     {
       "id": "local-model",
@@ -99,6 +99,27 @@
         "src/tools.js: shell, read_file, write_file, list_dir, grep",
         "src/server.js: approval gate"
       ]
+    },
+    {
+      "id": "file-actions-undo",
+      "name": "Move, rename and trash files with an undo journal",
+      "keywords": [
+        "move files",
+        "rename files",
+        "trash",
+        "undo",
+        "file management",
+        "recycle bin"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/tools.js: move_path, rename_path, trash_path, undo_last and list_recent_changes \u2014 rename-only mutations, approved as one plan",
+        "src/store.js: file-action journal with source, destination, timestamp, turn id and batch id, written atomically",
+        "test/tools.test.js: trash round-trip restores the original path, cross-root refusal, partial-batch undo reporting, no unlink in src/tools.js",
+        "test/hardening.test.js: one approval names every operation, denial changes nothing, unattended runs are refused"
+      ],
+      "note": "Nothing in the file actions can unlink: trash is a rename into .quasnooze-trash, overwrite trashes the old destination first, and undo restores the original path."
     },
     {
       "id": "risk-tiers",

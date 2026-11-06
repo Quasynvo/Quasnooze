@@ -444,6 +444,73 @@ export function saveTask(task) {
   return task;
 }
 
+/* ─────────────────── file-action journal (the undo record) ────────────── */
+
+/**
+ * One entry per mutation, written through this store like everything else
+ * that reaches disk: atomic, inside data/, JSON that parses back.
+ *
+ * The journal is what makes `move_path` / `rename_path` / `trash_path`
+ * honest: a mutation with no record is a promise, and this product does not
+ * make promises about files. Entries are written *ahead* of the rename with
+ * status "pending" and updated to "applied" or "failed" after it lands, so a
+ * crash between the two states leaves a record that says "unknown" rather
+ * than a gap that says "nothing happened".
+ *
+ *   id, batchId   one batch = one approved plan; undo reverses a whole batch
+ *   kind          "apply" (a file action) or "undo" (a reversal of one)
+ *   action        move | rename | trash
+ *   source        where the bytes were before
+ *   destination   where they are after
+ *   status        pending → applied | failed; applied → undone by a reversal
+ *   turnId        which assistant turn performed it (null when run directly)
+ */
+const FILE_JOURNAL = join(DATA, "file-journal.json");
+const JOURNAL_MAX_ENTRIES = 500;
+
+const JOURNAL_ACTIONS = new Set(["move", "rename", "trash"]);
+const JOURNAL_KINDS = new Set(["apply", "undo"]);
+const JOURNAL_STATUSES = new Set(["pending", "applied", "failed", "undone"]);
+
+function validJournalEntry(entry) {
+  return Boolean(entry) && typeof entry === "object" && !Array.isArray(entry) &&
+    typeof entry.id === "string" && entry.id.length > 0 && entry.id.length <= 80 &&
+    typeof entry.batchId === "string" && entry.batchId.length > 0 && entry.batchId.length <= 80 &&
+    JOURNAL_KINDS.has(entry.kind) && JOURNAL_ACTIONS.has(entry.action) &&
+    typeof entry.source === "string" && entry.source.length <= 4096 &&
+    typeof entry.destination === "string" && entry.destination.length <= 4096 &&
+    JOURNAL_STATUSES.has(entry.status) &&
+    typeof entry.at === "string" && entry.at.length <= 40 &&
+    (entry.turnId == null || (typeof entry.turnId === "string" && entry.turnId.length <= 80));
+}
+
+export function loadFileJournal() {
+  const list = readJson(FILE_JOURNAL, []);
+  if (!Array.isArray(list)) return [];
+  return list.filter(validJournalEntry);
+}
+
+/** Append entries (write-ahead or completed) and return the stored list. */
+export function appendFileJournal(entries) {
+  const clean = (Array.isArray(entries) ? entries : [entries]).filter(validJournalEntry);
+  if (!clean.length) return loadFileJournal();
+  const next = [...loadFileJournal(), ...clean].slice(-JOURNAL_MAX_ENTRIES);
+  atomicWrite(FILE_JOURNAL, JSON.stringify(next, null, 2));
+  return next;
+}
+
+/** Patch one entry by id; refuses a patch that would make it unvalid. */
+export function updateFileJournalEntry(id, patch) {
+  const list = loadFileJournal();
+  const index = list.findIndex((entry) => entry.id === id);
+  if (index === -1) return null;
+  const merged = { ...list[index], ...(patch && typeof patch === "object" ? patch : {}) };
+  if (!validJournalEntry(merged)) return null;
+  list[index] = merged;
+  atomicWrite(FILE_JOURNAL, JSON.stringify(list, null, 2));
+  return merged;
+}
+
 /* ─────────────────── saved style personas (not security policy) ───────── */
 const PERSONAS_FILE = join(DATA, 'personas.json');
 const emptyPersonas = () => ({ version: 1, personas: [], selections: [] });

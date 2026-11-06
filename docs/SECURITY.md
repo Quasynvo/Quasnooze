@@ -103,6 +103,17 @@ Quasnooze is an agent with a shell. Read this before you leave it running.
   channel (no shell). Clipboard text is omitted from tool traces, never written to
   `telemetry.ndjson`, never included in support bundles, and refused by `remember` unless you ask.
   Set `QUASNOOZE_CLIPBOARD=off` to disable both tools completely.
+- **File-action tools** (`move_path`, `rename_path`, `trash_path`, `undo_last`) require
+  per-call approval and only ever `rename()` — nothing they touch can be unlinked. A batch
+  of operations is previewed once (every source and destination named) and approved once;
+  both ends must sit in the same workspace root, and a cross-root move is refused rather
+  than copied. An existing destination needs the explicit `overwrite` flag and is moved to
+  the local `.quasnooze-trash` folder first, never overwritten in place. Every mutation is
+  journaled in `data/file-journal.json` (source, destination, timestamp, turn id, batch
+  id) ahead of the rename it describes, `undo_last` reverses a whole batch — including a
+  partially applied one, reporting exactly what it restored — and `list_recent_changes`
+  reads the record. Unattended runs refuse all four, and the honesty guard treats a
+  "moved/trashed/restored" claim as needing the matching tool in the trace.
 
 ## Hardening checklist
 

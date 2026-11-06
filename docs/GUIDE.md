@@ -21,6 +21,7 @@ from zero to a running assistant.
 - [Attaching files](#attaching-files)
 - [Reminders that actually fire](#reminders-that-actually-fire)
 - [Tasks that run without you](#tasks-that-run-without-you)
+- [File actions: move, rename, trash, undo](#file-actions-move-rename-trash-undo)
 - [Where the answer came from](#where-the-answer-came-from)
 - [Commands it runs without asking](#commands-it-runs-without-asking)
 - [Taking your data with you](#taking-your-data-with-you)
@@ -1010,6 +1011,31 @@ deliberately select a cloud LLM provider, the turn's prompt is sent to that prov
 alias `PINCH_CLIPBOARD=off`) in `.env` or the process environment and restart. When
 disabled, `read_clipboard` and `write_clipboard` are omitted from the model's tool list
 and refuse execution immediately without touching the OS clipboard.
+
+## File actions: move, rename, trash, undo
+
+Ask **“tidy my downloads”** and the plan comes back as **one approval**, not one
+prompt per file. Three tools do the work, and a fourth takes it back:
+
+- **`move_path`** and **`rename_path`** take the whole list of operations in a single
+  call, so the batch is previewed once and approved once. Both ends must sit in the
+  same workspace root — a cross-root move is **refused** with a sentence that says so,
+  never copied. An existing destination is refused unless you approve `overwrite: true`,
+  which moves the old file into the local trash first rather than overwriting it.
+- **`trash_path`** moves files into a `.quasnooze-trash` folder inside your workspace.
+  It is a rename, not a delete: the bytes stay on disk, and nothing in these tools can
+  unlink a file.
+- **`undo_last`** reverses the most recent batch — including a partially applied one —
+  restoring every original path and reporting **exactly** what it restored and what it
+  could not. **`list_recent_changes`** shows the journal: source, destination,
+  timestamp, status and batch id for every mutation, plus which turn performed it.
+
+**What is stored:** every mutation is written to `data/file-journal.json` through the
+same atomic store as your conversations, ahead of the rename it describes. The journal
+is what makes undo honest — a mutation with no record is a promise, and this product
+does not make promises about files. All four mutating tools sit on the dangerous list:
+they ask for approval every time and a scheduled run refuses them outright. The
+approval preview names every operation in the plan before anything moves.
 
 ## Switch models without restarting
 
