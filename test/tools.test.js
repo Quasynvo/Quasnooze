@@ -5,7 +5,7 @@
  */
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, symlinkSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, symlinkSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -455,5 +455,291 @@ test("write_clipboard validates input bounds and writes exact text", async () =>
     assert.match(ok.output, /Wrote 30 bytes/);
   } finally {
     clearClipboardStateForTests();
+  }
+});
+
+/* ── file actions: move, rename, trash, undo journal (#129 / laptop-05) ──
+ *
+ * The contract under test is the issue's acceptance list, one test per line:
+ * nothing can delete, cross-root moves are refused, undo of a partial batch
+ * reports exactly what it restored, and every mutation is journaled and
+ * previewed before it runs (the preview half lives in action-preview.test.js
+ * and hardening.test.js).
+ */
+
+const { TRASH_DIR_NAME, FILE_BATCH_MAX } = await import("../src/tools.js");
+const { loadFileJournal } = await import("../src/store.js");
+
+function lastBatchId(output) {
+  const match = /batch (b_[a-z0-9_]+)/.exec(String(output));
+  assert.ok(match, `no batch id in output: ${output}`);
+  return match[1];
+}
+
+test("file-action tools are dangerous (approval + unattended refusal) and list_recent_changes is not", () => {
+  for (const name of ["move_path", "rename_path", "trash_path", "undo_last"]) {
+    assert.equal(DANGEROUS.has(name), true, `${name} must ask for approval`);
+  }
+  assert.equal(DANGEROUS.has("list_recent_changes"), false, "reading the journal is read-only");
+  assert.ok(toolSchemas().some((s) => s.function.name === "move_path"));
+  assert.ok(toolSchemas().some((s) => s.function.name === "undo_last"));
+});
+
+test("a plan of moves is one approved batch: applied in order, journaled with one batch id and the turn id", async () => {
+  mkdirSync(join(sandbox, "dl"), { recursive: true });
+  writeFileSync(join(sandbox, "dl", "one.txt"), "1");
+  writeFileSync(join(sandbox, "dl", "two.txt"), "2");
+
+  const res = await TOOL_MAP.get("move_path").run(
+    {
+      operations: [
+        { from: "dl/one.txt", to: "arch/one.txt" },
+        { from: "dl/two.txt", to: "arch/two.txt" },
+      ],
+    },
+    { turnId: "turn_fixture_1" },
+  );
+  assert.equal(res.ok, true, res.output);
+  assert.match(res.output, /Applied 2 of 2 operations/);
+
+  const batchId = lastBatchId(res.output);
+  const entries = loadFileJournal().filter((entry) => entry.batchId === batchId);
+  assert.equal(entries.length, 2, "every mutation gets its own journal entry");
+  for (const entry of entries) {
+    assert.equal(entry.kind, "apply");
+    assert.equal(entry.status, "applied");
+    assert.equal(entry.action, "move");
+    assert.equal(entry.turnId, "turn_fixture_1");
+    assert.ok(entry.source.length && entry.destination.length && entry.at);
+  }
+  assert.equal(readFileSync(join(sandbox, "arch", "one.txt"), "utf8"), "1");
+  assert.equal(readFileSync(join(sandbox, "arch", "two.txt"), "utf8"), "2");
+  assert.equal(existsSync(join(sandbox, "dl", "one.txt")), false);
+
+  const list = await TOOL_MAP.get("list_recent_changes").run({ limit: 5 });
+  assert.equal(list.ok, true);
+  assert.match(list.output, new RegExp(batchId));
+  assert.match(list.output, /arch\/one\.txt/);
+  assert.match(list.output, /applied/);
+
+  // Leave the journal clean for the tests below: undo this batch now.
+  const undo = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(undo.ok, true, undo.output);
+  assert.match(undo.output, /restored 2 of 2/);
+  assert.equal(readFileSync(join(sandbox, "dl", "one.txt"), "utf8"), "1");
+  assert.equal(readFileSync(join(sandbox, "dl", "two.txt"), "utf8"), "2");
+});
+
+test("trash_path never deletes: the bytes stay on disk and undo restores the original path", async () => {
+  const file = join(sandbox, "keepme.txt");
+  writeFileSync(file, "precious bytes");
+
+  const trash = await TOOL_MAP.get("trash_path").run({ operations: [{ path: file }] });
+  assert.equal(trash.ok, true, trash.output);
+  assert.equal(existsSync(file), false, "the original path is vacated");
+
+  const entry = loadFileJournal().filter((e) => e.kind === "apply" && e.action === "trash").at(-1);
+  assert.equal(entry.status, "applied");
+  assert.ok(entry.destination.includes(TRASH_DIR_NAME), `trash landed outside the trash dir: ${entry.destination}`);
+  assert.equal(readFileSync(entry.destination, "utf8"), "precious bytes", "the bytes must still be on disk");
+
+  const undo = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(undo.ok, true, undo.output);
+  assert.match(undo.output, /restored 1 of 1 applied operation/);
+  assert.match(undo.output, /keepme\.txt/);
+  assert.equal(readFileSync(file, "utf8"), "precious bytes", "undo must restore the original path");
+
+  const journal = loadFileJournal();
+  assert.equal(journal.find((e) => e.id === entry.id).status, "undone");
+  assert.ok(
+    journal.some((e) => e.kind === "undo" && e.action === "trash" && e.destination === file),
+    "the reversal is journaled too",
+  );
+
+  const again = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(again.ok, true);
+  assert.match(again.output, /Nothing to undo/);
+});
+
+test("nothing in the file actions can unlink: src/tools.js carries no delete primitive", () => {
+  const src = readFileSync(new URL("../src/tools.js", import.meta.url), "utf8");
+  // The invariant, checked at the source level: every mutation in this item
+  // is a rename. A future `unlink(` or `rmSync(` in here is the bug the
+  // journal exists to prevent.
+  assert.doesNotMatch(src, /unlink\s*\(|unlinkSync|rmSync|rmdirSync/);
+});
+
+test("overwrite without the explicit flag is refused — nothing was changed", async () => {
+  writeFileSync(join(sandbox, "src-file.txt"), "new-content");
+  writeFileSync(join(sandbox, "dst-file.txt"), "old-content");
+
+  const refused = await TOOL_MAP.get("move_path").run({
+    operations: [{ from: "src-file.txt", to: "dst-file.txt" }],
+  });
+  assert.equal(refused.ok, false);
+  assert.match(refused.output, /already exists/);
+  assert.match(refused.output, /overwrite: true/);
+  assert.match(refused.output, /Nothing was changed/);
+  assert.equal(readFileSync(join(sandbox, "dst-file.txt"), "utf8"), "old-content");
+  assert.equal(readFileSync(join(sandbox, "src-file.txt"), "utf8"), "new-content");
+});
+
+test("overwrite with the flag trashes the existing destination first, and one undo reverses both", async () => {
+  const overwritten = await TOOL_MAP.get("move_path").run({
+    operations: [{ from: "src-file.txt", to: "dst-file.txt", overwrite: true }],
+  });
+  assert.equal(overwritten.ok, true, overwritten.output);
+  assert.equal(readFileSync(join(sandbox, "dst-file.txt"), "utf8"), "new-content");
+
+  const batchId = lastBatchId(overwritten.output);
+  const entries = loadFileJournal().filter((e) => e.batchId === batchId);
+  assert.equal(entries.length, 2, "trash-the-old and move-the-new are both journaled in the batch");
+  const trashed = entries.find((e) => e.action === "trash");
+  assert.equal(trashed.status, "applied");
+  assert.equal(readFileSync(trashed.destination, "utf8"), "old-content", "the replaced file was recovered, not deleted");
+
+  const undo = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(undo.ok, true, undo.output);
+  assert.match(undo.output, /restored 2 of 2/);
+  assert.equal(readFileSync(join(sandbox, "src-file.txt"), "utf8"), "new-content");
+  assert.equal(readFileSync(join(sandbox, "dst-file.txt"), "utf8"), "old-content");
+});
+
+test("undo of a partially-applied batch reports exactly what was restored", async () => {
+  mkdirSync(join(sandbox, "partial"), { recursive: true });
+  writeFileSync(join(sandbox, "blocker"), "a file, not a directory");
+  writeFileSync(join(sandbox, "partial", "good.txt"), "good");
+  writeFileSync(join(sandbox, "partial", "later.txt"), "later");
+
+  // Op 1 applies; op 2 fails at apply time (its destination parent is a
+  // regular file), which validation cannot see without running.
+  const res = await TOOL_MAP.get("move_path").run({
+    operations: [
+      { from: "partial/good.txt", to: "moved/good.txt" },
+      { from: "partial/later.txt", to: "blocker/later.txt" },
+    ],
+  });
+  assert.equal(res.ok, true, "a partial batch applied something, so it reports honestly as partial");
+  assert.match(res.output, /Applied 1 of 2 operations, then stopped/);
+  assert.match(res.output, /failed/);
+  const batchId = lastBatchId(res.output);
+  assert.equal(readFileSync(join(sandbox, "moved", "good.txt"), "utf8"), "good");
+  assert.equal(existsSync(join(sandbox, "partial", "later.txt")), true, "the failed op's source is untouched");
+
+  const undo = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(undo.ok, true, undo.output);
+  assert.match(undo.output, new RegExp(`Undid batch ${batchId}`));
+  assert.match(undo.output, /restored 1 of 1 applied operation/);
+  assert.match(undo.output, /Restored:/);
+  assert.match(undo.output, /partial\/good\.txt \(from moved\/good\.txt\)/);
+  assert.match(undo.output, /Never applied in this batch \(1\)/);
+  assert.match(undo.output, /partial\/later\.txt/);
+
+  assert.equal(readFileSync(join(sandbox, "partial", "good.txt"), "utf8"), "good", "the applied op is back");
+  assert.equal(existsSync(join(sandbox, "moved", "good.txt")), false);
+  assert.equal(existsSync(join(sandbox, "partial", "later.txt")), true);
+});
+
+test("rename_path renames in place and refuses names that are paths", async () => {
+  writeFileSync(join(sandbox, "before.txt"), "payload");
+  const ok = await TOOL_MAP.get("rename_path").run({ operations: [{ path: "before.txt", new_name: "after.txt" }] });
+  assert.equal(ok.ok, true, ok.output);
+  assert.equal(readFileSync(join(sandbox, "after.txt"), "utf8"), "payload");
+
+  const asPath = await TOOL_MAP.get("rename_path").run({ operations: [{ path: "after.txt", new_name: "sub/after.txt" }] });
+  assert.equal(asPath.ok, false);
+  assert.match(asPath.output, /plain name, not a path/);
+  assert.match(asPath.output, /Nothing was changed/);
+  assert.equal(existsSync(join(sandbox, "after.txt")), true);
+
+  const dot = await TOOL_MAP.get("rename_path").run({ operations: [{ path: "after.txt", new_name: ".." }] });
+  assert.equal(dot.ok, false);
+  assert.match(dot.output, /Nothing was changed/);
+
+  // Clean the journal for the tests that follow.
+  const undo = await TOOL_MAP.get("undo_last").run({});
+  assert.equal(undo.ok, true, undo.output);
+  assert.equal(readFileSync(join(sandbox, "before.txt"), "utf8"), "payload");
+});
+
+test("a whole-plan validation failure runs nothing, not even the first operation", async () => {
+  writeFileSync(join(sandbox, "v1.txt"), "1");
+  writeFileSync(join(sandbox, "v2.txt"), "2");
+  const res = await TOOL_MAP.get("move_path").run({
+    operations: [
+      { from: "v1.txt", to: "v1-moved.txt" },
+      { from: "does-not-exist.txt", to: "nowhere.txt" },
+    ],
+  });
+  assert.equal(res.ok, false);
+  assert.match(res.output, /Plan refused/);
+  assert.match(res.output, /Nothing was changed/);
+  assert.equal(existsSync(join(sandbox, "v1.txt")), true, "op 1 must not run when op 2 fails validation");
+  assert.equal(existsSync(join(sandbox, "v1-moved.txt")), false);
+});
+
+test("an empty or oversized plan is refused with a sentence the model can act on", async () => {
+  const empty = await TOOL_MAP.get("move_path").run({ operations: [] });
+  assert.equal(empty.ok, false);
+  assert.match(empty.output, /non-empty array/);
+  const huge = await TOOL_MAP.get("trash_path").run({
+    operations: Array.from({ length: FILE_BATCH_MAX + 1 }, (_, i) => ({ path: `f${i}.txt` })),
+  });
+  assert.equal(huge.ok, false);
+  assert.match(huge.output, new RegExp(`${FILE_BATCH_MAX} operations`));
+  assert.match(huge.output, /Nothing was changed/);
+});
+
+test("cross-root moves are refused, not silently copied", async () => {
+  const { spawn } = await import("node:child_process");
+  const base = mkdtempSync(join(tmpdir(), "pinch-roots-"));
+  try {
+    const rootA = join(base, "rootA");
+    const rootB = join(base, "rootB");
+    mkdirSync(rootA, { recursive: true });
+    mkdirSync(rootB, { recursive: true });
+    writeFileSync(join(rootA, "shared.txt"), "only copy");
+
+    // config.js reads PINCH_WORKSPACE once at import, so two roots need a
+    // child process — the same reason the symlink tests spawn one.
+    const script = `
+      import { readFileSync, existsSync } from "node:fs";
+      import { join } from "node:path";
+      const [a, b] = process.env.PINCH_WORKSPACE.split(",");
+      const { TOOL_MAP } = await import(${JSON.stringify(new URL("../src/tools.js", import.meta.url).href)});
+      const refused = await TOOL_MAP.get("move_path").run({ operations: [{ from: join(a, "shared.txt"), to: join(b, "shared.txt") }] });
+      const sourceAfterRefusal = existsSync(join(a, "shared.txt")) ? readFileSync(join(a, "shared.txt"), "utf8") : null;
+      const copyInBAfterRefusal = existsSync(join(b, "shared.txt"));
+      const allowed = await TOOL_MAP.get("move_path").run({ operations: [{ from: join(a, "shared.txt"), to: join(a, "moved.txt") }] });
+      console.log(JSON.stringify({
+        refusedOk: refused.ok,
+        refusedOutput: refused.output,
+        sourceStillThere: sourceAfterRefusal,
+        noCopyInB: !copyInBAfterRefusal,
+        sameRootOk: allowed.ok,
+      }));
+    `;
+    const stdout = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+        env: { ...process.env, PINCH_WORKSPACE: `${rootA},${rootB}`, PINCH_DATA: join(base, "data"), LLM_PROVIDER: "mock" },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let out = "";
+      let err = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
+      child.on("error", reject);
+      child.on("close", (code) => (code === 0 ? resolve(out) : reject(new Error(`child exited ${code}: ${err}`))));
+    });
+    const result = JSON.parse(stdout);
+    assert.equal(result.refusedOk, false, "cross-root move must be refused");
+    assert.match(result.refusedOutput, /cross-root move refused/);
+    assert.match(result.refusedOutput, /not copied/);
+    assert.match(result.refusedOutput, /Nothing was changed/);
+    assert.equal(result.sourceStillThere, "only copy", "the source must be untouched");
+    assert.equal(result.noCopyInB, true, "a refused cross-root move must not leave a copy behind");
+    assert.equal(result.sameRootOk, true, "the same-root control move must still work");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });

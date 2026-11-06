@@ -75,9 +75,9 @@ test("default static inventory describes built-in capabilities, approval policie
 
     assert.equal(report.sources.builtin.state, "enabled");
     assert.equal(report.sources.builtin.sandboxed, false);
-    assert.equal(report.sources.builtin.total, 32);
-    assert.equal(report.sources.builtin.dangerousCount, 10);
-    assert.equal(report.sources.builtin.nonDangerousCount, 22);
+    assert.equal(report.sources.builtin.total, 37);
+    assert.equal(report.sources.builtin.dangerousCount, 14);
+    assert.equal(report.sources.builtin.nonDangerousCount, 23);
 
     const shell = report.sources.builtin.tools.find((t) => t.name === "shell");
     const writeFile = report.sources.builtin.tools.find((t) => t.name === "write_file");

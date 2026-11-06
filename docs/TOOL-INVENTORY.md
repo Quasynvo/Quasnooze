@@ -38,6 +38,6 @@ Without a static inventory, inspecting `QUASNOOZE_TOOLS_DIR` or `QUASNOOZE_MCP` 
 ## What this does not claim
 
 - **Configured or listed does not mean safe, verified, trusted, or sandboxed.** Every source reports `sandboxed: false` and top-level `osSandboxed: false`.
-- **Workspace path confinement applies only to built-in workspace file tools** (`read_file`, `write_file`, `list_dir`, `grep`, `scan_project`, `search_documents`). Approved `shell` commands, custom manifest binaries, local JS plugins, and MCP servers run with your OS user account's permissions.
+- **Workspace path confinement applies only to built-in workspace file tools** (`read_file`, `write_file`, `list_dir`, `grep`, `scan_project`, `search_documents`, `move_path`, `rename_path`, `trash_path`, `undo_last`, `list_recent_changes`). Approved `shell` commands, custom manifest binaries, local JS plugins, and MCP servers run with your OS user account's permissions.
 - **Normal startup still executes `QUASNOOZE_TOOLS_DIR` module initialization** before any tool-call approval prompt when you run `quasnooze`, `quasnooze chat`, `quasnooze ask`, or `quasnooze desktop`. Leave `QUASNOOZE_TOOLS_DIR` unset unless you have reviewed every file in that directory.
 - **Concurrent local processes are out of scope.** Descriptor and canonical-path checks guard against accidental symlinks and static misconfiguration, not a privileged or concurrent local attacker mutating directories on the same OS account.

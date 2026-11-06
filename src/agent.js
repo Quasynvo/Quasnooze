@@ -206,6 +206,24 @@ export function describeCall(name, args) {
     return `run: ${a.command}${a.cwd ? `  (in ${a.cwd})` : ""}${outside}`;
   }
   if (name === "write_file") return `write ${a.path} (${Buffer.byteLength(a.content || "", "utf8")} bytes)`;
+  // File actions are batches: the human gate has to see every operation in
+  // the plan, not "operations=[object Object]".
+  if (name === "move_path" || name === "rename_path" || name === "trash_path") {
+    const ops = Array.isArray(a.operations) ? a.operations : [];
+    const parts = ops.slice(0, 6).map((op) => {
+      const raw =
+        name === "move_path" ? `${op?.from} → ${op?.to}`
+        : name === "rename_path" ? `${op?.path} → ${op?.new_name}`
+        : String(op?.path);
+      const flat = raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
+      const risky = /[$`(){}|;&<>]/.test(flat) ? "  ⚠ shell metacharacters" : "";
+      return flat + risky;
+    });
+    const more = ops.length > parts.length ? ` (+${ops.length - parts.length} more)` : "";
+    return `${name}(${ops.length} operation${ops.length === 1 ? "" : "s"}): ${parts.join("; ")}${more}`;
+  }
+  if (name === "undo_last") return "undo_last — reverse the most recent file-action batch from the journal";
+  if (name === "list_recent_changes") return `list_recent_changes(limit=${a.limit ?? 10})`;
   if (name === "read_clipboard") {
     return "read_clipboard — read current system clipboard (this read only; bounded to 4,096 bytes)";
   }
@@ -679,10 +697,14 @@ export async function runAgent({
   for (const a of attachments) {
     addSource(sources, { kind: "attachment", title: a.name, ref: a.name, snippet: (a.text || "").slice(0, 160) });
   }
+  // One id for this turn, so anything it mutates (the file-action journal)
+  // can be traced back to the conversation that asked for it.
+  const turnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const ctx = {
     channel,
     target: addressFor(channel, target),
     sessionId,
+    turnId,
     sources,
     userText: text,
     clipboardTouched: false,

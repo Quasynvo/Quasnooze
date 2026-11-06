@@ -19,7 +19,8 @@ Version 1 fields:
 | `effectSummary` | Expected effect or explicit unknown, 320 characters |
 | `redactions` | Fixed reason codes for withholding, sensitive/control text or truncation |
 
-Supported summaries cover shell execution, file writes, opening URLs, screenshots,
+Supported summaries cover shell execution, file writes, file move/rename/trash plans
+(with every operation named, plus the undo path), opening URLs, screenshots,
 system/window/app actions, and clipboard read/write requests. Unknown/custom tools expose no arguments and report
 unknown targets/effects rather than inventing a dry run. Shell summaries describe
 the working directory and explicitly unknown side effects, **not** a parsed or

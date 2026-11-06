@@ -164,3 +164,84 @@ test('read_clipboard and write_clipboard previews disclose per-read privacy and 
   const emptyWrite = buildActionPreview('write_clipboard', { text: '' });
   assert.match(emptyWrite.effectSummary, /will be rejected/);
 });
+
+test('file-action previews show the whole plan, the no-delete promise and the undo path before anything runs', () => {
+  const move = buildActionPreview('move_path', {
+    operations: [
+      { from: 'downloads/a.txt', to: 'archive/a.txt' },
+      { from: 'downloads/b.pdf', to: 'archive/b.pdf' },
+    ],
+  });
+  assert.equal(move.status, 'supported');
+  assert.match(move.target, /2 operations/);
+  assert.match(move.effectSummary, /downloads\/a\.txt → archive\/a\.txt/);
+  assert.match(move.effectSummary, /downloads\/b\.pdf → archive\/b\.pdf/);
+  assert.match(move.effectSummary, /Nothing is deleted/);
+  assert.match(move.effectSummary, /undo_last/);
+  assert.match(move.riskRationale, /Cross-root moves are refused/);
+
+  const trash = buildActionPreview('trash_path', { operations: [{ path: 'downloads/old.txt' }] });
+  assert.equal(trash.target, 'downloads/old.txt');
+  assert.match(trash.effectSummary, /downloads\/old\.txt/);
+  assert.match(trash.effectSummary, /Never deleted/);
+  assert.match(trash.effectSummary, /\.quasnooze-trash/);
+
+  const rename = buildActionPreview('rename_path', { operations: [{ path: 'draft.txt', new_name: 'final.txt' }] });
+  assert.match(rename.effectSummary, /draft\.txt → final\.txt/);
+  assert.match(rename.effectSummary, /Nothing is deleted/);
+
+  const undo = buildActionPreview('undo_last', {});
+  assert.equal(undo.status, 'supported');
+  assert.match(undo.effectSummary, /original path/);
+  assert.match(undo.effectSummary, /exactly what was restored/);
+
+  const list = buildActionPreview('list_recent_changes', { limit: 5 });
+  assert.equal(list.status, 'supported');
+  assert.match(list.effectSummary, /Read-only/);
+});
+
+test('a denied file-action approval leaves the preview visible and the plan unrun', async () => {
+  const original = brain.chat;
+  const { readFileSync: read, writeFileSync: write, existsSync: exists } = await import('node:fs');
+  const planFile = join(dir, 'plan-source.txt');
+  const planTarget = join(dir, 'plan-target.txt');
+  write(planFile, 'plan-canary');
+  try {
+    let round = 0;
+    let approvalEvent = null;
+    brain.chat = async () =>
+      round++ === 0
+        ? { content: '', toolCalls: [{ id: 'file-call', name: 'move_path', arguments: { operations: [{ from: planFile, to: planTarget }] } }] }
+        : { content: 'Done.', toolCalls: [] };
+    await runAgent({
+      sessionId: 'file-approval-deny',
+      channel: 'web',
+      text: 'Move my file',
+      onEvent(event) {
+        if (event.type !== 'approval') return;
+        approvalEvent = event;
+        // The preview names the exact operation before it runs…
+        assert.equal(event.preview.tool, 'move_path');
+        assert.match(event.preview.effectSummary, /plan-source\.txt.*plan-target\.txt/);
+        assert.match(event.description, /plan-source\.txt.*plan-target\.txt/);
+        // …and at approval time nothing has happened yet.
+        assert.equal(exists(planTarget), false, 'the preview must be shown before the move runs');
+        answerApproval(event.id, false);
+      },
+    });
+    assert.ok(approvalEvent, 'move_path must raise an approval');
+    assert.equal(exists(planFile), true, 'a denied plan must not move anything');
+    assert.equal(exists(planTarget), false);
+    assert.equal(read(planFile, 'utf8'), 'plan-canary');
+    const { loadFileJournal } = await import('../src/store.js');
+    assert.equal(
+      loadFileJournal().some((e) => e.source === planFile && e.status === 'applied'),
+      false,
+      'a denied plan writes no applied journal entries',
+    );
+  } finally {
+    brain.chat = original;
+    try { (await import('node:fs')).rmSync(planFile, { force: true }); } catch {}
+    try { (await import('node:fs')).rmSync(planTarget, { force: true }); } catch {}
+  }
+});
