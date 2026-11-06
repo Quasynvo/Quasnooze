@@ -64,6 +64,31 @@ jobs:
               -f dismissed_comment='The Telegram bot token is sent only to the Telegram API that issued it. The URL host is a literal, the token is shape-checked and percent-encoded, and no caller can redirect the request.'
           done
 
+  dump-alerts:
+    name: Dump open alerts (temporary)
+    needs: codeql
+    if: ${{ !contains(github.event.head_commit.message, '[alerts-dump]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - name: Dump open alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&per_page=100" \
+            --jq '.[] | [.number, .rule.id, .most_recent_instance.location.path, (.most_recent_instance.location.start_line|tostring)] | @tsv' > alerts.txt
+          cat alerts.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add alerts.txt
+          git commit -m "alerts dump [alerts-dump]" || true
+          git push origin HEAD:arena/a0c87ae0-quasnooze || true
+
   dependency-review:
     name: Dependency review (PRs)
     if: github.event_name == 'pull_request'
