@@ -219,7 +219,7 @@ public static class QuasnoozeTyping {
     }
 
     public static Dictionary<string, object> Type(string id, string text, string handleText, string approvedTitle, string approvedProcess) {
-        var preview = Preview(text, approvedTitle);
+        Preview(text, approvedTitle);
         IntPtr expected = new IntPtr(Int64.Parse(handleText, System.Globalization.CultureInfo.InvariantCulture));
         IntPtr current = QuasnoozeWindows.User32.GetForegroundWindow();
         var currentInfo = QuasnoozeWindows.Info(current);
