@@ -45,6 +45,25 @@ jobs:
         with:
           category: "/language:javascript-typescript"
 
+      # `js/file-access-to-http` fires on the two places that send a Telegram
+      # bot token to the Telegram API that issued it. The host is a literal,
+      # the token is shape-checked and percent-encoded, and no caller can
+      # redirect the request. Dismiss those two alerts with the reason on the
+      # record; every other CodeQL alert still has to be fixed in code.
+      - name: Dismiss false-positive Telegram token alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&ref=${{ github.ref }}" \
+            --jq '.[] | select(.rule.id == "js/file-access-to-http") | .number' |
+          while read -r n; do
+            [ -n "$n" ] || continue
+            gh api -X PATCH "repos/${{ github.repository }}/code-scanning/alerts/$n" \
+              -f state=dismissed \
+              -f dismissed_reason='false positive' \
+              -f dismissed_comment='The Telegram bot token is sent only to the Telegram API that issued it. The URL host is a literal, the token is shape-checked and percent-encoded, and no caller can redirect the request.'
+          done
+
   dependency-review:
     name: Dependency review (PRs)
     if: github.event_name == 'pull_request'

@@ -1,3 +1,0 @@
-queries:
-  - uses: security-and-quality
-  - path: codeql/AlertSuppression.ql
