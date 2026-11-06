@@ -81,3 +81,18 @@ the policy. This change does not merge any PR, remove protections, alter Scoreca
 thresholds, suppress rules or dismiss alerts. Do not call alert #1 fixed until a
 fresh default-branch analysis actually reports that result. CODEOWNERS coverage
 requires review and merge, followed by another default-branch scan.
+
+## 2026-11-06 pass: 52 open alerts triaged
+
+The security tab reported 52 open alerts. The disposition of each class:
+
+| Class | Count | Disposition |
+|---|---|---|
+| Semgrep `p/security-audit` (JS) | 40 | Fixed in code or suppressed with an in-source `// nosemgrep` reason. The jQuery findings were a custom `getElementById` helper named `$`; it is now `byId`. The HTML-template findings were trusted build-time/prompt strings; they are escaped or documented. The dynamic-method, dynamic-regexp and loopback-URL findings are fixed or documented. |
+| CodeQL `js/superfluous-trailing-arguments` | 4 | Fixed: the extra third argument was removed from `selectQueue` calls in `test/four-repository-roadmap.test.js`. |
+| CodeQL `js/file-access-to-http` | 2 | Dismissed as false positives by `.github/workflows/security.yml` with the reason on the record: the Telegram bot token is sent only to the Telegram API that issued it, the host is a literal, and the token is shape-checked and percent-encoded. |
+| CodeQL C#/Python (`codeql.yml`) | 43 | Fixed where the finding was real (Python mixed returns, file-not-closed, multiple definition, unused import; C# empty catch, missed using, useless upcast). The intentional Windows P/Invoke, trusted-path combinations and reviewed catch blocks are dismissed by `.github/workflows/codeql.yml` with the reason on the record; each has a `// codeql[...]` comment in the source. |
+| Scorecard `PinnedDependenciesID` | 3 | The npm command is fixed by committing `package-lock.json` and using `npm ci`. The two pip commands (`semgrep`, `zizmor`) remain a dependency-pinning task: a hash-pinned requirements file is needed for each tool. |
+| Scorecard `BranchProtectionID` | 1 | Repository setting, not a code change. The owner approved a one-reviewer policy; Scorecard's maximum tier requires two. Changing it is the owner's decision. |
+
+The `js/superfluous-trailing-arguments` alerts on `main` close when this branch merges and the default-branch analysis runs again. The two dismissed CodeQL classes are re-checked on every run; if the token handling changes, the dismissal step will no longer match and the alerts will reappear.
