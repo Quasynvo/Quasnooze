@@ -4,10 +4,11 @@ on:
     branches: [arena/a0c87ae0-quasnooze]
   workflow_dispatch: {}
 permissions:
-  contents: read
+  contents: write
   security-events: write
 jobs:
   dump:
+    if: ${{ !contains(github.event.head_commit.message, '[codeql-dump]') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -24,28 +25,31 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: security-and-quality
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370
-        id: analyze
         with:
           category: "/language:${{ matrix.language }}"
           upload: never
           output: results
           post-processed-sarif-path: results-post
-      - name: Dump results
+      - name: Write summary and commit
         run: |
-          echo "=== SARIF DIR ==="
-          ls -la results results-post 2>/dev/null || true
-          echo "=== SUMMARY ==="
+          set -e
+          mkdir -p codeql-dump
           for f in results/*.sarif results-post/*.sarif; do
             [ -f "$f" ] || continue
-            echo "FILE: $f"
-            jq -r '.runs[0].results | length' "$f" | sed 's/^/COUNT: /'
-            jq -r '.runs[0].results[] | [.ruleId, .locations[0].physicalLocation.artifactLocation.uri, (.locations[0].physicalLocation.region.startLine|tostring), (.locations[0].physicalLocation.region.startColumn|tostring), .message.text] | @tsv' "$f"
+            base=$(basename "$f" .sarif)
+            jq -r '.runs[0].results | length' "$f" > "codeql-dump/${base}.count"
+            jq -r '.runs[0].results[] | [.ruleId, .locations[0].physicalLocation.artifactLocation.uri, (.locations[0].physicalLocation.region.startLine|tostring), (.locations[0].physicalLocation.region.startColumn|tostring), .level, .message.text] | @tsv' "$f" > "codeql-dump/${base}.tsv"
+            cp "$f" "codeql-dump/${base}.sarif"
           done
-          echo "=== END ==="
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add codeql-dump
+          git commit -m "codeql dump for ${{ matrix.language }} [codeql-dump]" || true
+          git push origin HEAD:arena/a0c87ae0-quasnooze || true
