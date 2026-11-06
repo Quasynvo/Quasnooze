@@ -195,7 +195,14 @@ jobs:
           node-version: "22"
       - name: Compile .NET Framework native host without opening a microphone
         shell: powershell
-        run: ./desktop/windows.ps1 -CheckOnly
+        run: |
+          try {
+            ./desktop/windows.ps1 -CheckOnly
+          } catch {
+            $detail = ($_ | Out-String).Trim().Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error::$detail"
+            throw
+          }
       - name: Speech prerequisite inventory (no microphone)
         run: node scripts/desktop-doctor.js
       - name: Synthetic speech probe (no microphone; reports unavailable prerequisites explicitly)
