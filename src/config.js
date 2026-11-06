@@ -41,14 +41,7 @@ export function loadEnv(root = ROOT) {
   assertNoLegacyState(root, paths);
   const file = paths.envPath;
   const fromFile = existsSync(file) ? parseEnv(readFileSync(file, "utf8")) : {};
-  const normalizedFile = normalizeBrandEnv(fromFile);
-  // Make the file values visible through the normal environment interface as
-  // well. A real environment variable still wins; this only fills the ones the
-  // file provides, so callers can read process.env without re-reading the file.
-  for (const [key, value] of Object.entries(normalizedFile)) {
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-  return { ...normalizedFile, ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
+  return { ...normalizeBrandEnv(fromFile), ...normalizeBrandEnv(process.env), __loadedFromFile: fromFile };
 }
 
 const env = loadEnv();
@@ -156,7 +149,7 @@ export const config = Object.freeze({
   numPredict: Number(env.PINCH_NUM_PREDICT || 2048),
 
   telegram: Object.freeze({
-    token: process.env.TELEGRAM_TOKEN || "",
+    token: env.TELEGRAM_TOKEN || "",
     allowedIds: list(env.TELEGRAM_ALLOWED_IDS),
   }),
   discord: Object.freeze({

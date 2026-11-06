@@ -184,8 +184,7 @@ function shapeOf(kind, token) {
 }
 
 async function checkTelegram(token) {
-  const candidate = process.env.TELEGRAM_TOKEN || token;
-  const bad = shapeOf("telegram", candidate);
+  const bad = shapeOf("telegram", token);
   if (bad) return { ok: false, error: bad };
   try {
     // The token is pasted from a browser and ends up in a URL path. Percent-
@@ -193,7 +192,7 @@ async function checkTelegram(token) {
     // to the provider — the shape regex above is a courtesy, this is the
     // actual confinement.
     // codeql[js/file-access-to-http] sent only to the issuing provider; literal host, encoded token
-    const { body } = await jsonFetch(`https://api.telegram.org/bot${encodeURIComponent(candidate)}/getMe`);
+    const { body } = await jsonFetch(`https://api.telegram.org/bot${encodeURIComponent(token)}/getMe`);
     if (!body?.ok) return { ok: false, error: body?.description || "invalid token" };
     return { ok: true, label: `@${body.result.username}` };
   } catch (err) {
@@ -236,12 +235,6 @@ async function checkSlack(token) {
 async function setup() {
   const existing = parseEnvFile(ENV_PATH);
   const values = { ...existing };
-  // Expose the file values through the environment as well, without
-  // overriding a real variable. This keeps the verification helpers on the
-  // same source the runtime uses.
-  for (const [key, value] of Object.entries(normalizeBrandEnv(existing))) {
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
 
   console.log(C.coral(`
    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
