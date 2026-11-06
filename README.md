@@ -286,3 +286,5 @@ Maintained by **[Ranjith Rosan](https://github.com/RANJITHROSAN17)** and the [op
 Scoped local memory, correction history, owner API examples, and migration/rollback privacy notes: [docs/MEMORY.md](docs/MEMORY.md).
 
 For an opt-in, owner-allowlisted scheduled source briefing, see [docs/SCOUT.md](docs/SCOUT.md).
+
+PRs receive a [per-area change table](docs/PR-AREA-METRICS.md). Its percentages describe tracked text size, not proven improvements or user growth.
