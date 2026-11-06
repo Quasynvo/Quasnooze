@@ -7,7 +7,6 @@ data/
 
 # ── optional deps ──
 node_modules/
-package-lock.json
 
 # ── noise ──
 .DS_Store

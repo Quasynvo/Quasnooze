@@ -109,7 +109,7 @@ jobs:
       # reads lockfiles - resolve one in CI so the scan has something true
       # to read. --ignore-scripts: resolving must never execute code.
       - name: Resolve lockfile for scanning
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       # Report-first: results publish to the Security tab while the
       # baseline is reviewed; promotion to gating is a deliberate follow-up
       # once the first report is triaged (see docs/SCANNERS.md).
