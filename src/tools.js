@@ -2039,6 +2039,63 @@ export const TOOLS = [
     },
   },
   {
+    name: "type_text",
+    dangerous: true,
+    description:
+      "Type literal Unicode text into the currently focused Windows application. A native dry run first " +
+      "captures the exact window and checks for password fields. Requires fresh explicit approval every time; " +
+      "typing stops if the window changes or the request is aborted. Maximum 4000 UTF-16 characters.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: stringProp("Literal text to type, 1-4000 UTF-16 characters"),
+        expected_window_title: stringProp("Optional exact expected foreground window title (maximum 200 characters)"),
+      },
+      required: ["text"],
+    },
+    async prepare({ text, expected_window_title = "" }) {
+      if (typeof text !== "string" || text.length < 1 || text.length > 4000) {
+        throw Object.assign(new Error("Text must contain 1-4000 UTF-16 characters. Nothing was typed."), { code: "BAD_TEXT" });
+      }
+      if (typeof expected_window_title !== "string" || expected_window_title.length > 200 || /[\x00-\x1f\x7f]/.test(expected_window_title)) {
+        throw Object.assign(new Error("Expected window title must be at most 200 characters without control characters. Nothing was typed."), { code: "BAD_TITLE" });
+      }
+      const { desktop } = await import("./desktop.js");
+      try {
+        const raw = await desktop.previewTypeText(text, expected_window_title);
+        return {
+          target: {
+            handle: String(raw?.handle || ""),
+            title: String(raw?.title || "").slice(0, 200),
+            process: String(raw?.process || "").slice(0, 120),
+          },
+          keystrokes: Number(raw?.keystrokes),
+          delayMs: Number(raw?.delayMs),
+        };
+      } catch (err) {
+        const prefix = ["CREDENTIAL_FIELD", "FIELD_UNKNOWN", "TARGET_CHANGED", "NO_TARGET"].includes(err?.code)
+          ? "Typed input refused: "
+          : "Typed-input dry run failed: ";
+        throw Object.assign(new Error(prefix + String(err?.message || err).slice(0, 400) + " No approval will be requested and nothing was typed."), { code: err?.code });
+      }
+    },
+    async run({ text }, ctx = {}) {
+      const approved = ctx.actionPreparation;
+      if (!approved?.target?.handle || approved.keystrokes !== text.length) {
+        return { ok: false, output: "Typed input requires the native dry-run snapshot created for its approval. Nothing was typed." };
+      }
+      const { desktop } = await import("./desktop.js");
+      try {
+        const result = await desktop.typeText(text, approved.target, { signal: ctx.signal });
+        return { ok: true, output: `Typed ${Number(result?.sent)} of ${approved.keystrokes} characters into "${approved.target.title}" (${approved.target.process}).` };
+      } catch (err) {
+        const sent = Number(err?.data?.sent);
+        const progress = Number.isFinite(sent) ? ` Sent ${sent} of ${approved.keystrokes} characters; no further characters will be sent by this request.` : " Nothing may be assumed about how much was sent; inspect the target before retrying.";
+        return { ok: false, output: `Typing failed${err?.code ? ` (${err.code})` : ""}: ${String(err?.message || err).slice(0, 300)}.${progress}` };
+      }
+    },
+  },
+  {
     name: "launch_app",
     dangerous: true,
     description:
@@ -2262,6 +2319,7 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   focus_window: "Brings one uniquely matched window to the foreground via the companion (IsWindow re-checked at action time); ambiguous names return candidates and change nothing; a window that closed mid-call is a typed CLOSED failure. No shell, no command line.",
   minimise_window: "Minimises one uniquely matched window via the companion's ShowWindow; same ambiguity and closed-mid-call semantics as focus_window.",
   close_window: "Asks one uniquely matched window to close (WM_CLOSE) via the companion after a native confirmation naming the application; destructive, so approval-required. No shell, no command line.",
+  type_text: "Native dry run captures the focused window and refuses credential fields; fresh approval is mandatory even with auto-approve. SendInput revalidates focus per character and aborts with a sent count.",
   launch_app: "Starts only an allowlist/config-approved executable by plain name via the companion (Process.Start with UseShellExecute=false, no arguments); the model string is a dictionary key, never a command line or path. Approval-required.",
   read_clipboard: "Reads up to 4,096 UTF-8 bytes of system clipboard text after per-read approval (never session-granted), reporting the original byte length; refuses secret-shaped content and never stores clipboard text in telemetry, support bundles or default memory.",
   write_clipboard: "Overwrites system clipboard text via stdin/companion (no shell) after per-write approval with a preview of the exact text to be written.",
@@ -2282,12 +2340,16 @@ export function describeBuiltinTools({
       ? "no-prompt"
       : tool.name === "shell" && riskTiers
         ? "conditional-shell-risk-tiers"
-        : "approval-required";
+        : tool.name === "type_text"
+          ? "fresh-approval-required"
+          : "approval-required";
     const effectiveInteractivePolicy = !dangerous
       ? "no-prompt"
-      : autoApprove
-        ? "auto-approved-by-config"
-        : approvalPolicy;
+      : tool.name === "type_text"
+        ? approvalPolicy
+        : autoApprove
+          ? "auto-approved-by-config"
+          : approvalPolicy;
     const unattendedPolicy = dangerous ? "refused" : "allowed";
     const parameters = Object.freeze(Object.keys(tool.parameters?.properties || {}));
     return Object.freeze({
