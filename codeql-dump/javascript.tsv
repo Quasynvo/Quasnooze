@@ -1,6 +1,2 @@
 js/file-access-to-http	scripts/setup.js	143	27		Outbound network request depends on [file data](1).
-js/file-access-to-http	src/channels/telegram.js	18	11		Outbound network request depends on [file data](1).
-js/superfluous-trailing-arguments	test/four-repository-roadmap.test.js	28	37		Superfluous argument passed to [function selectQueue](1).
-js/superfluous-trailing-arguments	test/four-repository-roadmap.test.js	29	37		Superfluous argument passed to [function selectQueue](1).
-js/superfluous-trailing-arguments	test/four-repository-roadmap.test.js	31	36		Superfluous argument passed to [function selectQueue](1).
-js/superfluous-trailing-arguments	test/four-repository-roadmap.test.js	32	93		Superfluous argument passed to [function selectQueue](1).
+js/file-access-to-http	src/channels/telegram.js	19	11		Outbound network request depends on [file data](1).
