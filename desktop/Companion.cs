@@ -184,7 +184,15 @@ public static class QuasnoozeTyping {
                 .Any(word => name.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0 || cls.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0);
             if (password || namedPassword) throw new QuasnoozeWindows.OsFailure("CREDENTIAL_FIELD", "The focused field looks like a password or credential field. Typed input is refused; nothing was sent.");
         } catch (QuasnoozeWindows.OsFailure) { throw; }
-        catch (Exception) {
+        catch (ElementNotAvailableException) {
+            // If the safety check itself is unavailable, typing is not safe.
+            throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be checked for credential input. Nothing was typed.");
+        }
+        catch (InvalidOperationException) {
+            // If the safety check itself is unavailable, typing is not safe.
+            throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be checked for credential input. Nothing was typed.");
+        }
+        catch (COMException) {
             // If the safety check itself is unavailable, typing is not safe.
             throw new QuasnoozeWindows.OsFailure("FIELD_UNKNOWN", "The focused field could not be checked for credential input. Nothing was typed.");
         }
