@@ -159,7 +159,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 | *“Run the tests”* / edit a file | Risk-classified: read-only runs instantly, state-changing asks first |
 | Anything ambiguous | Falls through to the local model — the fast path never guesses |
 
-**24 built-in tools** — `shell`, `read_file`, `write_file`, `list_dir`, `grep`, `scan_project`, `calculator`, `time_now`, `remember`, `recall`, `forget`, `search_history`, `search_documents`, `search_web`, `add_task`, `list_tasks`, `complete_task`, `remind`, `list_reminders`, `cancel_reminder`, `schedule`, `open_url`, `screenshot`, `system_control` — plus custom tools and MCP servers. Inspect them without executing anything: `quasnooze tools` ([docs/TOOL-INVENTORY.md](docs/TOOL-INVENTORY.md)).
+**25 built-in tools** — `shell`, `read_file`, `write_file`, `list_dir`, `grep`, `scan_project`, `calculator`, `time_now`, `remember`, `recall`, `forget`, `search_history`, `search_documents`, `search_web`, `add_task`, `list_tasks`, `complete_task`, `remind`, `list_reminders`, `cancel_reminder`, `schedule`, `open_url`, `screenshot`, `system_control`, `type_text` — plus custom tools and MCP servers. Inspect them without executing anything: `quasnooze tools` ([docs/TOOL-INVENTORY.md](docs/TOOL-INVENTORY.md)).
 
 ### The permission gate
 
