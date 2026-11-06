@@ -86,6 +86,14 @@ Quasnooze is an agent with a shell. Read this before you leave it running.
   Because they are reversible and non-destructive, approving one volume/media action can cover the
   rest of the session; the approval prompt says so when it applies. Lock and sleep always ask,
   every time, and the session grant dies with the process.
+- **Window and app tools** (`list_windows`, `focus_window`, `minimise_window`, `close_window`,
+  `launch_app`) act only through the Windows companion. Names are matched against open window
+  titles/processes with bounded fuzzy matching — an ambiguous name returns the candidates and
+  changes nothing — and a window that closed mid-call is a typed failure, not a guess. Launch
+  resolves only a plain name from the companion's built-in list or your own
+  `%APPDATA%\Quasnooze\apps.json` to an absolute `.exe` path and starts it with no arguments and no
+  shell, so no model text ever becomes a command line. `close_window` is destructive: it is behind
+  the approval gate and the companion asks again on the machine, naming the application.
 
 ## Hardening checklist
 

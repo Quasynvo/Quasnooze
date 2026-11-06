@@ -78,6 +78,16 @@ export function buildActionPreview(name, args = {}, { risk, secrets = previewSec
       else preview.effectSummary = `Send ${preview.action.replace(/_/g, ' ')} to the Windows companion (Core Audio / media key). Reversible; touches no files.`;
       break;
     }
+    case 'launch_app':
+      preview.action = 'launch_app';
+      preview.target = String(args.name ?? 'unknown');
+      preview.effectSummary = 'Start the executable registered under this exact plain name (companion built-in list or the user\'s own %APPDATA%\\Quasnooze\\apps.json) with no arguments and no shell. Unknown names are refused.';
+      break;
+    case 'close_window':
+      preview.action = 'close_window';
+      preview.target = String(args.name ?? 'unknown');
+      preview.effectSummary = 'Close one uniquely matched window (WM_CLOSE) via the Windows companion, after a second native confirmation naming the application. Unsaved work in that window may be lost; ambiguous names change nothing.';
+      break;
     default:
       preview.status = 'unknown'; preview.redactions.push('unsupported-arguments-withheld');
   }

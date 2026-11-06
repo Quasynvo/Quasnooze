@@ -77,7 +77,7 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 | # | Requirement | Today | Item |
 |---|---|---|---|
 | 11 | Volume, mute, play/pause, next/previous | have (Windows companion; reversible, session-grantable approval) | `laptop-01` |
-| 12 | Launch an app, switch to a window, minimise it | partial (fixed allowlist, no focus) | `laptop-02` |
+| 12 | Launch an app, switch to a window, minimise it | have (`list_windows`/`focus_window`/`minimise_window`/`close_window`/`launch_app` via the Windows companion; ambiguous names return candidates, close asks twice) | `laptop-02` |
 | 13 | Read and write the clipboard safely | **missing** | `laptop-03` |
 | 14 | Type dictated text into the focused app | **missing** | `laptop-04` |
 | 15 | Move, rename, trash files with undo | **missing** | `laptop-05` |
