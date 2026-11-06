@@ -993,7 +993,10 @@ public static class QuasnoozeCompanion {
                     try {
                         var incoming = Json.Deserialize<Dictionary<string, object>>(copy);
                         if (Value(incoming, "op") == "abort_type") { QuasnoozeTyping.Abort(Value(incoming, "id")); continue; }
-                    } catch { /* Receive applies the normal malformed-message policy. */ }
+                    } catch (ArgumentException) { /* Receive applies the normal malformed-message policy. */ }
+                    catch (InvalidOperationException) { /* Receive applies the normal malformed-message policy. */ }
+                    catch (KeyNotFoundException) { /* Receive applies the normal malformed-message policy. */ }
+                    catch (InvalidCastException) { /* Receive applies the normal malformed-message policy. */ }
                     Post(() => Receive(copy));
                 }
                 Post(() => { Quitting = true; Window.Close(); });
