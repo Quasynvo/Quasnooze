@@ -64,6 +64,20 @@ jobs:
               -f dismissed_comment='The Telegram bot token is sent only to the Telegram API that issued it. The URL host is a literal, the token is shape-checked and percent-encoded, and no caller can redirect the request.'
           done
 
+  dump-alerts:
+    name: Dump open alerts (temporary)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Dump open alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&per_page=100" \
+            --jq '.[] | [.number, .rule.id, .most_recent_instance.location.path, (.most_recent_instance.location.start_line|tostring)] | @tsv'
+
   dependency-review:
     name: Dependency review (PRs)
     if: github.event_name == 'pull_request'
