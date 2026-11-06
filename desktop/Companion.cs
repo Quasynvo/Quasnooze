@@ -105,7 +105,7 @@ public static class QuasnoozeAudio {
     // codeql[cs/unmanaged-code] intentional P/Invoke for SendInput and the foreground-window checks
     [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
     // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
     // codeql[cs/unmanaged-code] intentional P/Invoke for the foreground-window checks
@@ -137,14 +137,14 @@ public static class QuasnoozeAudio {
         keybd_event(key, 0, KeyExtended | KeyUp, UIntPtr.Zero);
     }
 
-    static string WindowTitle(IntPtr hWnd) {
+    public static string WindowTitle(IntPtr hWnd) {
         var sb = new StringBuilder(512);
         // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the foreground-window title
         GetWindowText(hWnd, sb, sb.Capacity);
         return sb.ToString();
     }
 
-    static string ProcessName(IntPtr hWnd) {
+    public static string ProcessName(IntPtr hWnd) {
         try {
             // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the foreground-window process
             uint pid;
@@ -153,7 +153,7 @@ public static class QuasnoozeAudio {
         } catch { return ""; }
     }
 
-    static bool IsPasswordField(IntPtr hWnd) {
+    public static bool IsPasswordField(IntPtr hWnd) {
         // A password field is a focused edit control with ES_PASSWORD (0x0020).
         // The style is checked on the focused window, not the top-level window.
         // codeql[cs/call-to-unmanaged-code] intentional P/Invoke for the password-field check
@@ -164,7 +164,7 @@ public static class QuasnoozeAudio {
         return (style & 0x0020) != 0;
     }
 
-    static uint SendChar(char ch) {
+    public static uint SendChar(char ch) {
         INPUT[] inputs = new INPUT[2];
         inputs[0].type = 1; // INPUT_KEYBOARD
         inputs[0].U.ki.wVk = 0;
@@ -435,16 +435,16 @@ public static class QuasnoozeCompanion {
                 string expectedWindow = Value(m, "window");
                 string expectedProcess = Value(m, "process");
                 if (text.Length == 0 || text.Length > 2000) throw new InvalidOperationException("type_text needs 1-2000 characters. Nothing was sent.");
-                IntPtr foreground = GetForegroundWindow();
-                string title = WindowTitle(foreground);
-                string process = ProcessName(foreground);
+                IntPtr foreground = QuasnoozeAudio.GetForegroundWindow();
+                string title = QuasnoozeAudio.WindowTitle(foreground);
+                string process = QuasnoozeAudio.ProcessName(foreground);
                 if (expectedWindow.Length > 0 && !String.Equals(title, expectedWindow, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The foreground window changed since the preview; nothing was sent.");
                 if (expectedProcess.Length > 0 && !String.Equals(process, expectedProcess, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("The foreground process changed since the preview; nothing was sent.");
-                if (IsPasswordField(foreground)) throw new InvalidOperationException("The focused field looks like a password field; typing is refused.");
+                if (QuasnoozeAudio.IsPasswordField(foreground)) throw new InvalidOperationException("The focused field looks like a password field; typing is refused.");
                 int sent = 0;
                 for (int i = 0; i < text.Length; i++) {
                     if (AbortedActions.Contains(id)) break;
-                    if (SendChar(text[i]) != 2) break;
+                    if (QuasnoozeAudio.SendChar(text[i]) != 2) break;
                     sent++;
                     Thread.Sleep(8);
                 }
