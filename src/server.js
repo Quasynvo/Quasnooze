@@ -16,7 +16,7 @@ import { config } from "./config.js";
 import { brain, modelCommand } from "./brain.js";
 import { runAgent, answerApproval, pendingApprovals, pendingApprovalsFor, answerApprovalFor } from "./agent.js";
 import {
-  ensureData, loadMemory, saveMemory, remember, forget,
+  ensureData, loadMemory, saveMemory, remember, forget, correctMemory,
   listSessions, loadSession, deleteSession, loadTasks,
   loadReminders, pendingReminders, removeReminder,
 } from "./store.js";
@@ -530,16 +530,26 @@ async function handleApi(req, res, url) {
   }
 
   if (path === "/api/memory") {
-    if (req.method === "GET") return json(res, 200, loadMemory());
-    const body = await readBody(req);
-    if (body.forget) return json(res, 200, forget(body.forget));
-    if (body.fact) return json(res, 200, remember(body.fact, body.tag));
-    if (typeof body.profile === "object" && body.profile) {
-      const memory = loadMemory();
-      memory.profile = { ...memory.profile, ...body.profile };
-      return json(res, 200, saveMemory(memory));
+    // This is an owner API under the existing server authentication boundary;
+    // model tool arguments never select a scope or provenance.
+    try {
+      if (req.method === "GET") return json(res, 200, loadMemory({ scope: url.searchParams.get("scope") || config.memoryScope }));
+      if (req.method !== "POST") return json(res, 405, { error: "method not allowed" });
+      const body = await readBody(req);
+      const scope = body.scope || config.memoryScope;
+      if (body.forget) return json(res, 200, forget(body.forget, { scope }));
+      if (body.correct && typeof body.correct === "object") return json(res, 200, correctMemory(body.correct.id, body.correct.fact, { scope, source: body.correct.source }));
+      if (body.fact) return json(res, 200, remember(body.fact, body.tag, { scope, source: body.source }));
+      if (typeof body.profile === "object" && body.profile) {
+        const memory = loadMemory();
+        memory.profile = { ...memory.profile, ...body.profile };
+        return json(res, 200, saveMemory(memory));
+      }
+      return json(res, 400, { error: "nothing to do" });
+    } catch (err) {
+      if (err instanceof HTTPError) throw err;
+      return json(res, 400, { error: err.message });
     }
-    return json(res, 400, { error: "nothing to do" });
   }
 
   if (path === "/api/tasks") {

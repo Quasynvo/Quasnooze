@@ -113,6 +113,8 @@ test('packaged runtime reads user config and persists data across restart and pa
     for (const name of ['config.js', 'brand-config.js', 'state-paths.js', 'providers.js', 'store.js']) {
       fs.copyFileSync(join(repo, 'src', name), join(root, 'src', name));
     }
+    fs.mkdirSync(join(root, 'src/memory'), { recursive: true });
+    fs.copyFileSync(join(repo, 'src/memory/provenance.js'), join(root, 'src/memory/provenance.js'));
     const code = `const {config}=await import(${JSON.stringify(pathToFileURL(join(root, 'src/config.js')).href)});
       const {ensureData}=await import(${JSON.stringify(pathToFileURL(join(root, 'src/store.js')).href)});
       ensureData(); console.log(JSON.stringify({owner:config.ownerName,data:config.dataDir,profile:config.profilePath}));`;

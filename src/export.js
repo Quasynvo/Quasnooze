@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { config, ROOT } from "./config.js";
-import { loadPersonas, loadMemory, loadReminders, loadSchedules, listSessions, loadSession } from "./store.js";
+import { loadPersonas, exportMemory, loadReminders, loadSchedules, listSessions, loadSession } from "./store.js";
 
 export const EXPORT_VERSION = 1;
 
@@ -32,7 +32,7 @@ export const EXPORT_VERSION = 1;
  */
 export function buildExport({ includeTelemetry = false } = {}) {
   const personas = loadPersonas();
-  const memories = loadMemory();
+  const memories = exportMemory();
   const reminders = loadReminders();
   const schedules = loadSchedules();
 
