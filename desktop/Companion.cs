@@ -166,7 +166,10 @@ public static class QuasnoozeTyping {
         [FieldOffset(0)] public HARDWAREINPUT hi;
     }
     [StructLayout(LayoutKind.Sequential)] struct INPUT { public uint type; public InputUnion U; }
-    [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+    // Intentional Win32 interop: required for reliable Unicode keystroke injection.
+    // Kept private and constrained to this typing helper to minimize unmanaged surface area.
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
+    static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
     static volatile string AbortId;
 
     // Called directly on the console-reader thread: the UI thread is busy sending.
