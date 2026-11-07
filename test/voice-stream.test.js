@@ -27,7 +27,7 @@ const {
 } = await import("../src/voice/stream.js");
 
 const {
-  MIC_STATES, STREAM_CLIENT_LIMITS, createMicrophoneState,
+  MIC_STATES, createMicrophoneState,
   fetchStreamCapability, startLocalSpeechStream,
 } = await import("../public/audio-input.js");
 
