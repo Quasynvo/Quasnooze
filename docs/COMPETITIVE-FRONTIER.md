@@ -130,6 +130,7 @@ make worse.
 | `mind-01-intent-fast-path` ✅ **shipped** | Deterministic grammars in voice assistants | p50 < 400 ms for matched intents, ≥ 95% routing accuracy, 100% fall-through when unsure — **measured: 4.3 ms p50 end to end, 31/31 matched, 0/28 neighbours routed** |
 | `mind-02-context-budget` | Streaming-memory compression | prefill p50 −40% at turn 20, 100% pinned-fact retention, no eval regression |
 | `mind-03-model-router` | PilotDeck-style routing (~70% cost cut) | overall p50 −35%, task success at or above baseline, escalation < 15% |
+| `mind-07-first-token-deadline` | *The Tail at Scale*'s hedged requests, applied to a model chain instead of a datacenter | silent-primary worst case 180,000 ms → 1.2 s + one hop; `firstTokenMs` p95 < 3 s on a dead primary; **0** cutovers after the first delta |
 
 ### The first one shipped
 
@@ -259,6 +260,9 @@ reason this product can make claims the rest of the field cannot.
 | Multi-agent orchestration | One person, one laptop. Every extra agent is another failure mode the user has to debug. |
 | A vector database for memory | BM25 + FTS covers a personal corpus without a second service. Revisit only with a measured recall gap. |
 | Benchmark numbers from a warm cache on a borrowed GPU | The budget is the path the user actually has. |
+| Ask every installed model the same question and let a judge pick the winner | On one laptop GPU the candidates evict each other: every model after the first costs a 5–30 s swap-in, and the judge is another generation on top. It is the most expensive verifier in the field, deployed against the one number it makes worse. |
+| Keep three or four specialist models resident so switching is free | That is a multi-GPU cloud property. The sweep below already refuses a second resident model for everything, for the same reason: memory is the scarce resource on the machine this runs on. |
+| Let the small model emit a `[PASS]` token where it admits it cannot answer | Self-reported confidence is the routing literature's canonical trap — a wrong `PASS` taxes every easy turn with an escalation, and a model that never emits one leaves the mechanism dead weight. Escalate on checks code can run (`mind-07`), not on the model grading itself. |
 
 ---
 
