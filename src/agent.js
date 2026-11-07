@@ -10,6 +10,7 @@
  *  • every tool failure is fed back to the model as text, never swallowed.
  */
 import { buildActionPreview, previewSecrets, approvalDescription, sanitizeActionPreview } from "./action-preview.js";
+import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
@@ -707,7 +708,7 @@ export async function runAgent({
   }
   // One id for this turn, so anything it mutates (the file-action journal)
   // can be traced back to the conversation that asked for it.
-  const turnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const turnId = `turn_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
   const ctx = {
     channel,
     target: addressFor(channel, target),
