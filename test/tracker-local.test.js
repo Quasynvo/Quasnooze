@@ -266,6 +266,46 @@ test("a tracker directory replaced after setup is refused, not followed", async 
   assert.deepEqual(readdirSync(elsewhere), ["real-ticket.md"], "nothing was written through the link");
 });
 
+test("the ticket is validated on the opened handle, not on a separate stat of the name", async () => {
+  // CodeQL js/file-system-race on the first version of this reader: it lstat'ed
+  // the path and then opened it, so the two calls could disagree. The check now
+  // happens on the descriptor (plus O_NOFOLLOW), which this asserts directly:
+  // a symlink at the ticket's own path is refused by the open itself.
+  const repo = makeRepo("race");
+  const dir = join(repo, "tickets");
+  const secret = join(repo, "secret.txt");
+  writeFileSync(secret, "TOP-SECRET");
+  const local = createLocalAdapter(dir);
+
+  // A regular ticket reads fine…
+  writeFileSync(join(dir, "plain.md"), ticketText("Plain", { body: "visible" }));
+  assert.match((await local.read("plain")).body, /visible/);
+
+  // …and a name that becomes a symlink is refused, never followed.
+  symlinkSync(secret, join(dir, "swapped.md"));
+  await assert.rejects(
+    () => local.read("swapped"),
+    (error) => error.code === TRACKER_CODES.UNSAFE_PATH && /symlink/.test(error.message),
+  );
+
+  // A dangling symlink is ENOENT at the open, not a silent "no such ticket"
+  // that also happens to follow the link on another platform.
+  symlinkSync(join(repo, "does-not-exist"), join(dir, "dangling.md"));
+  await assert.rejects(
+    () => local.read("dangling"),
+    (error) => error.code === TRACKER_CODES.UNSAFE_PATH,
+  );
+
+  // The reader holds a descriptor, so replacing the entry after the open cannot
+  // change what was measured as "the file".
+  const big = join(dir, "big.md");
+  writeFileSync(big, ticketText("Big", { body: "x".repeat(TRACKER_LIMITS.fileBytes) }));
+  await assert.rejects(() => local.read("big"), (error) => /over the .* limit/.test(error.message));
+
+  // Nothing above leaked the secret into an error message.
+  assert.doesNotMatch(JSON.stringify(await local.list()), /TOP-SECRET/);
+});
+
 test("an oversized or malformed ticket is refused, not truncated", async () => {
   const repo = makeRepo("bounds");
   const dir = join(repo, "tickets");

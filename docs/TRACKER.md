@@ -83,6 +83,10 @@ a whole one.
 - **Symlinks.** Listing uses `withFileTypes` and takes only regular files, so a
   symlink named `good-ticket.md` pointing at `~/.ssh/id_rsa` never appears as a
   ticket, and reading it directly is refused rather than followed.
+- **File-system races.** The reader validates the *opened descriptor*
+  (`O_NOFOLLOW` + `fstat`) rather than stat-ing the name and opening it later,
+  so there is no window in which a path could be swapped for a symlink or a
+  larger file between the check and the read.
 - **Credential stores as roots.** `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
   `~/.config/gh` and friends can never be a tracker directory, even inside your
   own home directory. `test/tracker-local.test.js` asserts this list still

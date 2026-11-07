@@ -23,7 +23,7 @@
  * No network, no child process, no git. A ticket directory is a directory.
  */
 import {
-  closeSync, fstatSync, lstatSync, openSync, readdirSync, readSync, realpathSync, writeFileSync,
+  closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readSync, realpathSync, writeFileSync,
 } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 
@@ -97,35 +97,49 @@ function ticketPath(root, id) {
 /**
  * Read at most `limit` bytes, refusing larger files outright.
  *
- * `readFileSync` would either truncate silently or allocate whatever the file
- * claims to be; opening, stat-ing the descriptor and reading a bounded amount
- * means a 4 GB "ticket" costs one lstat and one error message.
+ * **One check, on the descriptor.** An earlier version lstat'ed the path, then
+ * opened it — a time-of-check/time-of-use window in which the name could be
+ * swapped for a symlink or a huge file between the two calls (CodeQL
+ * `js/file-system-race`). Every property is now read from the open file
+ * descriptor (`fstat`) or enforced by the open itself:
+ *
+ *   • `O_NOFOLLOW` makes the open fail with ELOOP if the name is a symlink, so
+ *     there is no window in which to swap one in.
+ *   • `fstatSync(fd)` describes the file that was actually opened, not the name
+ *     that was looked at.
+ *   • The bytes are then read from that same descriptor, so what was measured
+ *     is what is read.
+ *
+ * `O_NOFOLLOW` does not exist on Windows; there the identity check below is the
+ * guard, and a symlink swapped in would still have to pass the `isFile` and
+ * size checks against the opened handle.
  */
 function readBoundedSync(path, limit) {
-  let stats;
+  const noFollow = constants.O_NOFOLLOW ?? 0;
+  let fd;
   try {
-    stats = lstatSync(path);
-  } catch {
-    return null;
+    fd = openSync(path, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null;
+    if (error?.code === 'ELOOP') {
+      throw new TrackerError(TRACKER_CODES.UNSAFE_PATH, `${path} is a symlink; tickets must be regular files.`);
+    }
+    throw error;
   }
-  // A symlink here is a redirect, not a ticket. Refuse rather than follow.
-  if (stats.isSymbolicLink()) {
-    throw new TrackerError(TRACKER_CODES.UNSAFE_PATH, `${path} is a symlink; tickets must be regular files.`);
-  }
-  if (!stats.isFile()) {
-    throw new TrackerError(TRACKER_CODES.INVALID, `${path} is not a regular file.`);
-  }
-  if (stats.size > limit) {
-    throw new TrackerError(
-      TRACKER_CODES.INVALID,
-      `${path} is ${stats.size} bytes, over the ${limit}-byte ticket limit; refusing to read part of it.`,
-    );
-  }
-  const fd = openSync(path, 'r');
   try {
+    // Everything below describes the opened descriptor, never the path again.
     const opened = fstatSync(fd);
-    if (!opened.isFile() || opened.size > limit) {
-      throw new TrackerError(TRACKER_CODES.UNSAFE_PATH, `${path} changed while it was being read.`);
+    if (opened.isSymbolicLink()) {
+      throw new TrackerError(TRACKER_CODES.UNSAFE_PATH, `${path} is a symlink; tickets must be regular files.`);
+    }
+    if (!opened.isFile()) {
+      throw new TrackerError(TRACKER_CODES.INVALID, `${path} is not a regular file.`);
+    }
+    if (opened.size > limit) {
+      throw new TrackerError(
+        TRACKER_CODES.INVALID,
+        `${path} is ${opened.size} bytes, over the ${limit}-byte ticket limit; refusing to read part of it.`,
+      );
     }
     const buffer = Buffer.alloc(opened.size);
     let offset = 0;
