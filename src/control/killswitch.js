@@ -12,7 +12,7 @@
  * the access key) can. That is the whole point of an incident control.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { config } from "../config.js";
 
 const FILE = () => join(config.dataDir, "killswitch.json");
