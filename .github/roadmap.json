@@ -1338,7 +1338,7 @@
     {
       "id": "harness-13-local-voice",
       "title": "feat(voice): bounded opt-in local streaming speech interface",
-      "status": "backlog",
+      "status": "shipped",
       "difficulty": "hard",
       "labels": [
         "voice-engine",
@@ -1348,14 +1348,17 @@
       "time_estimate": "3–4 engineer-days",
       "files": [
         "src/voice.js",
+        "src/voice/stream.js",
         "src/server.js",
-        "public/index.html"
+        "public/index.html",
+        "public/audio-input.js"
       ],
       "planned_files": [
         "src/voice/stream.js",
-        "test/voice-stream.test.js"
+        "test/voice-stream.test.js",
+        "test/voice-stream-http.test.js"
       ],
-      "verify": "node --test test/voice-stream.test.js test/voice.test.js test/voice-reply.test.js",
+      "verify": "node --test test/voice-stream.test.js test/voice-stream-http.test.js test/voice.test.js test/voice-reply.test.js",
       "depends_on": [],
       "problem_statement": "Windows has local System.Speech recognition/TTS; browser dictation may be remote and the optional Whisper adapter is request/response, not a guaranteed local streaming pipeline.",
       "upgraded_design_spec": "Introduce an optional loopback-only, explicitly configured local STT stream adapter behind existing voice paths. Mic starts muted; no raw audio is retained by default. Enforce chunk size, timeout, cancellation, local origin, DNS/redirect restrictions and visible recording state. Reuse existing local playback, cancel old speech on barge-in where supported; otherwise honestly report that capability unavailable. Never silently fall back to browser vendor or a remote endpoint.",
@@ -1371,7 +1374,8 @@
         "Remote/redirected origins are refused in local-only mode; absence of adapter never invokes browser or cloud recognition silently.",
         "Startup remains muted, no audio file or transcript telemetry is written by default, and old voice APIs remain compatible."
       ],
-      "body": "## Context\n\nWindows has local System.Speech recognition/TTS; browser dictation may be remote and the optional Whisper adapter is request/response, not a guaranteed local streaming pipeline.\n\n## Upgraded design specification\n\nIntroduce an optional loopback-only, explicitly configured local STT stream adapter behind existing voice paths. Mic starts muted; no raw audio is retained by default. Enforce chunk size, timeout, cancellation, local origin, DNS/redirect restrictions and visible recording state. Reuse existing local playback, cancel old speech on barge-in where supported; otherwise honestly report that capability unavailable. Never silently fall back to browser vendor or a remote endpoint.\n\n## Affected files / modules\n\n- `src/voice/stream.js` (new)\n- `src/voice.js`\n- `src/server.js`\n- `public/index.html`\n- `test/voice-stream.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake local stream yields ordered partial and final transcripts; cancellation, backpressure, device error and disconnect release the input.\n- [ ] Remote/redirected origins are refused in local-only mode; absence of adapter never invokes browser or cloud recognition silently.\n- [ ] Startup remains muted, no audio file or transcript telemetry is written by default, and old voice APIs remain compatible.\n\n## How to verify\n\n```bash\nnode --test test/voice-stream.test.js test/voice.test.js test/voice-reply.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: none."
+      "body": "## Context\n\nWindows has local System.Speech recognition/TTS; browser dictation may be remote and the optional Whisper adapter is request/response, not a guaranteed local streaming pipeline.\n\n## Upgraded design specification\n\nIntroduce an optional loopback-only, explicitly configured local STT stream adapter behind existing voice paths. Mic starts muted; no raw audio is retained by default. Enforce chunk size, timeout, cancellation, local origin, DNS/redirect restrictions and visible recording state. Reuse existing local playback, cancel old speech on barge-in where supported; otherwise honestly report that capability unavailable. Never silently fall back to browser vendor or a remote endpoint.\n\n## Affected files / modules\n\n- `src/voice/stream.js` (new)\n- `src/voice.js`\n- `src/server.js`\n- `public/index.html`\n- `test/voice-stream.test.js` (new)\n\n## Acceptance criteria\n\n- [ ] Fake local stream yields ordered partial and final transcripts; cancellation, backpressure, device error and disconnect release the input.\n- [ ] Remote/redirected origins are refused in local-only mode; absence of adapter never invokes browser or cloud recognition silently.\n- [ ] Startup remains muted, no audio file or transcript telemetry is written by default, and old voice APIs remain compatible.\n\n## How to verify\n\n```bash\nnode --test test/voice-stream.test.js test/voice.test.js test/voice-reply.test.js\n```\n\nUse deterministic fixtures, temporary workspaces and fake models/transports; no cloud account, actual network or microphone required in CI.\n\n## Time estimate\n\n3–4 engineer-days.\n\n## Dependencies and release window\n\nWeek 3; not before 2026-11-17 UTC. Prerequisites: none.",
+      "shipped_at": "2026-11-07"
     },
     {
       "id": "harness-14-voice-rag",

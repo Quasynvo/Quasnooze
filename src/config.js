@@ -170,6 +170,15 @@ export const config = Object.freeze({
   }),
 
   whisperUrl: (env.WHISPER_URL || "").replace(/\/$/, ""),
+  // Optional local streaming speech (issue #134). Off by default: no stream, no
+  // capture, no partial transcripts. When on, the URL must be loopback — see
+  // src/voice/stream.js, which refuses anything else rather than falling back
+  // to a remote recogniser.
+  voiceStream: bool(env.QUASNOOZE_VOICE_STREAM, false),
+  voiceStreamUrl: (env.QUASNOOZE_VOICE_STREAM_URL || "").trim(),
+  // Muted at startup is not a UI preference: the page never starts capture on
+  // load, and this flag lets a deployment keep it that way even if a client asks.
+  voiceStreamMaxChunkBytes: Number(env.QUASNOOZE_VOICE_STREAM_CHUNK || 64 * 1024),
 });
 
 /** True when at least one real model is reachable by configuration. */
