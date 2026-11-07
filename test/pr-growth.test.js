@@ -73,3 +73,22 @@ test('fork-safe workflow executes trusted default-branch code and updates only b
   assert.match(workflow, /\.user\.login == "github-actions\[bot\]"/);
   assert.doesNotMatch(workflow, /pull_request\.head\.(?:sha|ref).*checkout|npm (?:install|ci)|git checkout.*pr-metrics/);
 });
+
+test('metrics job grants pull-requests: write, the scope PR comments actually need', () => {
+  // PR conversation comments go through POST/PATCH /issues/{n}/comments, but the
+  // target object is a pull request, so the write check is against
+  // pull-requests. `pull-requests: read` fails with HTTP 403
+  // "Resource not accessible by integration" on every run (see #186).
+  const workflow = readFileSync(new URL('../.github/workflows/pr-growth.yml', import.meta.url), 'utf8');
+  const jobIndex = workflow.search(/^jobs:\s*$/m);
+  assert.notEqual(jobIndex, -1, 'workflow must declare a jobs block');
+  const job = workflow.slice(jobIndex);
+  const jobPermissions = /^ {4}permissions:\s*\n((?: {6}.+\n)+)/m.exec(job);
+  assert.ok(jobPermissions, 'metrics job must declare its own permissions block');
+  assert.match(jobPermissions[1], /^ {6}pull-requests: write$/m);
+  assert.match(jobPermissions[1], /^ {6}issues: write$/m);
+  assert.doesNotMatch(jobPermissions[1], /^ {6}pull-requests: read$/m);
+  // The workflow-level token stays read-only; the write scopes live on the job.
+  const header = workflow.slice(0, jobIndex);
+  assert.match(header, /^permissions:\s*\n {2}contents: read$/m);
+});
