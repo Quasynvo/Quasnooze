@@ -1,5 +1,6 @@
 import { desktop } from "./desktop.js";
 import { AUDIO_MAX_BYTES, AUDIO_TYPES, transcribeAudio } from "./voice.js";
+import { resolveStream, describeFallback, transcribeStream, VoiceStreamError, STREAM_LIMITS } from "./voice/stream.js";
 /**
  * server.js — Quasnooze's local HTTP surface: web panel, REST API, SSE stream.
  *
@@ -380,6 +381,95 @@ async function handleApi(req, res, url) {
       return json(res, 502, { error: timedOut
         ? "Whisper timed out after 5 seconds; check WHISPER_URL or try a shorter recording."
         : "Voice transcription failed; check WHISPER_URL, the endpoint format and transcription server logs." });
+    }
+  }
+
+  /**
+   * GET /api/voice/stream — what the page is allowed to expect.
+   *
+   * Deliberately returns the *refusal reason* when there is no stream, so the
+   * panel can say "no local stream adapter" instead of discovering it when the
+   * mic button does nothing. It never returns the URL's credentials or query —
+   * a loopback URL has neither, and the policy refuses them.
+   */
+  if (path === "/api/voice/stream" && req.method === "GET") {
+    const resolved = resolveStream({ enabled: config.voiceStream, url: config.voiceStreamUrl });
+    if (!resolved.available) {
+      return json(res, 200, {
+        available: false,
+        reason: resolved.reason,
+        code: resolved.code || null,
+        detail: resolved.detail,
+        fallback: describeFallback({ bufferedAvailable: Boolean(config.whisperUrl) }),
+        maxChunkBytes: config.voiceStreamMaxChunkBytes,
+        limits: { timeoutMs: STREAM_LIMITS.timeoutMs, maxTranscriptChars: STREAM_LIMITS.maxTranscriptChars },
+      });
+    }
+    return json(res, 200, {
+      available: true,
+      localOnly: true,
+      maxChunkBytes: config.voiceStreamMaxChunkBytes,
+      limits: { timeoutMs: STREAM_LIMITS.timeoutMs, maxTranscriptChars: STREAM_LIMITS.maxTranscriptChars },
+      fallback: describeFallback({ bufferedAvailable: Boolean(config.whisperUrl) }),
+    });
+  }
+
+  /**
+   * POST /api/voice/stream — one bounded utterance against the local stream.
+   *
+   * Frames are `{ seq, audio: base64, mime, final }`, and the response is the
+   * ordered event list plus `text` (null unless a final was emitted). The
+   * expensive part — a real streaming session over a socket — is not needed to
+   * satisfy the contract the roadmap asks for, and a request/response shape
+   * keeps the whole path testable without a microphone or a socket server.
+   */
+  if (path === "/api/voice/stream" && req.method === "POST") {
+    const resolved = resolveStream({ enabled: config.voiceStream, url: config.voiceStreamUrl });
+    if (!resolved.available) {
+      // 503 rather than 404: the feature exists, it is just not turned on here.
+      return json(res, resolved.reason === "refused" ? 400 : 503, {
+        error: resolved.detail,
+        code: resolved.code || `STREAM_${String(resolved.reason).toUpperCase()}`,
+        available: false,
+      });
+    }
+    if (Number(req.headers["content-length"] || 0) > (STREAM_LIMITS.maxChunkBytes * 4)) {
+      throw new HTTPError(413, "That voice stream request is too large; send bounded chunks.");
+    }
+    let body;
+    try {
+      body = JSON.parse(await readRaw(req, 8 * 1024 * 1024));
+    } catch {
+      throw new HTTPError(400, "The voice stream body must be JSON.");
+    }
+    const frames = Array.isArray(body?.frames) ? body.frames.slice(0, 64) : null;
+    if (!frames || !frames.length) return json(res, 400, { error: "The voice stream needs a frames array." });
+    const abort = new AbortController();
+    // A client that hangs up releases the input instead of leaking a capture.
+    res.on("close", () => { if (!res.writableEnded) abort.abort(); });
+    try {
+      const result = await transcribeStream({
+        url: resolved.url,
+        frames,
+        signal: abort.signal,
+        limits: { ...STREAM_LIMITS, maxChunkBytes: config.voiceStreamMaxChunkBytes, chunkBytes: config.voiceStreamMaxChunkBytes },
+      });
+      // Cancelled, or terminally failed with no transcript, is not a 200. The
+      // events still ride along so the UI can say *why*.
+      const status = result.cancelled ? 499 : result.failure && !result.text ? 502 : 200;
+      return json(res, status, {
+        events: result.events,
+        text: result.text,
+        cancelled: result.cancelled,
+        error: result.failure ? result.failure.message : undefined,
+        code: result.failure ? result.failure.code : undefined,
+        // Stated plainly: a partial never becomes a message.
+        partialIsMessage: false,
+      });
+    } catch (error) {
+      const code = error instanceof VoiceStreamError ? error.code : "STREAM_UPSTREAM";
+      const status = code === "STREAM_CANCELLED" ? 499 : code === "STREAM_INVALID_FRAME" ? 400 : 502;
+      return json(res, status, { error: error?.message || "The local stream failed.", code });
     }
   }
 

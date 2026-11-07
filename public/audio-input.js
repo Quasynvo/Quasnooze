@@ -289,3 +289,214 @@ export async function startLocalDictation({
   onStatus({ state: "cancelled", reason: "stream-ended" });
   return { text: null, endpoint: null };
 }
+
+/* ── local streaming speech (issue #134) ─────────────────────────────────────
+   The optional stream path: bounded chunks go to this machine's configured
+   loopback endpoint as you speak, partials replace each other in place, and only
+   the final transcript is returned as text a caller may send.
+
+   Three things this module refuses to do, each of which the tests pin:
+
+   1. Start capture on load. `microphoneState` begins `muted`; nothing touches
+      getUserMedia until `start()` is called from a user gesture.
+   2. Fall back to a remote recogniser. If `/api/voice/stream` reports no
+      adapter, this rejects with the server's own reason — it never reaches for
+      the browser vendor's recogniser or an OpenAI endpoint.
+   3. Turn a partial into a result. `result.text` is null unless a final event
+      arrived, so a caller that forgets to check `final` gets nothing to send.  */
+
+export const MIC_STATES = Object.freeze({
+  MUTED: 'muted',
+  REQUESTING: 'requesting',
+  RECORDING: 'recording',
+  STOPPING: 'stopping',
+  ERROR: 'error',
+});
+
+export const STREAM_CLIENT_LIMITS = Object.freeze({
+  chunkMs: 1_200,
+  maxChunkBytes: 64 * 1024,
+  maxQueue: 8,
+  maxFrames: 64,
+});
+
+/** Recording state that starts muted and never advances on its own. */
+export function createMicrophoneState({ onChange = () => {} } = {}) {
+  let state = MIC_STATES.MUTED;
+  let reason = null;
+  const set = (next, why = null) => {
+    if (state === next && reason === why) return state;
+    state = next;
+    reason = why;
+    onChange({ state, reason, recording: state === MIC_STATES.RECORDING });
+    return state;
+  };
+  return Object.freeze({
+    get state() { return state; },
+    get reason() { return reason; },
+    /** True only while audio is actually being captured. */
+    get recording() { return state === MIC_STATES.RECORDING; },
+    begin() { if (state !== MIC_STATES.MUTED && state !== MIC_STATES.ERROR) return state; return set(MIC_STATES.REQUESTING); },
+    started() { return set(MIC_STATES.RECORDING); },
+    /** `why` is shown to the user; it is never a vendor fallback. */
+    fail(why) { return set(MIC_STATES.ERROR, String(why ?? 'microphone unavailable')); },
+    stop() { if (state === MIC_STATES.MUTED) return state; return set(MIC_STATES.STOPPING); },
+    muted() { return set(MIC_STATES.MUTED); },
+  });
+}
+
+/** Ask the server what it will allow. Never throws: a refusal is an answer. */
+export async function fetchStreamCapability({ fetch: fetchImpl = globalThis.fetch, key = '' } = {}) {
+  const response = await fetchImpl('/api/voice/stream', {
+    headers: key ? { 'x-quasnooze-key': key } : {},
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return { available: false, reason: 'unreachable', detail: data.error || `HTTP ${response.status}`, fallback: { path: 'none', detail: 'No local stream adapter is reachable.' } };
+  }
+  return {
+    available: data.available === true,
+    reason: data.reason || (data.available === true ? null : 'disabled'),
+    detail: data.detail || '',
+    code: data.code || null,
+    fallback: data.fallback || { path: 'none', detail: 'No local stream adapter is configured.' },
+    maxChunkBytes: Number(data.maxChunkBytes) || STREAM_CLIENT_LIMITS.maxChunkBytes,
+  };
+}
+
+/**
+ * Stream one utterance to the local endpoint.
+ *
+ * `frames` yields `{ level, at }` like the buffered path; `takeAudio()` returns
+ * the audio captured since the last call as a Blob/Uint8Array. Chunks are sent
+ * only while there is real speech, so silence never costs a request.
+ *
+ * Resolves `{ text, events, cancelled }`, where `text` is null unless a final
+ * transcript arrived — a partial is a preview, never a message.
+ */
+export async function startLocalSpeechStream({
+  frames, takeAudio, capability,
+  chunkMs = STREAM_CLIENT_LIMITS.chunkMs,
+  maxChunkBytes = STREAM_CLIENT_LIMITS.maxChunkBytes,
+  signal,
+  post = null,
+  fetch: fetchImpl = globalThis.fetch,
+  key = '',
+  onPartial = () => {},
+  onFinal = () => {},
+  onStatus = () => {},
+  onRecording = () => {},
+} = {}) {
+  if (!frames || typeof takeAudio !== 'function') {
+    throw new TypeError('Local speech streaming needs frames and takeAudio.');
+  }
+  // The capability is required: without it there is no evidence a local adapter
+  // exists, and guessing is how a silent remote fallback gets in.
+  const cap = capability || await fetchStreamCapability({ fetch: fetchImpl, key });
+  if (!cap.available) {
+    const error = new Error(cap.detail || 'No local streaming adapter is configured.');
+    error.code = cap.code || `STREAM_${String(cap.reason || 'not_available').toUpperCase()}`;
+    error.fallback = cap.fallback;
+    onStatus({ state: 'unavailable', reason: cap.reason, detail: error.message, fallback: cap.fallback });
+    onRecording({ state: MIC_STATES.MUTED, recording: false });
+    throw error;
+  }
+
+  const endpointer = createEndpointer();
+  const buffer = createProvisionalTranscript();
+  const send = post || (async (blob, { prompt, final, seq, mime }) => {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.byteLength > maxChunkBytes) {
+      throw Object.assign(new Error(`chunk exceeds ${maxChunkBytes} bytes`), { code: 'STREAM_CHUNK_TOO_LARGE' });
+    }
+    // base64 in bounded slices so a large chunk cannot blow the argument limit.
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    const response = await fetchImpl('/api/voice/stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(key ? { 'x-quasnooze-key': key } : {}) },
+      body: JSON.stringify({ frames: [{ seq, audio: btoa(binary), mime, final, prompt }] }),
+      signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || `stream failed (HTTP ${response.status})`), { code: data.code });
+    return { text: data.text ?? null, events: data.events || [] };
+  });
+
+  const events = [];
+  let seq = 0, sinceUpload = 0, previousAt = null, prompt = '';
+  onRecording({ state: MIC_STATES.RECORDING, recording: true });
+  onStatus({ state: 'listening', chunkMs });
+
+  const submit = async (final) => {
+    const current = seq++;
+    const blob = takeAudio();
+    const type = (blob && blob.type) || 'audio/webm';
+    try {
+      const result = await send(blob, { prompt, final, seq: current, mime: type });
+      for (const event of result.events || []) events.push(event);
+      if (final) {
+        const committed = buffer.commit(result.text);
+        if (!committed) { onStatus({ state: 'empty' }); return { text: null }; }
+        onFinal(committed);
+        onStatus({ state: 'final' });
+        return { text: committed.text };
+      }
+      if (result.text) { prompt = result.text; onPartial(buffer.update(result.text)); }
+      return { text: null };
+    } catch (error) {
+      if (final) {
+        buffer.discard();
+        onStatus({ state: 'failed', message: String(error?.message || error), code: error?.code });
+        return { text: null, error };
+      }
+      // A failed partial is a slow turn, not a lost turn.
+      onStatus({ state: 'partial-failed', message: String(error?.message || error) });
+      return { text: null };
+    }
+  };
+
+  for await (const frame of frames) {
+    if (signal?.aborted) {
+      endpointer.reset(); buffer.discard();
+      onStatus({ state: 'cancelled' });
+      onRecording({ state: MIC_STATES.MUTED, recording: false });
+      throw Object.assign(new DOMException('Speech stream cancelled.', 'AbortError'), { code: 'STREAM_CANCELLED' });
+    }
+    const at = Number(frame?.at);
+    if (!Number.isFinite(at)) continue;
+    const delta = previousAt === null ? 0 : Math.max(0, at - previousAt);
+    previousAt = at;
+    const event = endpointer.push(frame?.level, at);
+    if (event?.type === 'speech-start') onStatus({ state: 'speech' });
+    sinceUpload = endpointer.speaking ? sinceUpload + delta : 0;
+
+    if (event?.type === 'endpoint') {
+      onStatus({ state: 'endpoint', reason: event.reason, endpointMs: event.endpointMs, speechMs: event.speechMs });
+      if (event.discarded) {
+        buffer.discard();
+        onStatus({ state: 'discarded', reason: 'too-short' });
+        onRecording({ state: MIC_STATES.MUTED, recording: false });
+        return { text: null, events, endpoint: event };
+      }
+      onRecording({ state: MIC_STATES.STOPPING, recording: false });
+      const result = await submit(true);
+      onRecording({ state: MIC_STATES.MUTED, recording: false });
+      return { text: result.text, events, endpoint: event, error: result.error };
+    }
+
+    const voiced = (Number.isFinite(frame?.level) ? frame.level : 0) >= ENDPOINTER_DEFAULTS.silenceThreshold;
+    if (voiced && endpointer.speaking && endpointer.speechMs >= ENDPOINTER_DEFAULTS.minSpeechMs && sinceUpload >= chunkMs) {
+      sinceUpload = 0;
+      await submit(false);
+    }
+  }
+
+  endpointer.reset();
+  buffer.discard();
+  onStatus({ state: 'cancelled', reason: 'stream-ended' });
+  onRecording({ state: MIC_STATES.MUTED, recording: false });
+  return { text: null, events, endpoint: null };
+}

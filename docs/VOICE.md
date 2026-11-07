@@ -163,6 +163,7 @@ to be different products.
 |---|---|---|---|
 | **Browser recognition** (`SpeechRecognition` in the deck) | the browser, or its vendor | **may leave the device** — Chrome and Safari are entitled to send audio to their speech service | a browser that ships a recogniser; an explicit per-page opt-in |
 | **Local dictation** | this machine: `AnalyserNode` for endpointing, `MediaRecorder` for audio, `WHISPER_URL` for the transcript | the page → **your own server** (`/api/transcribe`) → the transcription endpoint **you configured** | `WHISPER_URL` pointed at an OpenAI-compatible local server (whisper.cpp, faster-whisper) |
+| **Local streaming speech** (opt-in, off by default) | this machine, chunk by chunk | the page → **your own server** (`/api/voice/stream`) → a **loopback-only** endpoint you named | `QUASNOOZE_VOICE_STREAM=on` and a loopback `QUASNOOZE_VOICE_STREAM_URL` |
 
 Nothing is persisted in either path: no recording is written to disk, and no
 audio is stored in `data/`. The local path never contacts a browser vendor, and
@@ -237,6 +238,60 @@ Setting `streaming: false` is the whole-clip path: one request at the end, the
 same status sequence, the same final callback, no partials. That is the
 "no behavioural difference" test — the caller cannot tell which path ran except by
 counting requests.
+
+## Local streaming speech, and what "local" is allowed to mean
+
+The buffered path above uploads a clip and waits. `harness-13` adds a streaming
+adapter that reports partials as you speak, and it is **off unless you turn it
+on**:
+
+```sh
+QUASNOOZE_VOICE_STREAM=on
+QUASNOOZE_VOICE_STREAM_URL=http://127.0.0.1:8080/v1/audio/transcriptions
+QUASNOOZE_VOICE_STREAM_CHUNK=65536   # one upload, in bytes
+```
+
+Five properties are enforced in `src/voice/stream.js`, not merely described:
+
+1. **No adapter means no adapter.** With the switch off, `GET /api/voice/stream`
+   answers `available: false` with a reason and a *fallback sentence* the panel
+   renders verbatim ("no local stream adapter — dictation uses your configured
+   transcription endpoint" or "typing only; nothing is recorded"). Nothing
+   reaches for the browser's vendor recogniser or an OpenAI endpoint to fill the
+   gap. The browser recogniser is a separate, labelled, opt-in path and is never
+   started on your behalf.
+2. **Local-only means loopback-only.** `assertLocalStreamUrl` accepts `http(s)`
+   on `127.0.0.1`, `localhost` or `[::1]` and refuses everything else — including
+   look-alikes that resolve remotely (`127.0.0.1.nip.io`, `localhost.evil.example`),
+   `0.0.0.0` (a bind address, not a destination), LAN addresses, embedded
+   credentials, fragments and non-HTTP schemes. The check runs again before every
+   upload, so a URL pinned at startup cannot be swapped for a different one later.
+3. **Redirects are refused, not followed.** A 302 is how a loopback endpoint
+   becomes an arbitrary destination. The request uses `redirect: "manual"` so the
+   3xx comes back and can be named — `STREAM_REDIRECT_REFUSED` — instead of
+   being reported as "unreachable", which would be a lie about what happened.
+4. **Bounded everywhere.** Chunks have a byte ceiling; a request has a 5 s
+   timeout, matching the buffered path; a response body is capped at 1 MB; a
+   transcript at 4 000 characters; a stream at 2 000 events; and at most
+   `maxQueue` chunks are in flight. Past that the caller gets
+   `{ accepted: false, reason: "backpressure" }` and pauses capture rather than
+   this module buffering audio without bound.
+5. **Ordered, and a partial is still not a message.** Requests finish out of
+   order, so results are parked by sequence and drained in order — the reader's
+   words cannot be reordered by a slow chunk. Events are `partial`, `final`,
+   `partial-failed`, `failed` or `cancelled`; a final is emitted exactly once; and
+   the route returns `text: null` with `partialIsMessage: false` unless a final
+   arrived. `failed` and `cancelled` are not 200s.
+
+**The microphone starts muted.** Capture begins only from a click; the capability
+probe on page load is a metadata request with no microphone access. No audio file
+is written and no transcript is sent anywhere as telemetry — the chunk is POSTed
+and dropped.
+
+**Barge-in is not claimed.** If a reply is speaking when you start dictating, the
+old speech is cancelled where the browser supports it; where it does not, the page
+says the capability is unavailable rather than pretending the overlap worked.
+This remains one utterance at a time, not full-duplex conversation.
 
 ## How accurate is it
 
@@ -344,6 +399,12 @@ flattering direction, and a reader who can open the code, run the test and hear 
   `firstAudioMs` is recorded only when a caller can supply it — in the browser it is null, never 0.
 - Not a noise-robust endpointing model. The local detector thresholds loudness with hysteresis;
   a noisy room makes it worse, and `docs/VOICE.md` says so rather than claiming clean segments.
+- Not a local streaming pipeline by default. `harness-13`'s adapter is opt-in (`QUASNOOZE_VOICE_STREAM=on`)
+  and loopback-only; with it off, dictation is buffered and the streaming partials do not exist. The
+  optional Whisper adapter remains request/response, and nothing here turns it into a stream.
+- Not a wake word, and not barge-in. There is no always-on listener: the mic starts muted. Overlapping
+  a reply is best-effort — old speech is cancelled where the browser supports it, and the page says so
+  when it does not.
 - Not a claim that browser recognition is private. That path may send audio to the browser vendor
   and is labelled as such; local dictation is the path that keeps audio on your machine.
 - Not a speech-recognition accuracy claim. The word error rate in
