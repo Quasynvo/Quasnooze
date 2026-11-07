@@ -2754,6 +2754,77 @@
       ],
       "auto_file": false,
       "body": "## Context\n\n`mintEnvelope` already forbids granting `shell`. `mind-06` will run independent read-tier tools concurrently. A conversation agent still should not spawn a second persona with the owner's write grants. This item is the join: a worker may only run tools named in the envelope, from the read allowlist, inside the same approval gate.\n\n## What to change\n\n- Parent may mint a worker for `search_docs` / `read_file` / `grep` with a 2-round / 30s budget.\n- Worker results return as evidence, not as silent side effects.\n- Off by default. The model cannot add grants.\n\n**Safety:** maintainer-gated. Shell, write_file, and MCP remain ungrantable. Child calls still need the user's live approval when the tool is dangerous.\n\n## Performance contract\n\n- **Baseline:** envelopes exist; 0 workers in the agent loop\n- **Target:** a two-document lookup worker finishes under the parent timeout without extra write tools\n- **Must not regress:** 0 shell grants in minted envelopes; live approvals still required for dangerous tools\n\n## Acceptance criteria\n\n- [ ] `workerMay(env, \"shell\")` is always false\n- [ ] Feature off means zero worker calls\n- [ ] Evidence listed in the parent reply, not hidden\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/agent.test.js\n```\n\n## Time estimate\n\n~5-7 days\n"
+    },
+    {
+      "id": "pinch-035-ollama-vision-route",
+      "title": "feat(vision): describe attached images with the local vision model, or refuse honestly",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "files": [
+        "src/attachments.js",
+        "src/brain.js",
+        "src/agent.js",
+        "src/prompt.js",
+        "test/attachments.test.js"
+      ],
+      "verify": "node --test test/attachments.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-5 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath"
+      ],
+      "body": "## Context\n\nJan and OpenClaw treat screenshots as first-class. Quasnooze already accepts image attachments (`file-upload`) but `docs/CAPABILITIES.json` marks `image-understanding` as missing: a non-vision Ollama tag will ignore pixels and the model may invent what it \"saw\". Competitive copy would add a cloud vision API. The fit version uses only the local provider's image parts, and fails closed.\n\n## What to change\n\n- If the turn has images and the active Ollama model advertises vision (or a documented allowlist of tags), pass `images` through as today and add one line to the system prompt: describe only what is in the pixels.\n- If the model is not vision-capable, do not pretend: reply that vision is unavailable and name `ollama pull` for a known vision tag. No cloud fallback.\n- Talk-only classifier: an attachment already forces `act` so tools remain available if the owner asks to save the file.\n\n**Safety:** no new dependency, no remote vision API, no pixel upload. Inspired by Jan/OpenClaw multimodal UX, inverted to local-only.\n\n## Performance contract\n\n- **Baseline:** images may be attached; understanding is missing; a text model can hallucinate the picture\n- **Target:** 100% of non-vision-model fixtures refuse instead of describing; vision-model fixtures include the image parts on the wire\n- **Must not regress:** attachment size/MIME gates; talk-only still omits tools when there is no attachment\n\n## Acceptance criteria\n\n- [ ] Non-vision active model + image → honest refuse, no invented description\n- [ ] Vision tag + image → provider payload contains the image\n- [ ] Zero new runtime dependencies\n- [ ] CAPABILITIES `image-understanding` evidence updated only when tests exist\n\n## How to verify\n\n```bash\nnode --test test/attachments.test.js test/agent.test.js\n```\n\n## Time estimate\n\n~3-5 days\n"
+    },
+    {
+      "id": "pinch-036-talk-ttft-bench",
+      "title": "test(converse): measure talk-path first-token vs full agent on the same model",
+      "status": "backlog",
+      "difficulty": "easy",
+      "labels": [
+        "good first issue",
+        "help wanted",
+        "roadmap",
+        "performance"
+      ],
+      "files": [
+        "scripts/talk-ttft-bench.js",
+        "docs/CONVERSATION.md",
+        "test/talk-shape.test.js"
+      ],
+      "verify": "node --test test/talk-shape.test.js\nnode scripts/validate-roadmap.js",
+      "time_estimate": "~1-2 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath",
+        "pinch-029-talk-classifier-eval"
+      ],
+      "auto_file": true,
+      "body": "## Context\n\n`mind-08` claims talk turns skip tool schemas so local prefill is cheaper. Without a bench that is an adjective. LiveKit-style judges measure voice; we need the same discipline for text TTFT: talk vs agent, same model, same machine, mock allowed for CI and optional Ollama for a documented local run.\n\n## What to change\n\n- A script that drives `classifyTalk` + records prompt token estimate (`budget.approxTokens` of system + tools) for talk vs act fixtures.\n- CI asserts talk prompts include 0 tool schema tokens and are smaller than the agent prompt by a measured margin (number in the report).\n- Optional `--ollama` path records `firstTokenMs` and writes a table into `docs/CONVERSATION.md`; CI must not require Ollama.\n\n**Safety:** no user text logged; mock provider only in CI.\n\n## Performance contract\n\n- **Baseline:** not implemented — mind-08 has unit tests, 0 TTFT comparison\n- **Target:** talk prompt tool-schema tokens = 0; talk prompt tokens ≤ 50% of the agent prompt on the fixture pair; optional local firstTokenMs reported not invented\n- **Must not regress:** false-talk remains 0 on the pinch-029 corpus when that ships\n\n## Acceptance criteria\n\n- [ ] CI script fails if talk turns still serialise tool schemas\n- [ ] Report prints talk vs agent token estimates\n- [ ] `--ollama` is optional and documented as hardware-specific\n\n## How to verify\n\n```bash\nnode --test test/talk-shape.test.js\n```\n\n## Time estimate\n\n~1-2 days\n"
+    },
+    {
+      "id": "pinch-037-static-system-prefix",
+      "title": "perf(prompt): split the system prompt so the cacheable prefix never includes memory",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance"
+      ],
+      "files": [
+        "src/prompt.js",
+        "src/budget.js",
+        "src/agent.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/agent.test.js test/talk-shape.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-4 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath"
+      ],
+      "body": "## Context\n\nOllama (and vLLM) can reuse a prefix KV cache only if the leading bytes are identical turn to turn. `buildSystemPrompt` currently interleaves identity, memory facts, clock, and channel — so every turn busts the cache. `mind-04` cannot land until this cut exists. Jan keeps a stable system prompt for that reason; we do it without an Electron runtime.\n\n## What to change\n\n- Two blocks: static (identity, honesty, tool policy) and dynamic (clock, memory, channel, persona).\n- Dynamic block comes *after* the static prefix. Talk and agent share the same static bytes so switching modes does not throw the cache away if the owner stays in one mode; if they must differ, document two prefixes not one mashed string.\n- A test hashes the static prefix across two turns with different facts and clocks and asserts equality.\n\n**Safety:** honesty and approval rules stay in the static prefix so they cannot be dropped by a memory trim. Clock/memory never move before the cut.\n\n## Performance contract\n\n- **Baseline:** one system string; memory and clock in the first tokens; prefix cache hit rate 0\n- **Target:** static prefix SHA-256 identical across 10 turns that only change facts/time; dynamic block still contains the new facts\n- **Must not regress:** honesty/approval sentences remain in the static prefix; talk-only still omits tools\n\n## Acceptance criteria\n\n- [ ] Hash of static prefix stable across memory/clock changes\n- [ ] New facts still appear in the dynamic block\n- [ ] No cloud, no new deps\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/talk-shape.test.js\n```\n\n## Time estimate\n\n~3-4 days\n"
     }
   ]
 }
