@@ -790,7 +790,6 @@ export async function startWakeListening({
           const result = await transcribe(capture({ elapsedMs: elapsed, deltaMs: delta }));
           gate.reset('sent');
           awakeAt = null;
-          spoke = false;
           onStatus({ state: gate.state, sent: true, text: result?.text ?? null });
           return { text: result?.text ?? null, sent: true };
         } catch (error) {
