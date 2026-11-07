@@ -796,7 +796,6 @@ export async function startWakeListening({
         } catch (error) {
           gate.reset('failed');
           awakeAt = null;
-          spoke = false;
           onStatus({ state: gate.state, reason: 'failed', message: String(error?.message || error), sent: true });
           return { text: null, sent: false, error };
         }
