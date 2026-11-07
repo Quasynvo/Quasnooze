@@ -574,7 +574,7 @@ export function normalizeWakeText(value) {
  * existing browser path already behaves: saying the phrase *and* the request in
  * one breath should work rather than needing two.
  */
-export function parseWakePhrase(phrase = 'hey quasnooze') {
+export function parseWakePhrase(phrase = `hey ${WAKE_WORD}`) {
   const normalized = normalizeWakeText(phrase);
   const tokens = normalized.split(' ').filter(Boolean);
   if (!tokens.length) throw new TypeError('A wake phrase needs at least one word.');
