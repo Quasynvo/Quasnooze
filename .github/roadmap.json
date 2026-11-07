@@ -2585,6 +2585,175 @@
         "pinch-022-retrieval-quality-corpus"
       ],
       "body": "## Context\n\n`src/prompt.js` injects `loadMemory().facts.slice(-40)` into the system prompt and `slice(-8)` into the conversation prompt. That is recency, not relevance: after a month of use the assistant carries forty mostly-unrelated facts on every turn, which dilutes attention, costs prefill, and changes the prompt prefix so often that caching (`mind-04`) cannot help.\n\nMemory systems that work rank and bound by relevance, keep pinned facts always present, and — the part usually skipped — record where a fact came from so a wrong one can be corrected rather than accumulating. `harness-05` covers provenance; this item covers selection.\n\n## What to change\n\n- Rank remembered facts against the current turn using the existing local scorer (`src/documents.js` BM25 is already in the tree) plus a pinned set and a recency tiebreak.\n- A token budget for the memory block rather than a count of facts, so a fact with a long body cannot crowd out five short ones.\n- Pinned facts (name, timezone, preferences the owner marked) always included; unpinned facts included only when they score above a floor, with the floor measured rather than guessed.\n- The block goes **after** the static prefix (see `mind-04`), so relevance selection and cache reuse do not fight each other.\n- Recall quality measured on a labelled set of turns: did the fact the turn needed make the cut?\n\n**Safety:** no fact may be sent anywhere, no new store, and nothing is deleted: this changes what is *included* in a prompt, never what is remembered. A fact that fails to be recalled is still there next turn.\n\n## Performance contract\n\n- **Baseline:** recency only — up to 40 facts are injected into the system prompt and 8 into the conversation prompt by position, with 0 relevance scoring and no token budget for the block\n- **Target:** injected memory tokens down **60% or more** on turns where more than 20 facts are stored, while recall@5 of the needed fact stays at **90% or more** on the labelled turn set\n- **Must not regress:** the fact a turn needs may not stop being available; pinned facts may never be dropped; a 90%-recall result may not be reached by simply injecting everything again\n\n## Acceptance criteria\n\n- [ ] Memory injection has a token budget and a measured relevance floor\n- [ ] Pinned facts are always present; unpinned facts must earn their place\n- [ ] recall@5 of the needed fact is 90% or more on the labelled turns\n- [ ] Injected memory tokens drop 60% or more on fact-heavy turns\n- [ ] Nothing is deleted from the store by this change\n- [ ] The memory block sits after the static prefix and does not break `mind-04`'s cache test\n\n## How to verify\n\n```bash\nnode --test test/agent.test.js test/router.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js\n```\n\n## Time estimate\n\n~4-6 days"
+    },
+    {
+      "id": "mind-08-talk-only-hotpath",
+      "title": "perf(converse): skip tool schemas on closed questions, keep actions on the agent",
+      "status": "shipped",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/voice",
+        "performance"
+      ],
+      "files": [
+        "src/converse/talk-shape.js",
+        "src/converse/recall.js",
+        "src/prompt.js",
+        "src/agent.js",
+        "test/talk-shape.test.js",
+        "docs/CONVERSATION.md"
+      ],
+      "verify": "node --test test/talk-shape.test.js test/conversation-route.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~2-3 days",
+      "depends_on": [
+        "mind-01-intent-fast-path"
+      ],
+      "shipped_at": "2026-11-07",
+      "body": "## Context\n\nGreetings already omitted tool schemas. Factual questions still paid ~2k tokens of tool JSON plus the long agent system prompt, so a local 7B spent its time-to-first-token on a contract it would not use. The expensive mistake is skipping tools when the person asked for an action; unmatched utterances must stay on the full agent.\n\n## What to change\n\n- `classifyTalk` routes closed question shapes (`what is`, `why`, `explain`, …) to a talk-only path: `buildTalkPrompt`, no `toolSchemas()`, `think:false`, 256-token cap, six turns of history.\n- Action verbs, attachments, slash commands, multi-clause text and anything unmatched stay on the agent. A tool call on the talk route is refused, not executed.\n- `relevantFacts` injects overlapping memories with a recent fallback, not `facts.slice(-40)`.\n\n**Safety:** this changes prefill, not permissions. The model cannot widen the talk set. Fast-path and social greeting routes stay as they are.\n\n## Performance contract\n\n- **Baseline:** not implemented as a separate path — questions used the full agent prompt and tool schemas; greetings already omitted tools\n- **Target:** talk-classified turns send 0 tool schemas and ≤256 max tokens; 100% of labelled action-verb fixtures remain `act`\n- **Must not regress:** `isSocialTurn` fixtures and `test/conversation-route.test.js` stay green; a talk turn that emits tools executes none\n\n## Acceptance criteria\n\n- [x] Closed questions omit tools; action verbs do not\n- [x] Overlapping memory is preferred; zero-overlap falls back to recent facts\n- [x] Tool calls on the talk route are refused\n- [x] Existing social and fast-path tests still pass\n\n## How to verify\n\n```bash\nnode --test test/talk-shape.test.js test/conversation-route.test.js test/agent.test.js\n```\n\n## Time estimate\n\n~2-3 days\n"
+    },
+    {
+      "id": "pinch-029-talk-classifier-eval",
+      "title": "test(converse): labelled corpus for false-talk vs false-act rates",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance"
+      ],
+      "files": [
+        "scripts/talk-shape-eval.js",
+        "test-fixtures/talk-shape-corpus.json",
+        "src/converse/talk-shape.js",
+        "test/talk-shape.test.js"
+      ],
+      "verify": "node --test test/talk-shape.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~2-3 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath"
+      ],
+      "auto_file": true,
+      "body": "## Context\n\n`classifyTalk` is conservative by design, but without a labelled corpus we cannot say the false-talk rate (skipping tools when an action was asked) is actually 0 on neighbour phrasings. The fast path has `docs/FAST-PATH-EVAL.md`; talk needs the same honesty.\n\n## What to change\n\n- A fixture corpus: talk / act / social labels, including look-alikes (`what is in src`, `what time should I remind Priya`, bilingual phrasing).\n- An eval script that prints false-talk, false-act, and fall-through-to-act counts. False-talk is the gate that fails the build.\n- Document the numbers next to the conversation review.\n\n**Safety:** eval is offline, no model, no tools, no network.\n\n## Performance contract\n\n- **Baseline:** unit fixtures only; no labelled neighbour set\n- **Target:** 0 false-talk on the labelled act set; false-act (questions that keep tools) reported, not hidden\n- **Must not regress:** existing `test/talk-shape.test.js` cases remain green\n\n## Acceptance criteria\n\n- [ ] Corpus checked in under test-fixtures/\n- [ ] Eval fails CI on any false-talk\n- [ ] Report lists fall-through reasons\n\n## How to verify\n\n```bash\nnode --test test/talk-shape.test.js\n```\n\n## Time estimate\n\n~2-3 days\n"
+    },
+    {
+      "id": "pinch-030-repeat-talk-cache",
+      "title": "perf(converse): hash-cache identical talk-only answers for a short TTL",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "performance"
+      ],
+      "files": [
+        "src/control/gateway.js",
+        "src/brain.js",
+        "src/agent.js",
+        "test/control-plane.test.js"
+      ],
+      "verify": "node --test test/control-plane.test.js test/talk-shape.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-4 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath",
+        "mind-04-prefix-cache-residency"
+      ],
+      "body": "## Context\n\nLocal decode is wasted when the owner asks the same talk-only question twice in a minute. `createPromptCache` already hashes messages and never stores the prompt text. It is not wired into `brain.chat`.\n\n## What to change\n\n- On `talk` turns only, look up the prompt-hash cache before a provider call; TTL ≤ 120 s; max 64 entries.\n- Never cache social greetings (they should vary), act turns, tool results, or anything with attachments.\n- Cache stores the assistant text hash-keyed; disable with an env flag that restores today's path exactly.\n\n**Safety:** cache must not serve an act/tool answer.\n\n## Performance contract\n\n- **Baseline:** not implemented — every talk turn hits the model\n- **Target:** identical talk-only repeats within 120 s skip the provider; hit rate measurable in telemetry\n- **Must not regress:** act turns never read or write the cache; `QUASNOOZE_TALK_CACHE=off` matches today's timings\n\n## Acceptance criteria\n\n- [ ] Talk-only exact repeats served from cache\n- [ ] Act/social/attachment turns never cached\n- [ ] Off-switch restores the uncached path\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/talk-shape.test.js\n```\n\n## Time estimate\n\n~3-4 days\n"
+    },
+    {
+      "id": "pinch-031-kill-switch-http",
+      "title": "feat(safety): keyed HTTP/CLI to arm and disarm the owner kill switch",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "files": [
+        "src/control/killswitch.js",
+        "src/server.js",
+        "src/cli.js",
+        "test/control-plane.test.js",
+        "test/http-surface.test.js"
+      ],
+      "verify": "node --test test/control-plane.test.js test/http-surface.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-5 days",
+      "depends_on": [
+        "mind-08-talk-only-hotpath"
+      ],
+      "auto_file": false,
+      "body": "## Context\n\n`src/control/killswitch.js` already freezes every tool, including the fast path, and fails closed on a corrupt latch. There is no keyed HTTP or CLI surface, so an incident still means editing a file or restarting with an env var.\n\n## What to change\n\n- `POST /api/killswitch` arm/disarm, same access key as the panel; CSRF/origin rules identical to other mutating routes.\n- `quasnooze freeze` / `quasnooze thaw` CLI writing the same latch.\n- Panel indicator when armed. The model still cannot toggle it.\n\n**Safety:** unauthenticated or cookie-only requests must not arm or disarm. Foreign Origin/Host rejected. This is maintainer-gated (`auto_file: false`).\n\n## Performance contract\n\n- **Baseline:** latch exists; freeze is env or direct file write; 0 HTTP/CLI\n- **Target:** arm takes effect on the next tool call without restart, p95 < 50 ms to read the latch\n- **Must not regress:** existing keyed API rejections; model-authored messages cannot arm it\n\n## Acceptance criteria\n\n- [ ] Keyed arm/disarm without restart\n- [ ] Unkeyed and foreign-origin requests fail\n- [ ] Fast path and tool loop both refuse while armed\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/http-surface.test.js\n```\n\n## Time estimate\n\n~3-5 days\n"
+    },
+    {
+      "id": "pinch-032-durable-hitl-panel",
+      "title": "feat(approvals): show the durable HITL queue in the panel, distinct from live Allow/Deny",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "files": [
+        "src/control/hitl.js",
+        "src/server.js",
+        "public/",
+        "test/control-plane.test.js"
+      ],
+      "verify": "node --test test/control-plane.test.js test/http-surface.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~3-4 days",
+      "depends_on": [
+        "pinch-020-structured-action-preview"
+      ],
+      "body": "## Context\n\nLive approvals in `src/agent.js` die with the process (correct for a ten-minute shell prompt). `src/control/hitl.js` already persists pending → approved/denied/expired. Nothing in the panel lists or decides those items, so deferred work still cannot wait overnight.\n\n## What to change\n\n- Panel list of pending HITL items with the existing action preview component.\n- Keyed approve/deny; expired items cannot be approved.\n- Do not replace live Allow/Deny for in-turn shell/file writes.\n\n**Safety:** decisions are owner-keyed. The model cannot mint an item that skips live risk tiers.\n\n## Performance contract\n\n- **Baseline:** queue on disk, 0 UI; live approvals remain in-memory\n- **Target:** pending items survive restart; approve/deny is single-use\n- **Must not regress:** live shell approval latency and `pinch-020` preview tests\n\n## Acceptance criteria\n\n- [ ] Restart preserves pending items\n- [ ] Single-use approve/deny; expired cannot approve\n- [ ] Live in-turn approvals unchanged\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/http-surface.test.js\n```\n\n## Time estimate\n\n~3-4 days\n"
+    },
+    {
+      "id": "pinch-033-acl-document-filter",
+      "title": "feat(retrieval): drop ranked document hits the session subject may not read",
+      "status": "backlog",
+      "difficulty": "medium",
+      "labels": [
+        "help wanted",
+        "roadmap",
+        "area/memory"
+      ],
+      "files": [
+        "src/control/acl.js",
+        "src/documents.js",
+        "src/agent.js",
+        "test/control-plane.test.js",
+        "test/documents.test.js"
+      ],
+      "verify": "node --test test/control-plane.test.js test/documents.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~2-4 days",
+      "depends_on": [
+        "pinch-022-retrieval-quality-corpus"
+      ],
+      "body": "## Context\n\n`filterHits` / `mayRead` exist in `src/control/acl.js` but `searchDocuments` does not call them. A Telegram session could cite a web-panel document if both share the workspace index. For a single-owner assistant this is channel isolation, not multi-tenant SaaS.\n\n## What to change\n\n- Stamp ACL on ingest (channel + tenant from config, never from the model).\n- `searchDocuments` runs `filterHits` after ranking, before citations.\n- Hits without ACL stay visible to the same tenant only (fail closed).\n\n**Safety:** this is a drop filter, not a new store. Do not send documents off-machine.\n\n## Performance contract\n\n- **Baseline:** not implemented in the retrieval path — ranked hits are not ACL-filtered\n- **Target:** 100% of cross-channel labelled fixtures are dropped; same-channel recall@5 stays within 5% of `pinch-022`\n- **Must not regress:** citation fabrication checks; unattended retrieval still refuses writes\n\n## Acceptance criteria\n\n- [ ] Cross-channel hits never become citations\n- [ ] Missing ACL is tenant-only, not public\n- [ ] Retrieval eval corpus still runs\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/documents.test.js\n```\n\n## Time estimate\n\n~2-4 days\n"
+    },
+    {
+      "id": "pinch-034-a2a-read-worker",
+      "title": "feat(agent): optional read-only worker envelope for parallel lookup, never shell",
+      "status": "backlog",
+      "difficulty": "hard",
+      "labels": [
+        "help wanted",
+        "roadmap"
+      ],
+      "files": [
+        "src/control/a2a.js",
+        "src/agent.js",
+        "test/control-plane.test.js",
+        "test/agent.test.js"
+      ],
+      "verify": "node --test test/control-plane.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
+      "time_estimate": "~5-7 days",
+      "depends_on": [
+        "mind-06-parallel-read-tools",
+        "agentic-06-worker"
+      ],
+      "auto_file": false,
+      "body": "## Context\n\n`mintEnvelope` already forbids granting `shell`. `mind-06` will run independent read-tier tools concurrently. A conversation agent still should not spawn a second persona with the owner's write grants. This item is the join: a worker may only run tools named in the envelope, from the read allowlist, inside the same approval gate.\n\n## What to change\n\n- Parent may mint a worker for `search_docs` / `read_file` / `grep` with a 2-round / 30s budget.\n- Worker results return as evidence, not as silent side effects.\n- Off by default. The model cannot add grants.\n\n**Safety:** maintainer-gated. Shell, write_file, and MCP remain ungrantable. Child calls still need the user's live approval when the tool is dangerous.\n\n## Performance contract\n\n- **Baseline:** envelopes exist; 0 workers in the agent loop\n- **Target:** a two-document lookup worker finishes under the parent timeout without extra write tools\n- **Must not regress:** 0 shell grants in minted envelopes; live approvals still required for dangerous tools\n\n## Acceptance criteria\n\n- [ ] `workerMay(env, \"shell\")` is always false\n- [ ] Feature off means zero worker calls\n- [ ] Evidence listed in the parent reply, not hidden\n\n## How to verify\n\n```bash\nnode --test test/control-plane.test.js test/agent.test.js\n```\n\n## Time estimate\n\n~5-7 days\n"
     }
   ]
 }

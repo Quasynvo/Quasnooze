@@ -633,6 +633,8 @@ flags and inherited OS variables are exceptions, documented below. The ones that
 | `QUASNOOZE_WORKSPACE` | `~` | the **only** roots the agent may touch — narrow this |
 | `QUASNOOZE_AUTO_APPROVE` | `false` | skip the approval gate for everything (don't) |
 | `QUASNOOZE_RISK_TIERS` | `true` | run proven read-only commands without asking; `false` = ask about all |
+| `QUASNOOZE_KILL_SWITCH` | `0` | owner freeze: refuse every tool until disarmed; see [CONTROL-PLANE.md](CONTROL-PLANE.md) |
+| `QUASNOOZE_TENANT` | `user` | identity label for ACL-aware retrieval; never taken from the model |
 | `QUASNOOZE_SHELL_TIMEOUT` | `120` | seconds per command |
 | `QUASNOOZE_NUM_CTX` | `8192` | context window in tokens; raise it to what your model supports |
 | `QUASNOOZE_NUM_PREDICT` | `2048` | tokens reserved for the reply — never counted as history |
