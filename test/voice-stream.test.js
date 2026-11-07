@@ -21,7 +21,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const {
-  STREAM_LIMITS, LOOPBACK_HOSTS, VoiceStreamError, VOICE_STREAM_CODES,
+  STREAM_LIMITS, LOOPBACK_HOSTS, VOICE_STREAM_CODES,
   assertLocalStreamUrl, resolveStream, describeFallback, validateFrame,
   cleanTranscript, sendChunk, createTranscriptStream, transcribeStream,
 } = await import("../src/voice/stream.js");
