@@ -1675,7 +1675,7 @@
     {
       "id": "voice-04-wake-gating",
       "title": "feat(voice): opt-in local wake gating that is not authentication",
-      "status": "backlog",
+      "status": "shipped",
       "difficulty": "medium",
       "labels": [
         "help wanted",
@@ -1683,13 +1683,14 @@
         "area/voice"
       ],
       "files": [
-        "desktop/Companion.cs",
-        "src/windows-companion.js",
-        "public/audio-input.js"
+        "public/audio-input.js",
+        "public/index.html",
+        "docs/VOICE.md"
       ],
       "verify": "node --test test/desktop.test.js test/audio-input.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~2-3 days",
-      "body": "## Context\n\nThe Windows host supports an opt-in \"Hey Quasnooze\" phrase through `System.Speech`, but the browser path has no gating at all: the visualizer analyses audio the moment the user enables the microphone, and there is no way to say \"listen for one phrase, not for everything\".\n\nA wake phrase is a **convenience trigger, not a security boundary** — recorded audio can replay it. The README already says so. This item makes the convenience real without pretending it is a lock.\n\n## What to change\n\n- `public/audio-input.js`: an on-device wake gate that runs before transcription, using a local keyword match on the recognition result rather than streaming audio anywhere.\n- Explicit states: `gate-idle`, `gate-heard`, `listening`, `sending` — surfaced in the UI so a person can see which one is active at any moment.\n- `docs/VOICE.md`: a paragraph stating plainly that a wake phrase is not authentication and does not protect against a recording.\n- Off by default, per-surface opt-in, and released on page hide like every other capture path.\n\n**Safety:** the phrase decides *when to listen*, never *who is allowed*. No approval gate may be keyed to it.\n\n## Acceptance criteria\n\n- [ ] Audio is not sent to any model until the gate fires\n- [ ] The UI always shows whether the gate is armed, and it is off by default\n- [ ] No documentation or UI copy implies the phrase authenticates the speaker\n- [ ] Hiding or navigating away releases the microphone\n\n## How to verify\n\n```bash\nnode --test test/desktop.test.js test/audio-input.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~2-3 days"
+      "body": "## Context\n\nThe Windows host supports an opt-in \"Hey Quasnooze\" phrase through `System.Speech`, but the browser path has no gating at all: the visualizer analyses audio the moment the user enables the microphone, and there is no way to say \"listen for one phrase, not for everything\".\n\nA wake phrase is a **convenience trigger, not a security boundary** — recorded audio can replay it. The README already says so. This item makes the convenience real without pretending it is a lock.\n\n## What to change\n\n- `public/audio-input.js`: an on-device wake gate that runs before transcription, using a local keyword match on the recognition result rather than streaming audio anywhere.\n- Explicit states: `gate-idle`, `gate-heard`, `listening`, `sending` — surfaced in the UI so a person can see which one is active at any moment.\n- `docs/VOICE.md`: a paragraph stating plainly that a wake phrase is not authentication and does not protect against a recording.\n- Off by default, per-surface opt-in, and released on page hide like every other capture path.\n\n**Safety:** the phrase decides *when to listen*, never *who is allowed*. No approval gate may be keyed to it.\n\n## Acceptance criteria\n\n- [ ] Audio is not sent to any model until the gate fires\n- [ ] The UI always shows whether the gate is armed, and it is off by default\n- [ ] No documentation or UI copy implies the phrase authenticates the speaker\n- [ ] Hiding or navigating away releases the microphone\n\n## How to verify\n\n```bash\nnode --test test/desktop.test.js test/audio-input.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~2-3 days",
+      "shipped_at": "2026-11-07"
     },
     {
       "id": "reason-01-plan-verify",

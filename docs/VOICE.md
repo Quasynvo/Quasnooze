@@ -205,8 +205,45 @@ the visualiser draws. There is no model and no dependency:
   adds a little. It is not a sample-accurate VAD.
 - **Not barge-in.** It does not detect speech while the assistant is talking, and
   it does not interrupt playback.
-- **Not a wake word.** Local dictation starts on the button. Background listening
-  still needs the Windows voice host.
+- **Not a wake word in the security sense.** There is a wake *gate* (above), but
+  it is a convenience trigger: recordings replay it, nearby people trigger it, and
+  it authenticates nobody. Background listening still needs the Windows voice host,
+  and the gate is off by default.
+
+## Wake gating: a trigger, not a lock
+
+There is an optional "Hey Quasnooze" gate on the browser path
+(`public/audio-input.js`, `voice-04`). Saying the phrase opens the microphone for
+**one utterance**; before that, audio is discarded as it is read rather than
+buffered and then dropped — no chunk is assembled, no request is made, and no
+transcript exists to send.
+
+**The phrase is not authentication, and this is the part that matters.** It
+decides *when to listen*, never *who is allowed*:
+
+- A **recording** of you saying it replays it. The gate has no way to tell a
+  speaker from a phone playing a clip.
+- A **nearby person** can say it. Nothing here identifies a voice; there is no
+  speaker verification, no enrolment, and no model that scores a voiceprint.
+- It is **not a permission**. No approval prompt, capability check or effect gate
+  may be keyed to the phrase. `wakePhraseAuthenticates()` exists purely so a
+  caller looking for that answer gets a `false` instead of a plausible-looking
+  state machine. Keep approval decisions on the approval path.
+
+The gate is **off by default** and opt-in per page: it arms only from a click in
+that tab, the panel always shows which of `off`, `gate-idle`, `gate-heard`,
+`listening` or `sending` is active, and losing the page releases the microphone —
+`pagehide` for a navigation, `visibilitychange` for a tab switch, which on mobile
+can suspend the page without firing `pagehide`. Silence after the phrase expires in
+3 s rather than holding the microphone for the full 15 s utterance cap, because a
+stray match is common and an open microphone is not free.
+
+Which hardware does the recognising decides where the audio goes, and that is the
+existing table above: the browser's recogniser may send audio to its vendor (the
+opt-in prompt says so), while the Windows voice host recognises on-device with
+`System.Speech`. Gating changes *when* capture may start, never *where* the audio
+goes — those are separate questions and conflating them is how a privacy label
+becomes a lie.
 
 ## Streaming partials, and why a partial is never a message
 
@@ -402,7 +439,9 @@ flattering direction, and a reader who can open the code, run the test and hear 
 - Not a local streaming pipeline by default. `harness-13`'s adapter is opt-in (`QUASNOOZE_VOICE_STREAM=on`)
   and loopback-only; with it off, dictation is buffered and the streaming partials do not exist. The
   optional Whisper adapter remains request/response, and nothing here turns it into a stream.
-- Not a wake word, and not barge-in. There is no always-on listener: the mic starts muted. Overlapping
+- Not a wake word as a security boundary. The opt-in gate (`voice-04`) is off by default, disarms on page
+  hide, and only decides when to listen; it is defeated by a recording, so nothing may gate approval on it.
+- Not barge-in. There is no always-on listener: the mic starts muted. Overlapping
   a reply is best-effort — old speech is cancelled where the browser supports it, and the page says so
   when it does not.
 - Not a claim that browser recognition is private. That path may send audio to the browser vendor
