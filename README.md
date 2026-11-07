@@ -131,18 +131,19 @@ Every number below ships with its sample size, its method, and a one-command rep
 
 ## How it compares
 
-| | **Quasnooze** | Cloud voice assistants | Chat-channel assistant harnesses | Local LLM chat UIs |
+| | **Quasnooze** | OpenClaw-class harnesses | Open Interpreter | Jan / local chat UIs |
 |---|---|---|---|---|
-| Runs fully on your machine | ✅ Ollama / LM Studio / llama.cpp / vLLM | ❌ cloud | ◐ optional | ✅ |
-| Any major API key you already have | ✅ OpenAI · Anthropic · Gemini · Groq · OpenRouter · Mistral · DeepSeek · Together · xAI (`quasnooze providers`) | ◐ own ecosystem | ◐ varies | ◐ depends on the app |
-| No account / API key needed | ✅ | ❌ | ◐ | ✅ |
-| Permission gate before state-changing actions | ✅ risk tiers + bounded previews | ◐ confirmations for some actions | ◐ varies by harness | ❌ (no actions) |
-| Actions verified by independent read-back | ✅ `verified / contradicted / unverified` | ❌ | ❌ | ❌ |
-| Voice interface | ◐ Windows native + browser analysis | ✅ | ❌ text-first | ❌ |
-| Chat channels (Telegram/Discord/Slack/WhatsApp) | ✅ | ❌ | ✅ | ❌ |
-| Everyday tools (files, shell, reminders, tasks, docs) | ✅ 24 built-in + MCP | ◐ closed ecosystem | ✅ | ❌ chat only |
-| Runtime dependencies to audit | **0** | n/a (hosted) | hundreds (typical) | varies |
-| License | MIT | proprietary | varies | varies |
+| Runs fully on your machine | ✅ Ollama default | ◐ often cloud-backed | ✅ | ✅ |
+| Permission before every mutation | ✅ risk tiers + previews + kill switch | ◐ varies | ❌ generated code runs | ❌ (no actions) |
+| Independent read-back of results | ✅ verified / contradicted | ❌ | ❌ | ❌ |
+| Everyday questions skip tool prefill | ✅ talk-only hotpath | ❌ full tool list every turn | n/a | n/a |
+| Deterministic intents without a model | ✅ 4.3 ms p50 | ❌ | ❌ | ❌ |
+| Zero runtime dependencies | ✅ | hundreds | Python tree | Electron |
+| Chat channels | ✅ Telegram · Discord · Slack · WhatsApp | ✅ | ❌ | ❌ |
+| Voice | ◐ Windows + browser | ◐ | ❌ | ❌ |
+| Vision | ◐ local vision tag, else honest refuse | ✅ often cloud | ❌ | ✅ |
+| Unbounded browser/CDP | ❌ on purpose | ✅ | ❌ | ❌ |
+| License | MIT | MIT | AGPL | AGPL |
 
 *Feature-level snapshot, November 2026, compiled from [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md) — which also scores Quasnooze **behind** the field on latency, turn-taking, and OS-control breadth. Something out of date or wrong? Please [open an issue](https://github.com/Quasynvo/Quasnooze/issues/new/choose).*
 

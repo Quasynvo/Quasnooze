@@ -35,6 +35,8 @@ import { parseWorkflowCommand, createWorkflow, submitDesign, approveDesign, begi
 import { verifyAction, describeVerification, CONTRADICTED as VERIFY_CONTRADICTED } from "./verify.js";
 import { isArmed, freezeMessage } from "./control/killswitch.js";
 import { classifyTalk } from "./converse/talk-shape.js";
+import { visionDecision } from "./converse/vision.js";
+import { talkCacheEnabled, talkCacheKey, talkCacheGet, talkCacheSet } from "./converse/talk-cache.js";
 
 const MAX_ROUNDS = 8;
 /** Characters of tool output one turn may carry into the context, in total. */
@@ -696,6 +698,22 @@ export async function runAgent({
   const userTurn = { role: "user", content: attachmentBlock.text ? `${attachmentBlock.text}\n\n---\n\n${text}` : text };
   if (attachmentBlock.images.length) userTurn.images = attachmentBlock.images;
 
+  const sight = visionDecision({
+    hasImages: Boolean(attachmentBlock.images.length),
+    model: activeModel.model,
+    provider: activeModel.provider,
+  });
+  if (!sight.ok) return simpleTurn(sight.message);
+
+  if (talk.kind === "talk" && talkCacheEnabled() && !attachments.length) {
+    const ck = talkCacheKey({ model: `${activeModel.provider}/${activeModel.model}`, text, sessionId });
+    const cached = talkCacheGet(ck);
+    if (cached) {
+      onEvent({ type: "status", message: "cached" });
+      return simpleTurn(cached);
+    }
+  }
+
   const persona = buildPersonaMessage(sessionId);
   let messages = [
     { role: "system", content: social ? buildConversationPrompt({ channel }) : talk.kind === "talk" ? buildTalkPrompt({ channel, userText: text }) : buildSystemPrompt({ channel }) },
@@ -1270,6 +1288,10 @@ export async function runAgent({
     guardFlags: guard.flags.length,
     error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
   }));
+
+  if (talk.kind === "talk" && talkCacheEnabled() && !attachments.length && !brainFailed && !modelOutputFailed && finalText) {
+    talkCacheSet(talkCacheKey({ model: `${activeModel.provider}/${activeModel.model}`, text, sessionId }), finalText);
+  }
 
   return {
     text: finalText,

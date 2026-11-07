@@ -106,6 +106,6 @@ See the manifest for full bodies. Summary:
 
 | ID | Source | Complexity | Value | Success |
 |---|---|---|---|---|
-| `pinch-035-ollama-vision-route` | Jan / OpenClaw multimodal | Medium | High if the owner already pulls a vision tag | Attached image + non-vision model → honest refuse; vision model → no invented pixels |
-| `pinch-036-talk-ttft-bench` | LiveKit judges / our own `voice-01` | Low | High (proves mind-08) | talk `firstTokenMs` p50 below agent path on the same mock/local model; 0 act fixtures classified talk |
-| `pinch-037-static-system-prefix` | Ollama prefix cache | Medium | High (unlocks mind-04) | Bytes before the memory block identical across turns; cache-busting fields after the cut |
+| `pinch-035-ollama-vision-route` | Jan / OpenClaw multimodal | **landed** | High | Non-vision model refuses; `llava` / `qwen2-vl` pass (`src/converse/vision.js`) |
+| `pinch-036-talk-ttft-bench` | LiveKit judges | **landed** | High | `node scripts/talk-ttft-bench.js` — talk prompt ~13% of agent+tools |
+| `pinch-037-static-system-prefix` | Ollama prefix cache | **landed** | High | `staticPrefixHash()` identical after new memories |

@@ -304,11 +304,15 @@
         "photo",
         "image recognition"
       ],
-      "status": "missing",
+      "status": "partial",
       "policy": "in-scope",
       "evidence": [
-        "src/brain.js: text-only message shape"
-      ]
+        "src/brain.js: Ollama images[] on the user message",
+        "src/converse/vision.js: non-vision tags refuse before a guessed description",
+        "src/agent.js: visionDecision before the model turn",
+        "test/leader-path.test.js"
+      ],
+      "note": "Local vision tags (llava, qwen2-vl, …) pass the image through. A text-only model refuses instead of inventing pixels. No cloud vision API."
     },
     {
       "id": "rag-documents",

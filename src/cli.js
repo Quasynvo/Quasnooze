@@ -195,8 +195,35 @@ async function runScoutCli(args) {
   console.log(JSON.stringify(result.schedule, null, 2));
 }
 
+async function runFreezeCli(args) {
+  const [{ armKillswitch, disarmKillswitch, readKillswitch, isArmed }] = await Promise.all([
+    import("./control/killswitch.js"),
+  ]);
+  const sub = args[0];
+  if (sub === "status" || !sub) {
+    const s = readKillswitch();
+    console.log(JSON.stringify({ armed: isArmed(), ...s }, null, 2));
+    return;
+  }
+  if (sub === "arm" || sub === "on") {
+    console.log(JSON.stringify(armKillswitch({ reason: args.slice(1).join(" ") || "owner freeze", by: "cli" }), null, 2));
+    return;
+  }
+  if (sub === "disarm" || sub === "off") {
+    console.log(JSON.stringify(disarmKillswitch({ by: "cli" }), null, 2));
+    return;
+  }
+  console.error("usage: quasnooze freeze [status|arm|disarm]");
+  process.exitCode = 1;
+}
+
 async function main() {
   const [mode, ...rest] = process.argv.slice(2);
+  if (mode === "freeze" || mode === "thaw") {
+    if (mode === "thaw") await runFreezeCli(["disarm", ...rest]);
+    else await runFreezeCli(rest);
+    return;
+  }
   if (mode === "scout") { await runScoutCli(rest); return; }
   if (mode === "tracker") { await runTrackerCli(rest); return; }
   if (mode === "providers") { await runProvidersCli(rest); return; }
