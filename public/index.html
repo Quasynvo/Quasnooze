@@ -591,7 +591,7 @@ async function toggleLocalSpeechStream() {
   const abort = new AbortController();
   const chunks = [];
   let session, recorder;
-  const { startAudioAnalysis, startLocalSpeechStream, createMicrophoneState } = await import("/audio-input.js");
+  const { startLocalSpeechStream, createMicrophoneState } = await import("/audio-input.js");
   const mic = createMicrophoneState({
     onChange: ({ recording }) => $("mic").classList.toggle("listening", recording),
   });
