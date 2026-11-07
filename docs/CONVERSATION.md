@@ -87,3 +87,17 @@ and resident in-progress text. Provider HTTP tests use controlled fixtures to
 inspect the actual request and response pipeline; they do not measure a live LLM's
 quality, throughput or obedience. Windows CI verifies native compilation; actual
 voice follow-up timing still requires microphone/speaker testing.
+
+## Talk-only questions (prefill)
+
+Greetings were already cheap. Factual questions were not: they still sent the
+full tool schema and the long agent system prompt. `classifyTalk` in
+`src/converse/talk-shape.js` now routes a closed set of question shapes
+(`what is`, `why`, `explain`, …) through `buildTalkPrompt`, **no tools**,
+`think:false`, 256 tokens, six turns of history, and only overlapping memories
+(`src/converse/recall.js`).
+
+Same asymmetry as the fast path: action verbs, attachments, slash commands,
+multi-clause text and anything unmatched stay on the full agent. A model that
+emits a tool call on this route is refused, not executed. See
+`test/talk-shape.test.js` and `test/conversation-route.test.js`.

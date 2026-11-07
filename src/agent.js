@@ -16,7 +16,7 @@ import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
 import { QuasError, classify } from "./failure.js";
 import { assistantText } from "./assistant-text.js";
-import { buildSystemPrompt, buildConversationPrompt, isSocialTurn, buildPersonaMessage,
+import { buildSystemPrompt, buildConversationPrompt, buildTalkPrompt, isSocialTurn, buildPersonaMessage,
   buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
@@ -33,6 +33,8 @@ import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
 import { parseWorkflowCommand, createWorkflow, submitDesign, approveDesign, beginExecution, finishExecution,
   cancelWorkflow, activeWorkflowFor, loadWorkflow, renderPlan, WorkflowStoreError, LIMITS as WORKFLOW_LIMITS } from "./agent/workflow.js";
 import { verifyAction, describeVerification, CONTRADICTED as VERIFY_CONTRADICTED } from "./verify.js";
+import { isArmed, freezeMessage } from "./control/killswitch.js";
+import { classifyTalk } from "./converse/talk-shape.js";
 
 const MAX_ROUNDS = 8;
 /** Characters of tool output one turn may carry into the context, in total. */
@@ -477,14 +479,16 @@ export async function runAgent({
     workflowRun = outcome.execute || null;
   }
 
-  const social = workflowRun ? false : isSocialTurn(text, attachments);
+  const talk = workflowRun ? { kind: "act", reason: "workflow" } : classifyTalk(text, attachments);
+  const social = talk.kind === "social";
+  const talkOnly = talk.kind === "social" || talk.kind === "talk";
   const session = loadSession(sessionId);
   // A transport failure is UI/runtime evidence, not the assistant's persona.
   // Do not prime a recovered model to keep claiming it is offline.
   const recent = session.messages.filter((m) =>
     (m.role === "user" || m.role === "assistant") &&
     !(m.role === "assistant" && (["brain-unreachable", "model-output-invalid"].includes(m.error) || /^(?:∿ Model unavailable|\u{1F99E} My brain is unreachable)/u.test(m.content)))
-  ).slice(social ? -6 : -24);
+  ).slice(talkOnly ? -6 : -24);
   // Only the last attachment-bearing message keeps its excerpt; older ones keep
   // the one-line "you attached X" note, which is enough to answer follow-ups
   // without carrying 2 KB of document per turn.
@@ -529,6 +533,14 @@ export async function runAgent({
     const fast = matchFastIntent(text);
     const tool = fast ? TOOL_MAP.get(fast.name) : null;
     if (tool && FAST_TOOLS.has(fast.name) && !DANGEROUS.has(fast.name) && !validateArgs(tool, fast.args)) {
+      if (isArmed()) {
+        const reply = freezeMessage();
+        const deniedTrace = [{ tool: fast.name, args: fast.args, ok: false, frozen: true }];
+        appendMessage(sessionId, { role: "assistant", content: reply, trace: deniedTrace, guard: [] });
+        onEvent({ type: "tool_done", name: fast.name, ok: false, preview: reply.slice(0, 200) });
+        const fastMs = Date.now() - startedAt;
+        return { text: reply, firstTextMs: fastMs, error: null, trace: deniedTrace, sessionId, guard: [], sources: [], ms: fastMs };
+      }
       let fastBlocked = false;
       if (activeHarness) {
         const secrets = turnSecrets();
@@ -686,7 +698,7 @@ export async function runAgent({
 
   const persona = buildPersonaMessage(sessionId);
   let messages = [
-    { role: "system", content: social ? buildConversationPrompt({ channel }) : buildSystemPrompt({ channel }) },
+    { role: "system", content: social ? buildConversationPrompt({ channel }) : talk.kind === "talk" ? buildTalkPrompt({ channel, userText: text }) : buildSystemPrompt({ channel }) },
     ...history,
     ...(persona ? [persona] : []),
     ...(workflowRun ? [buildWorkflowPlanMessage(workflowRun)] : []),
@@ -734,8 +746,8 @@ export async function runAgent({
       // usually produce no text, so this costs nothing when it does not apply.
       out = await brain.chat(messages, {
         selection: activeModel,
-        tools: social ? [] : toolSchemas(),
-        ...(social ? {maxTokens:128,think:false} : {}),
+        tools: talkOnly ? [] : toolSchemas(),
+        ...(talkOnly ? { maxTokens: social ? 128 : 256, think: false } : {}),
         ...(activeHarness
           ? {
               onBeforeContextTrim: (trimInfo) =>
@@ -758,9 +770,11 @@ export async function runAgent({
 
     tokens += out.tokens || 0;
 
-    if (social && out.toolCalls?.length) {
+    if (talkOnly && out.toolCalls?.length) {
       modelOutputFailed = true;
-      finalText = "The model tried to call a tool during a greeting. No action was taken; please state your request.";
+      finalText = social
+        ? "The model tried to call a tool during a greeting. No action was taken; please state your request."
+        : "The model tried to call a tool on a question-only turn. No action was taken.";
       break;
     }
     if (!out.toolCalls?.length) {
@@ -780,6 +794,14 @@ export async function runAgent({
           role: "tool", name: call.name, toolCallId: call.id,
           content: `No such tool: ${call.name}. Available: ${[...TOOL_MAP.keys()].join(", ")}`,
         });
+        continue;
+      }
+
+      if (isArmed()) {
+        const why = freezeMessage();
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, frozen: true });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why.slice(0, 200) });
         continue;
       }
 
@@ -1240,7 +1262,7 @@ export async function runAgent({
     model: activeModel.model,
     ms,
     firstTextMs,
-    mode: social ? "conversation" : "agent",
+    mode: social ? "conversation" : talk.kind === "talk" ? "talk" : "agent",
     rounds,
     tokens,
     tools: storedTrace.length,

@@ -131,6 +131,7 @@ make worse.
 | `mind-02-context-budget` | Streaming-memory compression | prefill p50 −40% at turn 20, 100% pinned-fact retention, no eval regression |
 | `mind-03-model-router` | PilotDeck-style routing (~70% cost cut) | overall p50 −35%, task success at or above baseline, escalation < 15% |
 | `mind-07-first-token-deadline` | *The Tail at Scale*'s hedged requests, applied to a model chain instead of a datacenter | silent-primary worst case 180,000 ms → 1.2 s + one hop; `firstTokenMs` p95 < 3 s on a dead primary; **0** cutovers after the first delta |
+| `mind-08-talk-only-hotpath` ✅ **shipped** | Greeting-route idea, applied to closed question shapes | tool schemas omitted on talk turns; action verbs keep tools; overlapping memory not last-40 — **measured: classifier tests; 0 false talk on action-verb fixtures** |
 
 ### The first one shipped
 

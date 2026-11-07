@@ -633,6 +633,77 @@
         "docs/TRACKER.md: format, bounds, refusals and consent model"
       ],
       "note": "Off by default and offline only: it reads and drafts Markdown in one owner-approved directory per repository and contacts no remote tracker. Every draft is approval-gated and never overwrites. Remote GitHub/GitLab adapters are a separate roadmap item."
+    },
+    {
+      "id": "owner-kill-switch",
+      "name": "Owner can freeze every tool without restarting",
+      "keywords": [
+        "kill switch",
+        "incident",
+        "freeze",
+        "stop agent",
+        "emergency stop"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/control/killswitch.js: disk latch plus QUASNOOZE_KILL_SWITCH; corrupt file fails closed",
+        "src/agent.js: tool loop and fast path refuse while armed",
+        "test/control-plane.test.js: arm, freeze message, disarm",
+        "docs/CONTROL-PLANE.md"
+      ],
+      "note": "The model cannot arm or disarm the latch. Cloud, MCP and shell all stop at the same gate."
+    },
+    {
+      "id": "control-plane",
+      "name": "Local control plane: identity, gateway, durable HITL, A2A envelopes, ACL retrieval",
+      "keywords": [
+        "gateway",
+        "hitl",
+        "human in the loop",
+        "a2a",
+        "agent to agent",
+        "acl",
+        "tenancy",
+        "structured output",
+        "spend cap",
+        "model router"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/control/identity.js: subject per tenant/channel/session",
+        "src/control/gateway.js: task routing, prompt-hash cache, daily spend cap",
+        "src/control/hitl.js: durable pending/approved/denied/expired queue",
+        "src/control/a2a.js: worker envelopes; shell is never grantable",
+        "src/control/schema.js: bounded JSON Schema",
+        "src/control/acl.js: drop retrieval hits the subject may not read",
+        "test/control-plane.test.js",
+        "docs/CONTROL-PLANE.md"
+      ],
+      "note": "Local only, zero new dependencies. Complements risk tiers and in-memory approvals; does not replace them. Cloud backends remain opt-in."
+    },
+    {
+      "id": "talk-only-hotpath",
+      "name": "Everyday questions skip tool schemas and use overlapping memory",
+      "keywords": [
+        "conversation latency",
+        "prefill",
+        "talk path",
+        "no tools question",
+        "relevant memory"
+      ],
+      "status": "have",
+      "policy": "in-scope",
+      "evidence": [
+        "src/converse/talk-shape.js: conservative question vs action classifier",
+        "src/converse/recall.js: token-overlap memory, recent fallback",
+        "src/prompt.js: buildTalkPrompt",
+        "src/agent.js: talk-only omits toolSchemas, caps tokens, refuses tool calls",
+        "test/talk-shape.test.js",
+        "docs/CONVERSATION.md"
+      ],
+      "note": "Does not replace the social greeting route or the deterministic fast path. False talk is treated as the expensive error; unmatched utterances keep tools."
     }
   ]
 }

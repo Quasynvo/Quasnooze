@@ -39,6 +39,7 @@ npm run demo        # real panel, canned brain — no keys, no Ollama, ~2 second
 
 - **Local by default** — Ollama reasoning on your machine; cloud providers, browser speech, and messaging channels are each opt-in with separate, explicit data boundaries
 - **Permission-first** — read-only work runs instantly; sensitive, state-changing actions show a bounded preview and wait for **Allow once / Deny**; low-risk personal actions are verified after they run, never silently
+- **Control plane** — owner kill switch, identity/ACL retrieval, model gateway + spend cap, durable HITL queue, and A2A worker envelopes that **cannot** inherit shell ([docs/CONTROL-PLANE.md](docs/CONTROL-PLANE.md))
 - **Verified, not just “done”** — file writes, tasks, reminders, and calculations are read back and marked `verified`, `contradicted`, or honestly `unverified`
 - **Zero runtime dependencies** — plain Node.js 22+, no mandatory packages, no CDN, no browser bundle for basic use
 - **Surfaces** — web panel, Windows tray/voice host, CLI, Telegram, Discord, Slack, WhatsApp
