@@ -288,4 +288,6 @@ Scoped local memory, correction history, owner API examples, and migration/rollb
 
 For an opt-in, owner-allowlisted scheduled source briefing, see [docs/SCOUT.md](docs/SCOUT.md).
 
+For opt-in per-repository tickets kept as plain Markdown — local, offline, and approval-gated on every draft — see [docs/TRACKER.md](docs/TRACKER.md).
+
 PRs receive a [per-area change table](docs/PR-AREA-METRICS.md). Its percentages describe tracked text size, not proven improvements or user growth.

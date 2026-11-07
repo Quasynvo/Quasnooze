@@ -95,6 +95,20 @@ export function buildActionPreview(name, args = {}, { risk, preparation, secrets
       preview.riskRationale = 'Read-only: this reads the local journal and changes nothing.';
       preview.effectSummary = 'List recent move, rename, trash and undo journal entries with source, destination, timestamp and status. Read-only.';
       break;
+    case 'tracker_draft_ticket': {
+      // The owner approves a draft, so the preamble shows the exact title and
+      // labels. The body is withheld here (it is already in the request) and
+      // summarised by size, because a 20 kB body in a prompt is unreadable.
+      const labels = Array.isArray(args.labels) ? args.labels.slice(0, 10) : [];
+      preview.action = 'tracker_draft_ticket';
+      preview.target = args.id ? `ticket ${args.id}` : `new ticket from title "${String(args.title ?? 'unknown').slice(0, 80)}"`;
+      preview.riskRationale = 'Drafting a ticket creates one new Markdown file in the tracker directory you configured. It never overwrites an existing ticket, never deletes one, and never contacts a remote tracker.';
+      preview.effectSummary = `Create one local ticket titled ${JSON.stringify(String(args.title ?? '').slice(0, 200))}`
+        + (labels.length ? ` with labels ${JSON.stringify(labels)}` : ' with no labels')
+        + ` and a ${Buffer.byteLength(String(args.body ?? ''), 'utf8')}-byte body. Body contents are withheld; nothing else on disk changes.`;
+      preview.redactions.push('content-withheld');
+      break;
+    }
     case 'open_url':
       try { const url = new URL(args.url); preview.target = url.origin + url.pathname; }
       catch { preview.target = 'unknown'; }

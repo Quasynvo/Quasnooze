@@ -28,6 +28,14 @@ import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
 import { SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
 import { guardClipboardMemory } from "./guard.js";
+import { TrackerError, TRACKER_CODES, assertWriteApproval } from "./tracker/adapter.js";
+
+/* Tracker tool names, so gating is one list rather than three string compares. */
+export const TRACKER_TOOL_NAMES = Object.freeze([
+  "tracker_list_tickets",
+  "tracker_read_ticket",
+  "tracker_draft_ticket",
+]);
 
 /* ───────────────────────────── path sandboxing ─────────────────────────── */
 
@@ -2929,6 +2937,163 @@ export const TOOLS = [
   },
 ];
 
+
+/* ─────────────────────────── tracker tools ─────────────────────────────────
+ * Opt-in per-repository ticket tracking (issue #133). Everything here is inert
+ * unless QUASNOOZE_TRACKER=on and the owner has configured a repository, so a
+ * machine that never asked for tickets gains no tool, no config and no prompt.
+ * Reads are local filesystem reads; the one write drafts a new Markdown file
+ * and is gated on a minted approval token.
+ */
+
+/**
+ * The approval token, taken from the turn context.
+ *
+ * `ctx.trackerApproval` is set by the agent loop only after a human answered
+ * yes to this exact call. A model cannot supply it: tool arguments are JSON,
+ * and this is object identity minted in process (`mintWriteApproval`).
+ */
+function trackerWriteApproval(ctx) {
+  const token = ctx?.trackerApproval;
+  if (!token || typeof token !== "object") {
+    throw new TrackerError(
+      TRACKER_CODES.NO_APPROVAL,
+      "Drafting a ticket needs your approval. Nothing was written.",
+    );
+  }
+  assertWriteApproval(token, "tracker_draft_ticket");
+  return token;
+}
+
+/** One repository, one adapter: the tracker root is the owner's choice, never a tool argument. */
+async function trackerAdapterFor(args = {}) {
+  const { registry } = await import("./tracker/setup.js");
+  const repoDir = typeof args.repo === "string" && args.repo.trim() ? args.repo : config.workspaceRoots[0];
+  const adapter = await registry.adapterFor(repoDir);
+  return { adapter, repoDir };
+}
+
+/** Typed tracker failures become tool output; anything else is a genuine bug. */
+function trackerFailure(error) {
+  if (error instanceof TrackerError) {
+    return { ok: false, output: error.message, trackerCode: error.code };
+  }
+  throw error;
+}
+
+/* ─────────────────────────── tracker tool definitions ────────────────────── */
+
+export const TRACKER_TOOLS = [
+  {
+    name: "tracker_list_tickets",
+    description:
+      "List the owner's local Markdown tickets for the configured repository (title, labels, a short summary). " +
+      "Read-only and offline. Returns an explanation instead of an error when tracking is off or no repository " +
+      "is configured. Never contacts a remote tracker.",
+    parameters: {
+      type: "object",
+      properties: {
+        repo: stringProp("Optional repository directory to read; defaults to the workspace root"),
+      },
+    },
+    async run(args = {}) {
+      try {
+        const { adapter, repoDir } = await trackerAdapterFor(args);
+        const board = await adapter.list();
+        const rows = board.tickets.map((row) => {
+          const labels = row.labels.length ? `  [${row.labels.join(", ")}]` : "";
+          return `- ${row.id} — ${row.title}${labels}${row.invalid ? "  (invalid)" : ""}`;
+        });
+        const header = `${board.total} ticket${board.total === 1 ? "" : "s"} in ${adapter.describe()}${board.truncated ? " (list truncated)" : ""}`;
+        return {
+          ok: true,
+          output: rows.length ? `${header}\n\n${rows.join("\n")}` : `${header}\n\nNo tickets yet.`,
+          traceSummary: `${board.total} local ticket(s)`,
+          trackerRepo: repoDir,
+        };
+      } catch (error) {
+        return trackerFailure(error);
+      }
+    },
+  },
+  {
+    name: "tracker_read_ticket",
+    description:
+      "Read one local Markdown ticket by id, including its body. Read-only and offline. Bounded: oversized or " +
+      "malformed ticket files are refused rather than partly returned.",
+    parameters: {
+      type: "object",
+      properties: {
+        id: stringProp("Ticket id, for example 'fix-login-timeout'"),
+        repo: stringProp("Optional repository directory; defaults to the workspace root"),
+      },
+      required: ["id"],
+    },
+    async run(args = {}) {
+      try {
+        const { adapter } = await trackerAdapterFor(args);
+        const ticket = await adapter.read(args.id);
+        const labels = ticket.labels.length ? `\nLabels: ${ticket.labels.join(", ")}` : "";
+        return {
+          ok: true,
+          output: `# ${ticket.title} (${ticket.id})${labels}\n\n${ticket.body}`,
+          traceSummary: `read ticket ${ticket.id}`,
+        };
+      } catch (error) {
+        return trackerFailure(error);
+      }
+    },
+  },
+  {
+    name: "tracker_draft_ticket",
+    description:
+      "Draft a NEW local Markdown ticket in the configured repository tracker. Requires approval: nothing is " +
+      "written unless the owner approves this exact draft. Never overwrites an existing ticket, never deletes, " +
+      "never contacts a remote tracker. Show the user the title, labels and body before calling this.",
+    dangerous: true,
+    parameters: {
+      type: "object",
+      properties: {
+        title: stringProp("Ticket title, at most 200 characters"),
+        body: stringProp("Ticket body in Markdown, at most 20,000 characters"),
+        labels: {
+          type: "array",
+          description: "At most 10 short labels (no commas)",
+          items: { type: "string" },
+        },
+        id: stringProp("Optional id: lowercase letters, digits and dashes; derived from the title when omitted"),
+        repo: stringProp("Optional repository directory; defaults to the workspace root"),
+      },
+      required: ["title"],
+    },
+    async run(args = {}, ctx = {}) {
+      try {
+        const { adapter } = await trackerAdapterFor(args);
+        const approval = trackerWriteApproval(ctx);
+        const written = await adapter.draft(
+          { id: args.id, title: args.title, labels: args.labels, body: args.body ?? "" },
+          { approval },
+        );
+        return {
+          ok: true,
+          output: `Drafted ticket ${written.id} (${written.bytes} bytes) in ${adapter.describe()}. Nothing else was changed.`,
+          traceSummary: `drafted ticket ${written.id}`,
+        };
+      } catch (error) {
+        return trackerFailure(error);
+      }
+    },
+  },
+];
+
+/**
+ * The tracker tools are appended to TOOLS only when the feature is enabled, so
+ * `TOOL_MAP`, `DANGEROUS`, `toolSchemas()` and the boot-time tool inventory all
+ * agree without a second gating path. Registered at import time because the
+ * switch is configuration, not runtime state.
+ */
+if (isTrackerEnabled()) TOOLS.push(...TRACKER_TOOLS);
+
 export const TOOL_MAP = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** Tool schemas in the shape both Ollama and OpenAI accept. */
@@ -2936,8 +3101,12 @@ export function toolSchemas() {
   // Derived from the map, not the array, so a tool registered at boot (an MCP
   // server, a user module) is offered to the model without touching this file.
   const clipOn = isClipboardEnabled();
+  const trackerOn = isTrackerEnabled();
   return [...TOOL_MAP.values()]
     .filter((t) => clipOn || (t.name !== "read_clipboard" && t.name !== "write_clipboard"))
+    // Ticket tools are opt-in: a machine that never enabled them is never
+    // offered them, so the model cannot spend a turn discovering a refusal.
+    .filter((t) => trackerOn || !TRACKER_TOOL_NAMES.includes(t.name))
     .map((t) => ({
       type: "function",
       function: { name: t.name, description: t.description, parameters: t.parameters },
@@ -2945,6 +3114,18 @@ export function toolSchemas() {
 }
 
 export const DANGEROUS = new Set(TOOLS.filter((t) => t.dangerous).map((t) => t.name));
+
+/**
+ * Is per-repository ticket tracking enabled? Default off: an unset value means
+ * the feature does not exist for this machine. Mirrors `isTrackerEnabled` in
+ * tracker/setup.js, kept here so toolSchemas and the agent gate share one
+ * answer without importing the setup module at boot.
+ */
+export function isTrackerEnabled(env = process.env) {
+  const live = env?.QUASNOOZE_TRACKER ?? env?.PINCH_TRACKER;
+  if (live === undefined || live === "") return false;
+  return /^(1|true|yes|on)$/i.test(String(live).trim());
+}
 
 const BUILTIN_BOUNDARIES = Object.freeze({
   shell: "Scrubbed child shell; allowlisted workspace reads skip prompt when riskTiers=true, command screen blocks catastrophes, other commands ask.",
@@ -2984,6 +3165,9 @@ const BUILTIN_BOUNDARIES = Object.freeze({
   launch_app: "Starts only an allowlist/config-approved executable by plain name via the companion (Process.Start with UseShellExecute=false, no arguments); the model string is a dictionary key, never a command line or path. Approval-required.",
   read_clipboard: "Reads up to 4,096 UTF-8 bytes of system clipboard text after per-read approval (never session-granted), reporting the original byte length; refuses secret-shaped content and never stores clipboard text in telemetry, support bundles or default memory.",
   write_clipboard: "Overwrites system clipboard text via stdin/companion (no shell) after per-write approval with a preview of the exact text to be written.",
+  tracker_list_tickets: "Reads *.md tickets from the owner-approved tracker directory (regular files only, bounded read), refusing traversal, symlinks and malformed front matter; changes nothing and contacts no remote tracker.",
+  tracker_read_ticket: "Reads one bounded ticket file by validated id from the owner-approved tracker directory; a symlink, an oversized file or a malformed ticket is refused rather than partly returned.",
+  tracker_draft_ticket: "Creates exactly one new Markdown ticket in the owner-approved directory using an exclusive create (never overwrite, never delete) after fresh approval; disabled unless QUASNOOZE_TRACKER=on and a repository is configured.",
 });
 
 /**
