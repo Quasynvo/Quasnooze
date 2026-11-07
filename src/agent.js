@@ -10,6 +10,7 @@
  *  • every tool failure is fed back to the model as text, never swallowed.
  */
 import { buildActionPreview, previewSecrets, approvalDescription, sanitizeActionPreview } from "./action-preview.js";
+import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 import { personaCommand } from "./personas.js";
 import { brain } from "./brain.js";
@@ -21,7 +22,8 @@ import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, classifySystemControl, classifyToolAction, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
 import { POLICY_DECISIONS, resolveHarnessPipeline } from "./harness/events.js";
-import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand, isClipboardEnabled } from "./tools.js";
+import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand, isClipboardEnabled, isTrackerEnabled, TRACKER_TOOL_NAMES } from "./tools.js";
+import { mintWriteApproval } from "./tracker/adapter.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
 import { auditReply, renderGuardNote, sanitizeTraceEntry } from "./guard.js";
 import { addressFor } from "./outbound.js";
@@ -221,6 +223,13 @@ export function describeCall(name, args) {
     });
     const more = ops.length > parts.length ? ` (+${ops.length - parts.length} more)` : "";
     return `${name}(${ops.length} operation${ops.length === 1 ? "" : "s"}): ${parts.join("; ")}${more}`;
+  }
+  if (name === "tracker_list_tickets") return `tracker_list_tickets (${a.repo ? `in ${String(a.repo).slice(0, 80)}` : "local tickets"})`;
+  if (name === "tracker_read_ticket") return `tracker_read_ticket: ${String(a.id ?? "?").slice(0, 64)}`;
+  if (name === "tracker_draft_ticket") {
+    const labels = Array.isArray(a.labels) ? a.labels.slice(0, 10) : [];
+    const title = String(a.title ?? "").slice(0, 160);
+    return `draft ticket "${title}"${labels.length ? `  [${labels.join(", ")}]` : ""} (${Buffer.byteLength(String(a.body ?? ""), "utf8")} byte body)`;
   }
   if (name === "undo_last") return "undo_last — reverse the most recent file-action batch from the journal";
   if (name === "list_recent_changes") return `list_recent_changes(limit=${a.limit ?? 10})`;
@@ -699,7 +708,7 @@ export async function runAgent({
   }
   // One id for this turn, so anything it mutates (the file-action journal)
   // can be traced back to the conversation that asked for it.
-  const turnId = `turn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const turnId = `turn_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
   const ctx = {
     channel,
     target: addressFor(channel, target),
@@ -790,6 +799,18 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+        continue;
+      }
+
+      // Ticket tracking is opt-in and default-off. The schemas are already
+      // hidden, but a model that remembered the name from an earlier session
+      // must get a refusal, not a filesystem read.
+      if (TRACKER_TOOL_NAMES.includes(tool.name) && !isTrackerEnabled()) {
+        const msg = "Ticket tracking is off (QUASNOOZE_TRACKER=off). Nothing was read or written. " +
+          "The owner can enable it with QUASNOOZE_TRACKER=on and run tracker setup.";
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
+        trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "disabled" });
+        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg });
         continue;
       }
 
@@ -972,6 +993,9 @@ export async function runAgent({
       }
 
       const mustAsk = baselineMustAsk || policyMustAsk;
+      // Set only by the branch below, after a human answered yes to *this*
+      // call. It is per-iteration state, so it cannot leak to the next tool.
+      let trackerWriteApproval = null;
       if (mustAsk) {
         const secrets = turnSecrets();
         const preview = buildActionPreview(tool.name, call.arguments, { risk: tier || classifiedShell || toolRisk, preparation: actionPreparation, secrets });
@@ -1005,6 +1029,10 @@ export async function runAgent({
         // A disclosed session-grantable approval was answered yes: remember it
         // for this session only, so the next volume press does not re-prompt.
         recordSessionGrant(sessionId, grantKey);
+        // The ticket-drafting adapter refuses writes without this token, and
+        // only this line can mint it: the model cannot approve its own write,
+        // because tool arguments are JSON and this is object identity.
+        if (mustAsk) trackerWriteApproval = mintWriteApproval({ tool: tool.name, sessionId, turnId });
       }
 
       if (signal?.aborted) {
@@ -1023,7 +1051,12 @@ export async function runAgent({
         // Let evidence-producing tools avoid registering passages the model
         // cannot see because the remaining tool-output budget is exhausted.
         ctx.toolOutputLimit = Math.min(12_000, Math.max(0, toolBudget));
-        result = await tool.run(call.arguments || {}, { ...ctx, signal, ...(actionPreparation !== undefined ? { actionPreparation } : {}) });
+        result = await tool.run(call.arguments || {}, {
+          ...ctx,
+          signal,
+          ...(actionPreparation !== undefined ? { actionPreparation } : {}),
+          ...(trackerWriteApproval ? { trackerApproval: trackerWriteApproval } : {}),
+        });
       } catch (err) {
         result = {
           ok: false,

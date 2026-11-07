@@ -70,6 +70,96 @@ async function runProvidersCli(args) {
   console.log(json ? JSON.stringify(rows, null, 2) : renderProviderCatalogue(rows));
 }
 
+const TRACKER_USAGE = `quasnooze tracker status [--json]
+quasnooze tracker discover [<repo>] [--json]
+quasnooze tracker setup <dir> [--repo <repo>] [--name <label>] [--json]
+quasnooze tracker disable [<repo>]
+Ticket tracking is off unless QUASNOOZE_TRACKER=on. Setup records one owner-approved
+directory per repository in <state>/data/tracker-config.json; it never edits the
+repository, its git remotes or its policy files. See docs/TRACKER.md.`;
+
+/**
+ * `quasnooze tracker …` — the owner-facing half of issue #133.
+ *
+ * Every command is offline and local. `setup` writes a configuration entry, not
+ * a ticket, and running it from a terminal *is* the owner consent the registry
+ * requires: the human typed the directory. The agent's tool path has no such
+ * shortcut, which is the whole point of the separate code path.
+ */
+async function runTrackerCli(args) {
+  if (!args.length || args.includes("--help") || args.includes("-h")) {
+    console.log(TRACKER_USAGE);
+    return;
+  }
+  const [action, ...rest] = args;
+  const json = rest.includes("--json");
+  const positional = rest.filter((a) => !a.startsWith("--") && !["--repo", "--name"].includes(a) &&
+    rest[rest.indexOf(a) - 1] !== "--repo" && rest[rest.indexOf(a) - 1] !== "--name");
+  const flag = (name) => {
+    const at = rest.indexOf(name);
+    return at >= 0 && rest[at + 1] && !rest[at + 1].startsWith("--") ? rest[at + 1] : null;
+  };
+  const setup = await import("./tracker/setup.js");
+  const registry = setup.createTrackerRegistry();
+
+  if (action === "status") {
+    const enabled = registry.isEnabled();
+    const rows = registry.listConfigured();
+    if (json) { console.log(JSON.stringify({ enabled, config: registry.path, repositories: rows }, null, 2)); return; }
+    console.log(`Ticket tracking: ${enabled ? "on" : "off (" + "set QUASNOOZE_TRACKER=on to enable)"}`);
+    console.log(`Configuration: ${registry.path}`);
+    if (!rows.length) { console.log("No repository has a tracker configured. Run: quasnooze tracker setup <dir>"); return; }
+    for (const row of rows) console.log(`  ${row.repository}\n    → ${row.rootDir}${row.name ? `  (${row.name})` : ""}`);
+    return;
+  }
+
+  if (action === "discover") {
+    const repo = positional[0] || ".";
+    const found = setup.discoverRepository(repo);
+    if (json) { console.log(JSON.stringify(found, null, 2)); return; }
+    console.log(`Repository: ${found.repository}`);
+    if (!found.candidates.length) { console.log(`No candidate directory found (${found.reason}).`); return; }
+    for (const c of found.candidates) console.log(`  ${c.label}  — ${c.tickets} Markdown file(s)  ${c.path}`);
+    console.log("\nNothing was created or changed. Re-run setup with the directory you want.");
+    return;
+  }
+
+  if (action === "setup") {
+    const dir = positional[0];
+    if (!dir) { console.error("usage: quasnooze tracker setup <dir> [--repo <repo>] [--name <label>]"); process.exitCode = 1; return; }
+    if (!registry.isEnabled()) {
+      console.error("Ticket tracking is off. Nothing was written. Set QUASNOOZE_TRACKER=on and run this again.");
+      process.exitCode = 1; return;
+    }
+    const repoDir = flag("--repo") || ".";
+    const { createInterface } = await import("node:readline/promises");
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    let answer;
+    try {
+      answer = await rl.question(`Record "${dir}" as the ticket tracker for ${setup.canonicalRepoPath(repoDir)}? [y/N] `);
+    } finally {
+      rl.close();
+    }
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      console.log("Nothing was written.");
+      return;
+    }
+    const result = registry.configure({ repoDir, rootDir: dir, name: flag("--name") });
+    if (json) { console.log(JSON.stringify(result, null, 2)); return; }
+    console.log(`Tracker ${result.reconfigured ? "updated" : "configured"} for ${result.repository}\n  → ${result.entry.rootDir}`);
+    return;
+  }
+
+  if (action === "disable") {
+    const result = registry.disable({ repoDir: positional[0] || "." });
+    console.log(result.changed ? `Tracker disabled for ${result.repository}. No tickets were touched.`
+      : `No tracker was configured for ${result.repository}.`);
+    return;
+  }
+
+  throw new Error("Invalid tracker command. Use: quasnooze tracker --help");
+}
+
 const SCOUT_USAGE = `quasnooze scout add --when "every 30m" --address web:main --source https://example.com/feed --allow-remote
 quasnooze scout list
 quasnooze scout delete <id>
@@ -108,6 +198,7 @@ async function runScoutCli(args) {
 async function main() {
   const [mode, ...rest] = process.argv.slice(2);
   if (mode === "scout") { await runScoutCli(rest); return; }
+  if (mode === "tracker") { await runTrackerCli(rest); return; }
   if (mode === "providers") { await runProvidersCli(rest); return; }
   if (mode === "tools" || mode === "tool-inventory") {
     await runToolsInventoryCli(rest);
