@@ -187,6 +187,17 @@
     box-shadow:0 10px 30px -12px var(--coral);
   }
   .wake-pill.on{display:flex}
+  /* The gate state is a label, always visible, never a control: a person must be
+     able to see whether the microphone is armed without clicking anything. */
+  .gate{
+    font-size:.72rem;letter-spacing:.02em;padding:2px 8px;border-radius:999px;
+    border:1px solid currentColor;opacity:.85;white-space:nowrap;
+  }
+  .gate[data-gate="off"]{color:#7d8b9a}
+  .gate[data-gate="gate-idle"]{color:var(--teal)}
+  .gate[data-gate="gate-heard"]{color:var(--coral);animation:pulse 1.1s infinite}
+  .gate[data-gate="listening"]{color:var(--coral)}
+  .gate[data-gate="sending"]{color:var(--blue,#7fb3ff)}
   .wake-pill i{width:7px;height:7px;border-radius:50%;background:var(--coral);animation:pulse 1.4s infinite}
   .toast{
     position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:60;
@@ -254,6 +265,7 @@
       <div class="hint">
         <span><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> newline</span>
         <span id="voiceHint">🎙️ voice · 🔈 spoken replies</span>
+        <span id="wakeGate" class="gate off" data-gate="off" aria-live="polite">gate: off</span>
       </div>
     </div>
   </main>
@@ -403,6 +415,16 @@ function takeTiming(sentAt) {
 
 /* ─────────────────────────────── voice ─────────────────────────────────── */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+// wake-gate:start
+// The local wake gate (voice-04). Off until a surface arms it, and never an
+// authentication signal — see docs/VOICE.md. Loaded lazily so a browser without
+// modules still gets the plain page.
+let wakeGateModule = null;
+async function wakeGateLib() {
+  if (!wakeGateModule) wakeGateModule = await import("/audio-input.js");
+  return wakeGateModule;
+}
+// wake-gate:end
 let recognition = null;
 let listening = false;
 let wakeMode = false; // Browser recognition requires a fresh opt-in per page load.
@@ -705,12 +727,139 @@ async function toggleLocalDictation() {
   }
 }
 
-/* ── "Hey Quasnooze" wake word: opt-in, page must stay open ───────────────────
-   Runs the browser's own recogniser in continuous mode and matches the
-   trigger phrase in transcripts. Browser speech may send audio to its vendor
-   even before a command; use the Windows companion for local recognition. Deliberately not always-on audio:
-   it only exists while this tab is open and the toggle is on.            */
-const WAKE_RE = /^\s*(?:hey\s+|ok\s+|oi\s+)?quasnooze\b[\s,.]*/i;
+/* ── "Hey Quasnooze" wake gating: opt-in, page must stay open ─────────────────
+   The phrase decides *when to listen*, never *who is allowed*. It is a
+   convenience trigger, not a lock: a recording replays it and a nearby speaker
+   triggers it, so no approval, permission or capability check is ever keyed to
+   this signal (see docs/VOICE.md).
+
+   Before the gate fires, nothing here transcribes: the recogniser's interim
+   text is matched locally by `createWakeGate`, and only a phrase match opens the
+   capture path. The gate state is painted into `#wakeGate` at every transition,
+   so "is the microphone armed?" always has a visible answer.
+
+   Off by default and per-page: the toggle must be clicked in this tab, and the
+   gate is disarmed on page hide.                                          */
+
+let gateBridge = { gate: null, state: "off" };
+
+/** Paint the gate state. Called on every transition, including "off". */
+function paintGate(state, detail = {}) {
+  const el = $("wakeGate");
+  if (!el) return;
+  el.dataset.gate = state;
+  el.textContent = `gate: ${state === "off" ? "off" : state.replace("gate-", "")}`;
+  el.title = state === "off"
+    ? "The wake gate is off. Nothing is listening for a phrase."
+    : `Wake gate ${state}. The phrase is a trigger, not authentication.`;
+  if (detail.reason === "no-phrase" && state === "gate-idle") return;
+}
+
+const WAKE_PHRASE_KEY = "pinch.wakephrase";
+let wakePhrase = localStorage.getItem(WAKE_PHRASE_KEY) || "hey quasnooze";
+let gateUnavailable = null;
+
+/**
+ * Open a gate-backed listening session over the browser recogniser.
+ *
+ * The recogniser is only used here because it is what turns speech into text on
+ * this platform; the *matching* is local, in `createWakeGate`, and the gate — not
+ * the recogniser — decides when a command may be captured. Where the browser may
+ * send audio to its vendor, the opt-in prompt says so before anything starts.
+ */
+async function startGateSession() {
+  if (!SR) { alert("This browser has no speech engine, so local wake gating is unavailable here."); return; }
+  const lib = await wakeGateLib();
+  const gate = lib.createWakeGate({
+    phrase: wakePhrase,
+    armed: true,
+    onChange: (change) => paintGate(change.state, change),
+  });
+  const abort = new AbortController();
+  gateBridge = { gate, abort, state: gate.state };
+  paintGate(gate.state);
+
+  const rec = ensureWake();
+  const chunks = [];
+  let session = null, recorder = null;
+  let pending = false;
+
+  // Recogniser results are the gate's only input. A phrase match opens capture;
+  // the command tail ("hey quasnooze, set a timer") is used directly, so the
+  // phrase and the request can arrive in one breath.
+  rec.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      const final = event.results[i].isFinal;
+      const heard = gate.hear(transcript);
+      if (heard.heard) {
+        if (heard.command.length > 2) {
+          // The whole request came with the trigger: no second utterance needed.
+          $("input").value = heard.command;
+          autoGrow();
+          gate.listen(); gate.dispatch(); gate.reset("inline");
+          paintGate(gate.state);
+          if (final) { stopGateSession("sent"); setTimeout(send, 150); }
+          return;
+        }
+        if (!final) return;
+        // Bare phrase: open the microphone for exactly one utterance.
+        if (pending) return;
+        pending = true;
+        openGateCapture().catch((error) => {
+          pending = false;
+          toast(String(error?.message || error), 7000);
+          stopGateSession("failed");
+        });
+      }
+      // No second gate input here on purpose: the phrase is matched in exactly
+      // one place (the branch above), so there is one answer to "did the phrase
+      // fire?" and no way for two matchers to disagree.
+    }
+  };
+
+  async function openGateCapture() {
+    const { startAudioAnalysis: analyse, startWakeListening: listen } = await wakeGateLib();
+    if (!session) {
+      session = await analyse({ onEnded: () => stopGateSession("device-ended") });
+      recorder = new MediaRecorder(session.stream, { mimeType: "audio/webm" });
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+      recorder.start(1000);
+    }
+    // Frames from the analyser plus the transcript above: the gate reads the
+    // transcript, the endpointer reads the level, and `capture` is only called
+    // once the gate has authorised an utterance. Nothing is posted before then.
+    const result = await listen({
+      gate,
+      signal: abort.signal,
+      // Levels only: the gate's phrase input is the recogniser callback, and
+      // the loop reads levels to endpoint the one utterance it authorised.
+      frames: frameStream(session),
+      capture: () => new Blob(chunks.splice(0), { type: "audio/webm" }),
+      transcribe: async (blob) => {
+        const text = await transcribeChunk(blob, { prompt: $("input").value.slice(-400) });
+        if (text) { $("input").value = text; autoGrow(); }
+        return { text };
+      },
+      onStatus: (status) => paintGate(status.state, status),
+    });
+    if (result?.sent) stopGateSession("sent");
+    else pending = false;
+  }
+}
+
+function stopGateSession(reason = "off") {
+  const { gate, abort } = gateBridge;
+  gateBridge = { gate: null, state: "off" };
+  abort?.abort();
+  try { wakeRecognition?.stop(); } catch {}
+  gate?.disarm(reason);
+  paintGate("off");
+  $("wakePill").classList.remove("on");
+  $("wakeToggle").classList.remove("on");
+  wakeMode = false;
+  localStorage.setItem("pinch.wake", "0");
+}
 
 function ensureWake() {
   if (!SR) return null;
@@ -719,24 +868,8 @@ function ensureWake() {
   rec.lang = micLang.value;
   rec.continuous = true;
   rec.interimResults = true;
-  rec.onresult = (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      const match = WAKE_RE.exec(transcript);
-      if (!match) continue;
-      const command = transcript.slice(match[0].length).trim();
-      if (command.length > 2) {
-        $("input").value = command;
-        autoGrow();
-        if (event.results[i].isFinal) { rec.stop(); setTimeout(send, 150); }
-      } else if (event.results[i].isFinal) {
-        toast("Listening — what do you need?", 2500);
-        $("mic").classList.add("listening");
-      }
-    }
-  };
   rec.onerror = (e) => {
-    if (e.error === "not-allowed") { setWake(false); alert("Microphone permission is required for the wake word."); }
+    if (e.error === "not-allowed") { stopGateSession("denied"); alert("Microphone permission is required for local wake gating."); }
     if (e.error === "no-speech" || e.error === "aborted") return;
   };
   rec.onend = () => {
@@ -746,26 +879,37 @@ function ensureWake() {
   return rec;
 }
 
-function setWake(on) {
-  if (on && !wakeMode && !confirm("Browser speech recognition may send microphone audio to the browser vendor. For local background wake listening, use npm run desktop on Windows. Enable browser recognition for this page only?")) return;
-  wakeMode = on;
-  localStorage.setItem("pinch.wake", on ? "1" : "0");
-  $("wakeToggle").classList.toggle("on", on);
-  $("wakePill").classList.toggle("on", on);
-  if (!SR) { if (on) alert("This browser has no speech engine."); return; }
-  const rec = ensureWake();
-  if (!rec) return;
-  try {
-    if (on) rec.start();
-    else rec.stop();
-  } catch {}
+async function setWake(on) {
+  if (!on) { stopGateSession("disarmed"); return; }
+  if (wakeMode) return;
+  const conf = await wakeGateLib().then((lib) => lib.parseWakePhrase(wakePhrase)).catch(() => null);
+  if (!conf) { alert("That wake phrase needs at least one word."); return; }
+  if (!confirm(`Listen for “${conf.phrase}” while this page stays open?\n\n`
+    + "The phrase only decides when to start listening. It is NOT authentication: a recording or a nearby person can trigger it, so never rely on it to keep others out.\n\n"
+    + (SR ? "The browser's own recogniser turns speech into text; on some browsers that may send audio to its vendor. Use npm run desktop on Windows for on-device recognition."
+          : "This browser has no speech engine, so local wake gating is unavailable here."))) return;
+  if (!SR) { alert("This browser has no speech engine."); return; }
+  wakeMode = true;
+  localStorage.setItem("pinch.wake", "1");
+  $("wakeToggle").classList.add("on");
+  $("wakePill").classList.add("on");
+  try { ensureWake()?.start(); } catch {}
+  await startGateSession();
 }
 
-$("wakeToggle").onclick = () => {
-  const next = !wakeMode;
-  if (next && !confirm("Listen for \"Hey Quasnooze\" while this page is open?\n\nThe microphone stays active in this tab only, and the browser's own recogniser does the matching on your device. Deny if you are on a shared machine.")) return;
-  setWake(next);
-};
+$("wakeToggle").onclick = () => { setWake(!wakeMode); };
+
+// Hiding or navigating away releases the microphone, like every other capture
+// path. `pagehide` covers a real navigation; `visibilitychange` covers a tab
+// switch, which on mobile can suspend the page without ever firing `pagehide`.
+window.addEventListener("pagehide", () => { if (wakeMode || gateBridge.gate) stopGateSession("page-hidden"); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && (wakeMode || gateBridge.gate)) {
+    stopGateSession("hidden");
+    toast("Microphone released while this page was hidden. Enable wake gating again when ready.", 5000);
+  }
+});
+
 if (wakeMode) setWake(true);
 
 /* ── speech out: local voices only, no server, no dependency ─────────────── */

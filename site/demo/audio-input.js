@@ -500,3 +500,336 @@ export async function startLocalSpeechStream({
   onRecording({ state: MIC_STATES.MUTED, recording: false });
   return { text: null, events, endpoint: null };
 }
+
+/* ─────────────────────── local wake gating (voice-04) ───────────────────────
+   An on-device gate that decides *when to listen*, and is explicit that it
+   decides nothing else.
+
+   The phrase is a convenience trigger. It is not authentication: recorded audio
+   replays it, a nearby speaker triggers it, and nothing here identifies a voice.
+   No approval, permission or capability decision may be keyed to this signal —
+   that is the whole safety property of the feature, and it is why the gate is a
+   separate object from the capture path rather than a flag inside it.
+
+   Two layers:
+
+   1. `createWakeGate` — the state machine. Pure, no audio, no globals. States
+      move idle → heard → listening → sending → idle, and an unexpected
+      transition is a bug the caller sees, not something quietly tolerated.
+   2. `startWakeListening` — the loop that makes "not yet awake" a real guarantee.
+      Before the gate fires it *discards* audio instead of holding it: no blob is
+      built, no chunk is posted, and `takeAudio` is not called. After it fires,
+      the same capture answers one utterance and then goes back to idle.
+
+   The matching is deliberately local: a transcript string, matched against a
+   phrase, with no network call and no model. Whether a recogniser put that string
+   there is the caller's business, and the caller is responsible for telling the
+   user where audio went (see docs/VOICE.md).                                   */
+
+/** The four states the issue names, plus `off` for "armed nowhere". */
+export const WAKE_STATES = Object.freeze({
+  OFF: 'off',
+  IDLE: 'gate-idle',
+  HEARD: 'gate-heard',
+  LISTENING: 'listening',
+  SENDING: 'sending',
+});
+
+/** Guards against a caller that keeps the gate open forever. */
+export const WAKE_DEFAULTS = Object.freeze({
+  // How long to wait for speech to start after the phrase. A phrase matched from
+  // a stray word, a cough or a replayed clip must not hold the microphone open
+  // waiting for an utterance that never comes.
+  onsetTimeoutMs: 3_000,
+  // How long one command may run before the gate closes itself again.
+  maxUtteranceMs: 15_000,
+  // After a command is sent, ignore the phrase briefly: a recogniser that repeats
+  // its final result must not launch the same command twice.
+  cooldownMs: 1_200,
+});
+
+const WAKE_WORD = 'quasnooze';
+
+/**
+ * Normalise a transcript for phrase matching.
+ *
+ * Only the words matter, so punctuation, case, extra whitespace, and the
+ * pauses a recogniser renders as commas are all flattened. Kept ASCII so a
+ * locale-specific "quasï¿½" style artefact in a transcript cannot smuggle a
+ * different word past the match.
+ */
+export function normalizeWakeText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * The phrase, parsed once per gate.
+ *
+ * `match()` returns `{ heard, command }`. The command is the tail after the
+ * phrase ("hey quasnooze, set a timer" → "set a timer"), which is how the
+ * existing browser path already behaves: saying the phrase *and* the request in
+ * one breath should work rather than needing two.
+ */
+export function parseWakePhrase(phrase = 'hey quasnooze') {
+  const normalized = normalizeWakeText(phrase);
+  const tokens = normalized.split(' ').filter(Boolean);
+  if (!tokens.length) throw new TypeError('A wake phrase needs at least one word.');
+  return Object.freeze({
+    phrase: normalized,
+    tokens: Object.freeze(tokens),
+    /** True when the text contains the phrase as whole words, in order. */
+    match(text) {
+      const normalizedText = normalizeWakeText(text);
+      if (!normalizedText) return { heard: false, command: '' };
+      const words = normalizedText.split(' ');
+      for (let start = 0; start + tokens.length <= words.length; start++) {
+        if (tokens.every((token, offset) => words[start + offset] === token)) {
+          return { heard: true, command: words.slice(start + tokens.length).join(' ').trim() };
+        }
+      }
+      return { heard: false, command: '' };
+    },
+  });
+}
+
+/**
+ * The gate state machine.
+ *
+ * Off by default — `createWakeGate()` with no arguments is `off`, and it takes an
+ * explicit `arm()` to leave that state. Every transition notifies, so the UI can
+ * always answer "is it armed?" without polling a private flag.
+ */
+export function createWakeGate({ phrase = 'hey quasnooze', armed = false, onChange = () => {}, now = () => Date.now() } = {}) {
+  const matcher = parseWakePhrase(phrase);
+  let state = armed ? WAKE_STATES.IDLE : WAKE_STATES.OFF;
+  let lastAt = null;
+  let lastCommand = '';
+
+  const emit = (detail = {}) => {
+    onChange({ state, armed: state !== WAKE_STATES.OFF, phrase: matcher.phrase, ...detail });
+    return state;
+  };
+
+  /** Refuse to move between states the diagram does not allow. */
+  const allowed = {
+    [WAKE_STATES.OFF]: [WAKE_STATES.IDLE],
+    [WAKE_STATES.IDLE]: [WAKE_STATES.HEARD, WAKE_STATES.OFF],
+    [WAKE_STATES.HEARD]: [WAKE_STATES.LISTENING, WAKE_STATES.IDLE, WAKE_STATES.OFF],
+    [WAKE_STATES.LISTENING]: [WAKE_STATES.SENDING, WAKE_STATES.IDLE, WAKE_STATES.OFF],
+    [WAKE_STATES.SENDING]: [WAKE_STATES.IDLE, WAKE_STATES.OFF],
+  };
+
+  const move = (next, detail) => {
+    if (next === state) return state;
+    if (!allowed[state].includes(next)) {
+      throw new Error(`Wake gate cannot go from ${state} to ${next}.`);
+    }
+    state = next;
+    emit(detail);
+    return state;
+  };
+
+  return Object.freeze({
+    get state() { return state; },
+    get armed() { return state !== WAKE_STATES.OFF; },
+    get phrase() { return matcher.phrase; },
+    get lastCommand() { return lastCommand; },
+
+    /** Arm the gate. Explicit, per surface, and never implied by construction. */
+    arm() {
+      // Deliberately does not touch `lastAt`: the cooldown belongs to a phrase
+      // that was heard, not to the moment the gate was armed. Seeding it here
+      // made the first real phrase after arming look like a repeat.
+      if (state === WAKE_STATES.OFF) move(WAKE_STATES.IDLE, { reason: 'armed' });
+      return state;
+    },
+
+    /** Disarm and return to `off`. Safe to call from a page-hide handler. */
+    disarm(reason = 'disarmed') {
+      if (state !== WAKE_STATES.OFF) {
+        state = WAKE_STATES.OFF;
+        emit({ reason });
+      }
+      return state;
+    },
+
+    /**
+     * Feed one transcript. Returns what happened, and never starts a command on
+     * its own: `heard` only moves the gate to `gate-heard`, and the caller decides
+     * whether to proceed. That separation is what stops a stray match from
+     * sending audio automatically.
+     */
+    hear(transcript, at = now()) {
+      if (state !== WAKE_STATES.IDLE) {
+        return { heard: false, state, reason: state === WAKE_STATES.OFF ? 'disarmed' : 'not-idle' };
+      }
+      // Cooldown: a recogniser that repeats its final result must not re-fire.
+      // Only forward time counts — a caller on a different clock (or a test with
+      // synthetic timestamps) must not be mistaken for a repeat.
+      const since = lastAt === null ? Infinity : at - lastAt;
+      if (since >= 0 && since < WAKE_DEFAULTS.cooldownMs) {
+        return { heard: false, state, reason: 'cooldown' };
+      }
+      const match = matcher.match(transcript);
+      if (!match.heard) return { heard: false, state, reason: 'no-phrase' };
+      lastAt = at;
+      lastCommand = match.command;
+      move(WAKE_STATES.HEARD, { command: match.command });
+      return { heard: true, state, command: match.command };
+    },
+
+    /** The phrase fired and capture may begin. */
+    listen() { return move(WAKE_STATES.LISTENING, { reason: 'capturing' }); },
+
+    /**
+     * A command is on its way out; audio for this turn is over.
+     *
+     * Named `dispatch`, not `send`: this is a state transition, not a network
+     * call, and the panel already has a `send()` that posts to the model. Two
+     * different `send`s in one file is how a reader concludes the gate is doing
+     * something it is not.
+     */
+    dispatch() { return move(WAKE_STATES.SENDING, { reason: 'sending' }); },
+
+    /** Back to watching for the phrase, or off entirely if it was disarmed. */
+    reset(reason = 'done') {
+      if (state === WAKE_STATES.OFF) return state;
+      state = WAKE_STATES.IDLE;
+      emit({ reason });
+      return state;
+    },
+  });
+}
+
+/**
+ * Run the gate in front of a capture loop.
+ *
+ * The guarantee this function exists to make true: **before the gate fires, no
+ * audio leaves this function.** Not "no audio is sent to a model" — no audio is
+ * even assembled, because `takeAudio` is not called and nothing is posted. A
+ * recording is discarded on read, not stored and then dropped.
+ *
+ * `frames` yields `{ level, at }`; `transcribe` is called only while awake, once
+ * per utterance. On page hide the caller disarms, which stops the loop and
+ * releases the input.
+ */
+export async function startWakeListening({
+  frames,
+  gate,
+  capture,
+  transcribe,
+  signal,
+  maxUtteranceMs = WAKE_DEFAULTS.maxUtteranceMs,
+  onsetTimeoutMs = WAKE_DEFAULTS.onsetTimeoutMs,
+  onStatus = () => {},
+} = {}) {
+  if (!frames || !gate) throw new TypeError('Wake listening needs frames and a gate.');
+  if (typeof capture !== 'function' || typeof transcribe !== 'function') {
+    throw new TypeError('Wake listening needs capture() and transcribe().');
+  }
+  if (!gate.armed) {
+    // Disarmed is not an error, but it is also not listening: say so plainly
+    // rather than spinning on frames that will never be used.
+    onStatus({ state: WAKE_STATES.OFF, reason: 'disarmed', sent: false });
+    return { text: null, sent: false, reason: 'disarmed' };
+  }
+
+  const endpointer = createEndpointer();
+  let awakeAt = null;
+  let previousAt = null;
+  let spoke = false;
+
+  onStatus({ state: WAKE_STATES.IDLE, armed: true, phrase: gate.phrase, sent: false });
+
+  for await (const frame of frames) {
+    if (signal?.aborted) {
+      gate.disarm('aborted');
+      onStatus({ state: WAKE_STATES.OFF, reason: 'aborted', sent: false });
+      throw new DOMException('Wake listening cancelled.', 'AbortError');
+    }
+
+    const at = Number(frame?.at);
+    if (!Number.isFinite(at)) continue;
+
+    // Awake phase: exactly one utterance, then back to watching.
+    if (awakeAt !== null) {
+      const delta = previousAt === null ? 0 : Math.max(0, at - previousAt);
+      previousAt = at;
+      const event = endpointer.push(frame?.level, at);
+      if (event?.type === 'speech-start') spoke = true;
+      const elapsed = at - awakeAt;
+
+      // The phrase fired but nobody spoke: close the gate rather than hold the
+      // microphone open for `maxUtteranceMs`. This is the difference between
+      // "listening" and "waiting for something that is not coming".
+      if (!spoke && elapsed >= onsetTimeoutMs) {
+        endpointer.reset();
+        gate.reset('no-speech');
+        awakeAt = null;
+        onStatus({ state: gate.state, reason: 'no-speech', sent: false });
+        continue;
+      }
+
+      if (event?.type === 'endpoint' || elapsed >= maxUtteranceMs) {
+        if (event?.discarded || elapsed >= maxUtteranceMs) {
+          // Too short, or too long: either way there is nothing to send, and the
+          // gate closes again rather than guessing at a command.
+          gate.reset(event?.discarded ? 'too-short' : 'max-length');
+          awakeAt = null;
+          spoke = false;
+          onStatus({ state: gate.state, reason: event?.discarded ? 'too-short' : 'max-length', sent: false });
+          continue;
+        }
+        gate.dispatch();
+        onStatus({ state: WAKE_STATES.SENDING, sent: true });
+        try {
+          const result = await transcribe(capture({ elapsedMs: elapsed, deltaMs: delta }));
+          gate.reset('sent');
+          awakeAt = null;
+          spoke = false;
+          onStatus({ state: gate.state, sent: true, text: result?.text ?? null });
+          return { text: result?.text ?? null, sent: true };
+        } catch (error) {
+          gate.reset('failed');
+          awakeAt = null;
+          spoke = false;
+          onStatus({ state: gate.state, reason: 'failed', message: String(error?.message || error), sent: true });
+          return { text: null, sent: false, error };
+        }
+      }
+      continue;
+    }
+
+    // Asleep phase. Audio is discarded, not accumulated: the frame's level is
+    // used to decide nothing at all, because the phrase decides when to listen.
+    const heard = frame?.transcript ? gate.hear(frame.transcript, at) : null;
+    if (heard?.heard) {
+      gate.listen();
+      awakeAt = at;
+      previousAt = null;
+      spoke = false;
+      endpointer.reset();
+      onStatus({ state: WAKE_STATES.LISTENING, command: heard.command, sent: false });
+    }
+  }
+
+  // The frame source ended — a closed tab, a mute, a released device.
+  gate.disarm('stream-ended');
+  onStatus({ state: WAKE_STATES.OFF, reason: 'stream-ended', sent: false });
+  return { text: null, sent: false, reason: 'stream-ended' };
+}
+
+/**
+ * Whether the gate may be used to authorise anything.
+ *
+ * It is a named function returning a constant `false` because the temptation is
+ * real: a state machine that knows a phrase was said looks like it knows who said
+ * it. It does not, and callers get an answer instead of a code comment.
+ */
+export function wakePhraseAuthenticates() {
+  return false;
+}
