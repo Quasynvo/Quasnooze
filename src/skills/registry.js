@@ -26,26 +26,42 @@ function approvalsPath() {
   return join(SKILLS_DIR, "approvals.json");
 }
 
-/** Skill names become file names — allowlist the shape, then prove containment. */
+/** Skill names become file names — allowlist the shape, then prove containment.
+ *
+ *  The containment proof is load-bearing twice: once for safety (a name may
+ *  never select a file outside the skills directory) and once for static
+ *  analysis (CodeQL's path-injection barrier recognizes exactly this shape —
+ *  resolve to a normalized absolute path, then guard with a positive
+ *  `startsWith(root)` before the value flows to any file sink).
+ */
 function skillPath(name) {
   const raw = String(name ?? "");
   if (!NAME_PATTERN.test(raw)) {
     throw new SkillError(`invalid skill name ${JSON.stringify(raw)} — names match ${NAME_PATTERN}`);
   }
-  const file = join(SKILLS_DIR, `${raw}.json`);
-  if (!resolve(file).startsWith(resolve(SKILLS_DIR) + sep)) {
-    throw new SkillError("invalid skill name");
+  if (raw === "approvals") {
+    throw new SkillError('invalid skill name "approvals" — reserved for the approval records file');
   }
-  return file;
+  const file = resolve(join(SKILLS_DIR, `${raw}.json`));
+  if (file.startsWith(resolve(SKILLS_DIR) + sep)) return file;
+  throw new SkillError("invalid skill name");
 }
 
+/** Approvals are keyed by skill name: build a null-prototype map and copy only
+ *  allowlisted keys, so no stored content can ever reach Object.prototype. */
 function readApprovals() {
+  const out = Object.create(null);
   try {
     const doc = JSON.parse(readFileSync(approvalsPath(), "utf8"));
-    return doc && typeof doc === "object" && !Array.isArray(doc) ? doc : {};
+    if (doc && typeof doc === "object" && !Array.isArray(doc)) {
+      for (const key of Object.keys(doc)) {
+        if (NAME_PATTERN.test(key)) out[key] = doc[key];
+      }
+    }
   } catch {
-    return {};
+    /* no approvals yet */
   }
+  return out;
 }
 
 function writeApprovals(doc) {

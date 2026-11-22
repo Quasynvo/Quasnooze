@@ -171,7 +171,7 @@ test("manifest arguments cannot reach the prototype chain", () => {
 
 test("skill names may not walk out of the registry", () => {
   const body = manifestFor([{ tool: "write_file", args: { path: "a", content: "b" } }, { tool: "read_file", args: { path: "a" } }]);
-  for (const name of ["../../evil", "skills/approvals", "..", "UPPER", "a b"]) {
+  for (const name of ["../../evil", "skills/approvals", "..", "UPPER", "a b", "approvals"]) {
     assert.throws(() => saveSkill({ ...body, name }), SkillError, name);
     assert.throws(() => loadSkill(name), SkillError, name);
   }
