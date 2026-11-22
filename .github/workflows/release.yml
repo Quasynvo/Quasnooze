@@ -78,7 +78,7 @@ jobs:
           node-version: "24"
           registry-url: https://registry.npmjs.org
 
-      - name: Publish to npm (opt-in: set the NPM_PUBLISH variable and NPM_TOKEN secret)
+      - name: "Publish to npm (opt-in: set the NPM_PUBLISH variable and NPM_TOKEN secret)"
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
