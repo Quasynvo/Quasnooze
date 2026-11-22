@@ -33,6 +33,8 @@ export const CODES = Object.freeze({
   CONTEXT_LIMIT: "CONTEXT_LIMIT",
   /** The reply had already started on screen when the provider failed. */
   STREAM_CUT: "STREAM_CUT",
+  /** The daily spend cap tripped. Provider-specific: a local model is free. */
+  SPEND_CAPPED: "SPEND_CAPPED",
 });
 
 /**
@@ -61,6 +63,7 @@ export const HINTS = Object.freeze({
   [CODES.BAD_INPUT]: "The request was rejected as invalid. Sending the same turn to another provider will not fix it.",
   [CODES.CONTEXT_LIMIT]: "The conversation is longer than the model's window. Start a new session, or attach less.",
   [CODES.STREAM_CUT]: "The reply had already started on screen, so it was not asked again elsewhere — that would print the beginning twice. Ask again for a whole answer.",
+  [CODES.SPEND_CAPPED]: "The daily spend cap tripped before this request was sent. Local models are free and keep answering; raise QUASNOOZE_SPEND_CAP_USD if the cap was expected to cover it.",
 });
 
 /**

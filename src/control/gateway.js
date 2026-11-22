@@ -30,16 +30,27 @@ export function classifyTask(text, { hasTools = false, workflow = false } = {}) 
   return "chat";
 }
 
-export function route({ task = "chat", backends = [], policy = DEFAULT_POLICY } = {}) {
+export function route({ task = "chat", backends = [], policy = DEFAULT_POLICY, spend = null } = {}) {
   const kind = TASKS.includes(task) ? task : "chat";
   const order = policy[kind] || policy.chat || [];
   const byName = new Map(backends.map((b) => [b.name, b]));
-  const picked = [];
+  let picked = [];
   for (const name of order) {
     const hit = byName.get(name);
     if (hit) picked.push(hit);
   }
   if (!picked.length) picked.push(...backends);
+  // The spend cap is enforced here, where backends are chosen: over the cap,
+  // priced cloud backends are refused and local ones keep the assistant
+  // answering. The refusal is part of the plan, not a silent degradation.
+  if (spend && spend.overCap) {
+    const affordable = picked.filter((b) => b.kind !== "cloud");
+    return {
+      task: kind,
+      backends: affordable,
+      reason: `spend cap exceeded ($${Number(spend.spentUsd).toFixed(2)} of $${Number(spend.limitUsd).toFixed(2)} today) — priced backends refused until tomorrow`,
+    };
+  }
   return { task: kind, backends: picked };
 }
 

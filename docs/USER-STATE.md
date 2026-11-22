@@ -59,11 +59,27 @@ consented manual validation; path simulation is not such validation.
 
 ## Uninstall versus deletion
 
-Uninstalling the npm package or clearing npx caches does **not** delete the new
-personal state directory. Reinstallation/restarts resolve the same user location.
-Intentional personal-data deletion is separate: stop every process, identify the
-resolved state home and any explicit external data/profile directories, back up
-what you wish to keep, then manually remove only those locations you intend to
-purge. Also consider migration originals, `.env.backup-*`, exports and backups.
-There is no automatic destructive purge command. Checkout deletion still deletes
-checkout-local state; migrate or back it up first.
+Three things, plainly:
+
+1. **Removing the app is not deleting your data.** Uninstalling the npm
+   package (`npm uninstall -g quasnooze`), clearing npx caches, or deleting
+   a checkout leaves the personal state directory untouched. Nothing in the
+   removal path deletes conversations, memory, tasks, schedules, skills or
+   approval grants.
+2. **Updates and reinstalls keep your state.** Reinstallation and restarts
+   resolve the same user location by the rules above. State survives both.
+   Run a backup first if you want a portable copy: `quasnooze export` for a
+   readable export, `writeBackup` (src/backup.js) for a full restore-capable
+   archive — it round-trips memory, tasks, reminders, schedules, personas,
+   sessions and skills through a wipe and back.
+3. **Deleting your data is deleting your data.** Intentional personal-data
+   deletion is separate and manual: stop every process, identify the resolved
+   state home and any explicit external data/profile directories, back up what
+   you wish to keep (`writeBackup` restores later; restored reminders and
+   schedules arrive disabled and skills arrive unapproved, by design), then
+   remove only the locations you intend to purge. For a checkout install that
+   is simply `rm -rf data` — a valid, complete uninstall of the data. Also
+   consider migration originals, `.env.backup-*`, exports and backups. There
+   is no automatic destructive purge command, and there never will be one
+   that runs without your hand on it. Checkout deletion still deletes
+   checkout-local state; migrate or back it up first.

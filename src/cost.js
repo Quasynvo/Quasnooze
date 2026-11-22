@@ -199,3 +199,68 @@ export function costReport({ days = 30, json = false } = {}) {
   lines.push("");
   return lines.join("\n");
 }
+
+/* ───────────────────────────── the cost ledger ──────────────────────────── */
+
+/**
+ * The per-turn ledger: one priced row per turn, newest first. This is the
+ * "what did that cost?" view — tokens, model, latency, and an honest spend
+ * range (all-input to all-output pricing; the real number is inside it).
+ * Everything is computed from the local telemetry log. Zero network bytes.
+ */
+export function costLedger({ limit = 100 } = {}) {
+  const rows = readTurns()
+    .slice(-Math.max(1, limit))
+    .map((t) => {
+      const c = costOfTurn(t);
+      return {
+        ts: t.ts || t.at || null,
+        model: c.price.model,
+        provider: t.provider || null,
+        tokens: c.tokens,
+        latencyMs: Number(t.ms) || null,
+        firstTextMs: Number(t.firstTextMs) || null,
+        state: c.state,
+        ...(c.state === "priced" ? { low: c.low, high: c.high } : c.state === "local" ? { low: 0, high: 0 } : {}),
+      };
+    });
+  const total = rows.reduce(
+    (acc, r) => ({
+      tokens: acc.tokens + (r.tokens || 0),
+      low: acc.low + (r.low || 0),
+      high: acc.high + (r.high || 0),
+    }),
+    { tokens: 0, low: 0, high: 0 },
+  );
+  return { rows, total, priceTableDate: PRICE_TABLE_DATE };
+}
+
+/** Today's spend in USD, summed from the local ledger. `high` takes the
+ *  all-output ceiling (the conservative number for a spend cap). */
+export function todaySpendUsd({ high = true, now = new Date() } = {}) {
+  const today = now.toISOString().slice(0, 10);
+  return readTurns()
+    .filter((t) => String(t.ts || t.at || "").slice(0, 10) === today)
+    .reduce((sum, t) => {
+      const c = costOfTurn(t);
+      if (c.state !== "priced") return sum;
+      return sum + (high ? c.high : c.low);
+    }, 0);
+}
+
+/**
+ * The spend-cap view for the control plane (src/control/gateway.js): the cap
+ * is computed from the same local ledger the panel shows, so it survives
+ * restarts and cannot be argued with — the number on screen is the number
+ * enforced. Over the cap, gateway.route() refuses priced cloud backends.
+ */
+export function spendState({ limitUsd = 5, now = new Date() } = {}) {
+  const spentUsd = todaySpendUsd({ high: true, now });
+  return {
+    limitUsd: Number(limitUsd),
+    spentUsd: Number(spentUsd.toFixed(6)),
+    overCap: spentUsd >= Number(limitUsd),
+    day: now.toISOString().slice(0, 10),
+    priceTableDate: PRICE_TABLE_DATE,
+  };
+}
