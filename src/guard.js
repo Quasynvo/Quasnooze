@@ -45,6 +45,7 @@ const TELEMETRY_ALLOWED_KEYS = new Set([
   "tools",
   "auto",
   "guardFlags",
+  "argumentRepairs",
   "error",
   "stages",
 ]);

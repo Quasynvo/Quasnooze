@@ -219,7 +219,8 @@ async function main() {
       // no bubble to put it in, so the label has to do that job.
       process.stdout.write(`${C.dim(`  ⌁ plan (${event.steps.length} steps, not an approval)` )}\n`);
       for (const step of event.steps) process.stdout.write(C.dim(`    ${step.n}. ${step.label.slice(0, 110)}\n`));
-    } else if (event.type === "tool") process.stdout.write(`${C.gold("  🔧")} ${C.dim(`${event.name}: ${event.label}`)}\n`);
+    } else if (event.type === "tool_repair") process.stdout.write(C.dim(`  ↻ repairing arguments for ${event.name} (one attempt)\n`));
+    else if (event.type === "tool") process.stdout.write(`${C.gold("  🔧")} ${C.dim(`${event.name}: ${event.label}`)}\n`);
     else if (event.type === "tool_done") {
       const icon = event.ok ? C.teal("  ✓") : "\x1b[31m  ✕\x1b[0m";
       process.stdout.write(`${icon} ${C.dim(String(event.preview).split("\n")[0].slice(0, 100))}\n`);

@@ -1306,6 +1306,12 @@ async function send() {
               `<div class="note">${String(data.note || "Not an approval — every step still asks.").replace(/</g,"&lt;")}</div>`;
             steps.insertBefore(box, thinking);
             scrollDown();
+          } else if (data.type === "tool_repair") {
+            const row = document.createElement("div");
+            row.className = "step";
+            row.textContent = `↻ Repairing arguments for ${String(data.name)} (one attempt)`;
+            steps.insertBefore(row, thinking);
+            scrollDown();
           } else if (data.type === "tool_done") {
             const row = document.createElement("div");
             row.className = "step";

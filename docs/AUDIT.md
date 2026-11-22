@@ -882,3 +882,13 @@ compaction. External shell, network, or plugin hook keys are rejected at
 configuration time. This pipeline coordinates in-process guard rails only; it
 does not sandbox child processes or validate arbitrary owner-written JS tools.
 
+
+### Tool argument validation and repair
+
+Issue #137 tightens the existing pre-policy validation boundary: nested types,
+required fields and enums are checked without coercion. One repair per turn
+may propose arguments only for the same registered tool; it cannot approve or
+execute an action, and its result goes through the unchanged risk classifier,
+command screen and approval gate. Unknown tools and unsuccessful repairs fail
+closed with `BAD_TOOL_ARGS`. The telemetry allowlist in `src/guard.js` now
+permits the numeric `argumentRepairs` count; honesty checks are unchanged.

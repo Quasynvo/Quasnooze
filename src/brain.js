@@ -487,10 +487,10 @@ export function safeParse(value) {
  * carried on the call so the agent can tell the model to re-emit it.
  */
 export function parseArgs(value) {
-  if (value == null) return { value: {}, error: null };
+  if (value == null) return { value: {}, error: "arguments must be a JSON object" };
   if (typeof value === "object") return { value, error: null };
   const text = String(value).trim();
-  if (!text) return { value: {}, error: null };
+  if (!text) return { value: {}, error: "arguments must be a JSON object" };
   try {
     const parsed = JSON.parse(text);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -505,7 +505,8 @@ export function parseArgs(value) {
 /** One place where a provider's tool call becomes our shape. */
 function toCall(id, name, rawArgs) {
   const { value, error } = parseArgs(rawArgs);
-  return error ? { id, name, arguments: value, parseError: error } : { id, name, arguments: value };
+  return error ? { id, name, arguments: value, parseError: error,
+    ...(typeof rawArgs === "string" ? { rawArguments: rawArgs.slice(0, 8000) } : {}) } : { id, name, arguments: value };
 }
 
 const PROVIDERS = { ollama, openai, mock };

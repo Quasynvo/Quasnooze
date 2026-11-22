@@ -353,6 +353,23 @@ The mismatch is **shown to you, appended to the reply** — never silently rewri
 that edits the model's output is a second liar. This is a code-level check, not a prompt: `src/guard.js`,
 150 lines, entirely readable.
 
+### Invalid tool arguments and repair
+
+Tool calls are checked against their registered schemas before policy checks,
+approvals, or execution. The validator checks types, required fields, enums,
+nested properties and array items without coercing or filling in values. It
+preserves the existing rejection of unknown top-level arguments; other JSON
+Schema constraints such as numeric bounds remain the tool's responsibility.
+
+At most one repair is attempted per turn. The model sees the validation error
+and may re-emit the same tool call; a different tool cannot be substituted. A
+repaired call still passes the normal policy and approval gates. If repair fails,
+the transcript contains an actionable `BAD_TOOL_ARGS` failure and no further
+model tool round is run. Unknown tool names also fail with `BAD_TOOL_ARGS` and
+cannot be repaired into a different tool. The `tool_repair` event and the
+`argumentRepairs` counter in local telemetry record the attempt without logging
+argument values.
+
 ### Receipts: what actually happened, counted by the tools
 
 The last two codes need a number the reply can be checked against, so the tools supply one
