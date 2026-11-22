@@ -43,7 +43,7 @@ const {
   remember, forget, saveTask, loadMemory, loadTasks, addReminder, loadReminders, pendingReminders,
   updateReminder, saveSchedule, loadSchedules, appendMessage, loadSession, invalidate,
 } = await import("../src/store.js");
-const { saveSkill, loadSkill, deleteSkill } = await import("../src/skills/registry.js");
+const { saveSkill, loadSkill } = await import("../src/skills/registry.js");
 const { validateSkill, SKILL_KIND, SKILL_SCHEMA_VERSION } = await import("../src/skills/manifest.js");
 
 const DATA = process.env.PINCH_DATA;
