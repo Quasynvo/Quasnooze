@@ -1720,7 +1720,7 @@
     {
       "id": "reason-02-tool-arg-validation",
       "title": "feat(agent): validate tool arguments against their schema and repair once",
-      "status": "backlog",
+      "status": "shipped",
       "difficulty": "easy",
       "labels": [
         "good first issue",
@@ -1734,7 +1734,9 @@
       ],
       "verify": "node --test test/tools.test.js test/agent.test.js\nnode --test --test-concurrency=4 && node scripts/audit.js",
       "time_estimate": "~3-5 hours",
-      "body": "## Context\n\nEvery tool in `src/tools.js` declares a `parameters` schema and then trusts whatever the model produced. A missing required field surfaces as a stack trace or a `TypeError` deep inside a handler, which is both a bad answer and a bad bug report.\n\nA validator plus a single repair round turns the most common local-model failure — malformed arguments — into a recoverable event.\n\n## What to change\n\n- A dependency-free validator for the subset of JSON Schema the tools already use (`type`, `required`, `enum`, `properties`, primitives, arrays).\n- On failure, one repair round: return the validation errors to the model and let it retry once, then fail with a typed `BAD_TOOL_ARGS` result.\n- Never coerce a wrong type silently; report it. `set_volume: \"loud\"` is an error, not a zero.\n- The typed failure appears in the transcript as a sentence a person can act on.\n\n**Safety:** validation narrows what the model can do. It must never relax a risk tier or fabricate a default.\n\n## Acceptance criteria\n\n- [ ] Unknown tool names, missing required fields and wrong types all produce `BAD_TOOL_ARGS`\n- [ ] Exactly one repair attempt happens, and it is visible in telemetry\n- [ ] A valid call is passed through byte-identically to today's behaviour\n- [ ] No new runtime dependency\n\n## How to verify\n\n```bash\nnode --test test/tools.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~3-5 hours"
+      "body": "## Context\n\nEvery tool in `src/tools.js` declares a `parameters` schema and then trusts whatever the model produced. A missing required field surfaces as a stack trace or a `TypeError` deep inside a handler, which is both a bad answer and a bad bug report.\n\nA validator plus a single repair round turns the most common local-model failure — malformed arguments — into a recoverable event.\n\n## What to change\n\n- A dependency-free validator for the subset of JSON Schema the tools already use (`type`, `required`, `enum`, `properties`, primitives, arrays).\n- On failure, one repair round: return the validation errors to the model and let it retry once, then fail with a typed `BAD_TOOL_ARGS` result.\n- Never coerce a wrong type silently; report it. `set_volume: \"loud\"` is an error, not a zero.\n- The typed failure appears in the transcript as a sentence a person can act on.\n\n**Safety:** validation narrows what the model can do. It must never relax a risk tier or fabricate a default.\n\n## Acceptance criteria\n\n- [ ] Unknown tool names, missing required fields and wrong types all produce `BAD_TOOL_ARGS`\n- [ ] Exactly one repair attempt happens, and it is visible in telemetry\n- [ ] A valid call is passed through byte-identically to today's behaviour\n- [ ] No new runtime dependency\n\n## How to verify\n\n```bash\nnode --test test/tools.test.js test/agent.test.js\nnode --test --test-concurrency=4\n```\n\n## Time estimate\n\n~3-5 hours",
+      "shipped_at": "2026-11-22",
+      "issue": 137
     },
     {
       "id": "reason-03-constrained-tool-arguments",

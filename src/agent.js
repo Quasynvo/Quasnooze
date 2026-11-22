@@ -9,6 +9,7 @@
  *    PINCH_AUTO_APPROVE=true;
  *  • every tool failure is fed back to the model as text, never swallowed.
  */
+import { validateSchema } from "./agent/tool-args.js";
 import { buildActionPreview, previewSecrets, approvalDescription, sanitizeActionPreview } from "./action-preview.js";
 import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
@@ -173,22 +174,8 @@ async function awaitApprovalWithSignal({ id, promise }, signal) {
  * @returns {string|null} a message for the model, or null if the call is fine
  */
 export function validateArgs(tool, args) {
-  const schema = tool.parameters || {};
-  const required = schema.required || [];
-  const allowed = Object.keys(schema.properties || {});
-  const given = Object.keys(args || {});
-
-  const missing = required.filter((k) => args?.[k] === undefined || args?.[k] === null);
-  if (missing.length) {
-    return `Missing required argument${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}. Call ${tool.name} again with ${missing.join(", ")}.`;
-  }
-  if (allowed.length) {
-    const unknown = given.filter((k) => !allowed.includes(k));
-    if (unknown.length) {
-      return `Unknown argument${unknown.length === 1 ? "" : "s"} for ${tool.name}: ${unknown.join(", ")}. Allowed: ${allowed.join(", ")}.`;
-    }
-  }
-  return null;
+  const errors = validateSchema({ type: "object", ...(tool.parameters || {}) }, args);
+  return errors.length ? `${errors.join("; ")}. Call ${tool.name} again with valid arguments.` : null;
 }
 
 /* ──────────────────────────────── agent ────────────────────────────────── */
@@ -211,7 +198,7 @@ export function describeCall(name, args) {
     const outside = screen.escapes?.length ? `  ⚠ outside workspace: ${screen.escapes.join(", ")}` : "";
     return `run: ${a.command}${a.cwd ? `  (in ${a.cwd})` : ""}${outside}`;
   }
-  if (name === "write_file") return `write ${a.path} (${Buffer.byteLength(a.content || "", "utf8")} bytes)`;
+  if (name === "write_file") return `write ${a.path} (${Buffer.byteLength(typeof a.content === "string" ? a.content : "", "utf8")} bytes)`;
   // File actions are batches: the human gate has to see every operation in
   // the plan, not "operations=[object Object]".
   if (name === "move_path" || name === "rename_path" || name === "trash_path") {
@@ -728,6 +715,8 @@ export async function runAgent({
   let tokens = 0;
   let toolBudget = TOOL_OUTPUT_BUDGET;
   let autoRan = 0;
+  let argumentRepairs = 0;
+  const argumentFailures = [];
   // What this turn actually retrieved. Only these can be cited; see sources.js.
   const sources = createSources();
   for (const a of attachments) {
@@ -817,7 +806,7 @@ export async function runAgent({
     // At most once per turn, and never for a conversation turn.
     if (!talkOnly && !turnPlan) {
       turnPlan = buildTurnPlan(
-        out.toolCalls.map((call) => ({ tool: call.name, label: describeCall(call.name, call.arguments) })),
+        out.toolCalls.map((call) => ({ tool: call.name, label: !TOOL_MAP.has(call.name) || call.parseError || validateArgs(TOOL_MAP.get(call.name), call.arguments) ? `${String(call.name).slice(0, 100)} (invalid arguments)` : describeCall(call.name, call.arguments) })),
       );
       if (turnPlan) {
         onEvent({ type: "plan", steps: turnPlan.steps, omitted: turnPlan.omitted, note: turnPlan.note });
@@ -835,34 +824,51 @@ export async function runAgent({
 
     for (const call of out.toolCalls) {
       const tool = TOOL_MAP.get(call.name);
-      const label = describeCall(call.name, call.arguments);
+      let invalid = !tool ? `Unknown tool: ${String(call.name).slice(0, 100)}.`
+        : call.parseError ? "Arguments must be a valid JSON object."
+        : validateArgs(tool, call.arguments);
 
-      if (!tool) {
-        messages.push({
-          role: "tool", name: call.name, toolCallId: call.id,
-          content: `No such tool: ${call.name}. Available: ${[...TOOL_MAP.keys()].join(", ")}`,
-        });
+      // One bounded repair per turn. It can only repair the same tool, and
+      // the result still goes through every normal risk and approval check.
+      if (invalid && argumentRepairs === 0 && !signal?.aborted && !isArmed()) {
+        argumentRepairs++;
+        onEvent({ type: "tool_repair", name: call.name, attempt: 1 });
+        try {
+          const available = tool ? toolSchemas().filter((s) => s.function.name === call.name) : [];
+          const repair = await brain.chat([
+            { role: "system", content: "Repair the tool arguments once. Do not guess missing values. Call only the same tool with corrected arguments; if you cannot, explain instead." },
+            { role: "user", content: `Original request: ${JSON.stringify(String(text).slice(0, 4000))}\nTool: ${String(call.name).slice(0, 100)}\nArguments: ${call.parseError && typeof call.rawArguments === "string" ? JSON.stringify(call.rawArguments).slice(0, 8000) : JSON.stringify(call.arguments).slice(0, 8000)}\nValidation error: ${invalid.slice(0, 1500)}` },
+          ], { selection: activeModel, tools: available, maxTokens: 700, think: false });
+          tokens += repair.tokens || 0;
+          const candidate = repair.toolCalls?.length === 1 ? repair.toolCalls[0] : null;
+          if (tool && candidate?.name === call.name && !candidate.parseError && !validateArgs(tool, candidate.arguments)) {
+            call.arguments = candidate.arguments;
+            delete call.parseError;
+            delete call.rawArguments;
+            invalid = null;
+          } else if (candidate?.name === call.name && tool) {
+            invalid = candidate.parseError ? "Arguments must be a valid JSON object." : validateArgs(tool, candidate.arguments) || invalid;
+          }
+        } catch {
+          // A failed repair is still a typed argument failure, not an approval.
+        }
+      }
+      if (invalid) {
+        const message = `BAD_TOOL_ARGS: Could not run ${String(call.name).slice(0, 100)}: ${invalid} Please provide valid arguments and try again.`;
+        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: message });
+        trace.push({ tool: call.name, args: call.arguments, ok: false, invalid: true, code: "BAD_TOOL_ARGS" });
+        onEvent({ type: "tool_done", name: call.name, ok: false, code: "BAD_TOOL_ARGS", preview: message.slice(0, 300) });
+        argumentFailures.push(message);
+        if (tool) noteRefusal(tool.name, call.arguments, "invalid-arguments");
         continue;
       }
-
+      const label = describeCall(call.name, call.arguments);
       if (isArmed()) {
         const why = freezeMessage();
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, frozen: true });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why.slice(0, 200) });
         noteRefusal(tool.name, call.arguments, "frozen");
-        continue;
-      }
-
-      // 1. Validate arguments first — before policy checks, approval, or execution.
-      const invalid = call.parseError
-        ? `Your arguments were not valid JSON (${call.parseError}). Re-emit ${call.name} with valid JSON.`
-        : validateArgs(tool, call.arguments);
-      if (invalid) {
-        messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: invalid });
-        trace.push({ tool: tool.name, args: call.arguments, ok: false, invalid: true });
-        onEvent({ type: "tool_done", name: tool.name, ok: false, preview: invalid.slice(0, 200) });
-        noteRefusal(tool.name, call.arguments, "invalid-arguments");
         continue;
       }
 
@@ -1238,6 +1244,11 @@ export async function runAgent({
         : "";
       messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: content + proof });
     }
+    // Do not permit a further model round to evade the one-repair limit.
+    if (argumentFailures.length) {
+      finalText = "I could not complete every requested tool call.";
+      break;
+    }
   }
 
   if (!finalText) {
@@ -1390,6 +1401,8 @@ export async function runAgent({
     }
   }
 
+  if (argumentFailures.length) finalText += `\n\n${argumentFailures.slice(0, 6).join("\n")}`;
+
   const sourceBlock = renderSourceBlock(citations);
   if (sourceBlock) finalText += sourceBlock;
 
@@ -1419,6 +1432,7 @@ export async function runAgent({
     mode: social ? "conversation" : talk.kind === "talk" ? "talk" : "agent",
     rounds,
     tokens,
+    argumentRepairs,
     tools: storedTrace.length,
     auto: autoRan,
     guardFlags: guard.flags.length,
