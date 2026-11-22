@@ -15,7 +15,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,11 @@ process.env.PINCH_DATA = mkdtempSync(join(tmpdir(), "pinch-skill-data-"));
 process.env.PINCH_AUTO_APPROVE = "true";
 process.env.LLM_PROVIDER = "ollama";
 process.env.OLLAMA_URL = "http://127.0.0.1:9"; // nothing listens; nothing may call it
+
+// A replayed turn is a statement about the world (F08 re-reads it before each
+// step), so the world must exist for the turn to be honest: these tests fake
+// the *executor*, not the system of record.
+writeFileSync(join(process.env.PINCH_WORKSPACE, "report.txt"), "draft one\n");
 
 const { compileSkill } = await import("../src/skills/compiler.js");
 const { saveSkill, loadSkill, listSkills, approveSkill, revokeSkill, deleteSkill, skillsDir } = await import("../src/skills/registry.js");

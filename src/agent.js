@@ -717,6 +717,7 @@ export async function runAgent({
   let autoRan = 0;
   let argumentRepairs = 0;
   const argumentFailures = [];
+  let contradictedStop = null;
   // What this turn actually retrieved. Only these can be cited; see sources.js.
   const sources = createSources();
   for (const a of attachments) {
@@ -1243,6 +1244,22 @@ export async function runAgent({
         ? `\n\n[verification: contradicted — ${verification.detail}. Do not describe this action as done; state what is actually true and what you will try instead.]`
         : "";
       messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: content + proof });
+
+      // F08, closing VERIFIED-EXECUTION §6's gap: the plan is abandoned, not
+      // talked through. A read-back that contradicts the action ends the
+      // turn's remaining calls — the model is not invited to negotiate with a
+      // world that just said no, and the user is not served a plan whose
+      // ground truth moved under it.
+      if (verification?.status === VERIFY_CONTRADICTED) {
+        contradictedStop = { tool: tool.name, detail: verification.detail };
+        break;
+      }
+    }
+    if (contradictedStop) {
+      finalText =
+        `I stopped mid-plan after ${contradictedStop.tool} was contradicted by its read-back ` +
+        `(${contradictedStop.detail}). No further actions were run.`;
+      break;
     }
     // Do not permit a further model round to evade the one-repair limit.
     if (argumentFailures.length) {

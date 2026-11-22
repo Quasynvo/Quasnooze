@@ -447,3 +447,37 @@ test("one disclosed approval covers volume/media for the session; lock, denials 
     assert.ok(lockRun.trace.filter((t) => t.tool === "system_control").every((t) => t.denied), "denied lock must not run");
   } finally { replyOverride = null; brain.resetModel(); }
 });
+
+test("a contradicted action ends the plan: the tool loop stops mid-plan (F08)", async () => {
+  const { TOOL_MAP } = await import("../src/tools.js");
+  const { brain } = await import("../src/brain.js");
+  const realCalculator = TOOL_MAP.get("calculator");
+  TOOL_MAP.set("calculator", {
+    ...realCalculator,
+    async run() {
+      return { ok: true, output: "42" }; // claims 9*9 = 42; the read-back recomputes
+    },
+  });
+  replyOverride = {
+    content: "",
+    tool_calls: [
+      { function: { name: "calculator", arguments: { expression: "9*9" } } },
+      { function: { name: "calculator", arguments: { expression: "1+1" } } },
+    ],
+  };
+  try {
+    await brain.setModel({ provider: "ollama", model: "coder:7b" });
+    const start = modelRequests.length;
+    const result = await runAgent({ sessionId: "contradict-stop", text: "force-tool-loop" });
+    const calcRuns = result.trace.filter((t) => t.tool === "calculator");
+    assert.equal(calcRuns.length, 1, "the second call never runs after a contradiction");
+    assert.equal(calcRuns[0].verification?.status, "contradicted");
+    assert.ok(!result.trace.some((t) => t.args?.expression === "1+1"), "the rest of the plan is abandoned");
+    assert.match(result.text, /stopped mid-plan/);
+    assert.equal(modelRequests.length - start, 1, "the model is not consulted again after the plan is abandoned");
+  } finally {
+    TOOL_MAP.set("calculator", realCalculator);
+    replyOverride = null;
+    brain.resetModel();
+  }
+});

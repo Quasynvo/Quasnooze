@@ -32,12 +32,15 @@ const SKILLS_USAGE = `quasnooze skills list [--json]
 quasnooze skills show <name>
 quasnooze skills compile <name> --from <turn.json> [--description <text>]
 quasnooze skills approve <name> | revoke <name> | delete <name>
-quasnooze skills replay <name> [--yes]
+quasnooze skills replay <name> [--yes] [--unattended]
 Skills are compiled conversation turns: ordered tool calls with their exact
 arguments (docs/SKILLS.md). Replay makes zero model calls, re-checks every
 permission and verifies every applied step. Nothing runs before the owner
 approves the skill's content. --yes approves dangerous steps for that one
-replay and counts as fresh consent for typed input, because the owner typed it.`;
+replay and counts as fresh consent for typed input, because the owner typed it.
+If the world drifted (the file moved, the task closed), replay offers a bounded
+repair or stops — it never guesses a target. --unattended stops on drift
+without asking: there is nobody to repair with.`;
 
 /**
  * The skills CLI. Executes tools through the real registry on replay — the
@@ -118,6 +121,39 @@ async function runSkillsCli(args) {
       const { replaySkill } = await import("./skills/replay.js");
       const { TOOL_MAP } = await import("./tools.js");
       const yes = has("--yes");
+      const unattended = has("--unattended");
+      // The drift gate is deliberately not --yes: choosing a substitute target
+      // is an owner decision about the world, not a permission waiver. With no
+      // terminal (or --unattended) drift stops the run.
+      const askRepair = async (d) => {
+        if (unattended || !process.stdin.isTTY) return { action: "stop" };
+        console.log(C.gold(`  drift at step ${d.step} (${d.tool}): ${d.kind} — expected ${JSON.stringify(String(d.expected).slice(0, 80))}, found ${JSON.stringify(String(d.actual).slice(0, 80))}`));
+        let prompt;
+        if (d.repair === "satisfied") {
+          prompt = "    the step's outcome already holds — s = accept it, anything else = stop: ";
+        } else if (d.candidates?.length) {
+          for (const [i, c] of d.candidates.entries()) console.log(`    ${i + 1}. ${c}`);
+          prompt = "    pick a number, or anything else = stop: ";
+        } else if (d.repair === "supply-argument") {
+          prompt = `    supply ${d.argument}, or empty = stop: `;
+        } else {
+          return { action: "stop" };
+        }
+        const { createInterface } = await import("node:readline/promises");
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        try {
+          const answer = (await rl.question(prompt)).trim();
+          if (d.repair === "satisfied" && answer.toLowerCase() === "s") return { action: "satisfied" };
+          if (d.candidates?.length && /^\d+$/.test(answer)) {
+            const picked = d.candidates[Number(answer) - 1];
+            if (picked !== undefined) return { action: "use", value: picked };
+          }
+          if (d.repair === "supply-argument" && answer) return { action: "use", value: answer };
+          return { action: "stop" };
+        } finally {
+          rl.close();
+        }
+      };
       const report = await replaySkill(loaded, {
         execute: async (tool, toolArgs) => {
           const impl = TOOL_MAP.get(tool);
@@ -126,10 +162,18 @@ async function runSkillsCli(args) {
         },
         approve: () => yes,
         freshConsent: yes, // the owner typed this command: that is fresh consent
+        unattended,
+        repair: askRepair,
       });
       for (const step of report.steps) {
         const verdict = step.verification ? ` — ${step.verification.status}: ${step.verification.detail}` : step.notRun ? " — not run" : "";
         console.log(`  ${step.applied ? C.teal("✓") : step.ok ? C.gold("~") : "✗"} ${step.tool} ${C.dim(step.argsJson.slice(0, 100))}${C.dim(verdict.slice(0, 120))}`);
+      }
+      for (const d of report.drift ?? []) {
+        const outcome = d.repaired
+          ? `repaired: ${String(d.repaired.before).slice(0, 60)} → ${String(d.repaired.after).slice(0, 60)}`
+          : (d.outcome ?? "not run");
+        console.log(`  ${C.gold("drift")} step ${d.step} (${d.tool}): ${d.kind} — ${outcome}`);
       }
       const line = `${report.status}${report.reason ? ` — ${report.reason}` : ""} (${report.completed}/${report.total} steps, ${report.ms} ms)`;
       console.log(report.status === "completed" ? C.teal(line) : C.gold(line));
