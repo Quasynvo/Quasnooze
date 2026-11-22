@@ -28,7 +28,7 @@ process.env.OLLAMA_URL = "http://127.0.0.1:9"; // nothing listens; nothing may c
 
 const { compileSkill } = await import("../src/skills/compiler.js");
 const { saveSkill, loadSkill, listSkills, approveSkill, revokeSkill, deleteSkill, skillsDir } = await import("../src/skills/registry.js");
-const { replaySkill, checkStepPolicy } = await import("../src/skills/replay.js");
+const { replaySkill } = await import("../src/skills/replay.js");
 const { validateSkill, skillDigest, SkillError, SKILL_KIND, SKILL_SCHEMA_VERSION } = await import("../src/skills/manifest.js");
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
