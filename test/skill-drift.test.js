@@ -62,7 +62,6 @@ function recorder() {
 }
 
 const verified = async () => ({ status: "verified", detail: "read back matches" });
-const stopAnswer = async () => ({ action: "stop" });
 
 /** Every drifted run is classified exactly one way. */
 const outcomes = [];
