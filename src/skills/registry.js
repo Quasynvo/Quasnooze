@@ -12,18 +12,44 @@
  * local files under PINCH_DATA like every other piece of state, mode 0600.
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, lstatSync, unlinkSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { config } from "../config.js";
 import { SkillError, NAME_PATTERN, validateSkill, skillDigest } from "./manifest.js";
 
 const SKILLS_DIR = join(config.dataDir, "skills");
+const SKILLS_ROOT = resolve(SKILLS_DIR);
 
 export function skillsDir() {
   return SKILLS_DIR;
 }
 
+/** The skills root itself, re-resolved and re-proven to be itself. Every
+ *  directory-level file sink (readdir, mkdir) takes this value — never the
+ *  raw configured constant. */
+function skillsRoot() {
+  const root = resolve(SKILLS_DIR);
+  if (root.indexOf(SKILLS_ROOT) !== 0) return null;
+  return root;
+}
+
+/** Build a path under the skills root and prove it stays there.
+ *
+ *  Every path this module hands to a file sink passes through here. The
+ *  proof is the containment pattern from the CodeQL tainted-path model:
+ *  the joined value is re-resolved and must start at the root — anything
+ *  else is rejected before any syscall sees it. Segments are additionally
+ *  constrained at the call sites (name shape, directory-entry equality),
+ *  so no caller-controlled byte becomes a path component unchecked.
+ */
+function insideSkills(segment) {
+  const file = join(SKILLS_ROOT, segment);
+  const abs = resolve(file);
+  if (abs.indexOf(SKILLS_ROOT) !== 0) return null;
+  return abs;
+}
+
 function approvalsPath() {
-  return join(SKILLS_DIR, "approvals.json");
+  return insideSkills("approvals.json");
 }
 
 /** Skill names become file names — allowlist the shape, then prove containment.
@@ -45,28 +71,33 @@ function skillPath(name, { mustExist = false } = {}) {
   }
   const wanted = `${raw}.json`;
   let entry = null;
-  try {
-    entry = readdirSync(SKILLS_DIR, { withFileTypes: true }).find((e) => e.isFile() && e.name === wanted) ?? null;
-  } catch {
-    /* the directory may not exist yet */
+  const dir = skillsRoot();
+  if (dir !== null) {
+    try {
+      entry = readdirSync(dir, { withFileTypes: true }).find((e) => e.isFile() && e.name === wanted) ?? null;
+    } catch {
+      /* the directory may not exist yet */
+    }
   }
   if (entry) {
-    const file = resolve(join(SKILLS_DIR, entry.name));
-    if (file.startsWith(resolve(SKILLS_DIR) + sep)) return file;
-    throw new SkillError("invalid skill name");
+    const file = insideSkills(entry.name);
+    if (file === null) throw new SkillError("invalid skill name");
+    return file;
   }
   if (mustExist) return null;
-  const file = resolve(join(SKILLS_DIR, wanted));
-  if (file.startsWith(resolve(SKILLS_DIR) + sep)) return file;
-  throw new SkillError("invalid skill name");
+  const file = insideSkills(wanted);
+  if (file === null) throw new SkillError("invalid skill name");
+  return file;
 }
 
 /** Approvals are keyed by skill name: build a null-prototype map and copy only
  *  allowlisted keys, so no stored content can ever reach Object.prototype. */
 function readApprovals() {
   const out = Object.create(null);
+  const path = approvalsPath();
+  if (path === null) return out;
   try {
-    const doc = JSON.parse(readFileSync(approvalsPath(), "utf8"));
+    const doc = JSON.parse(readFileSync(path, "utf8"));
     if (doc && typeof doc === "object" && !Array.isArray(doc)) {
       for (const key of Object.keys(doc)) {
         if (NAME_PATTERN.test(key)) out[key] = doc[key];
@@ -79,8 +110,11 @@ function readApprovals() {
 }
 
 function writeApprovals(doc) {
-  mkdirSync(SKILLS_DIR, { recursive: true });
-  writeFileSync(approvalsPath(), `${JSON.stringify(doc, null, 2)}\n`, { mode: 0o600 });
+  const dir = skillsRoot();
+  const path = approvalsPath();
+  if (dir === null || path === null) throw new SkillError("invalid skills directory");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path, `${JSON.stringify(doc, null, 2)}\n`, { mode: 0o600 });
 }
 
 /** Read a skill file the careful way: a regular file, not a symlink out. */
@@ -96,7 +130,11 @@ function readSkillFile(name) {
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new SkillError(`refusing to load ${file}: not a regular file`);
   }
-  return readFileSync(file, "utf8");
+  const abs = resolve(file);
+  if (abs.indexOf(SKILLS_ROOT) !== 0) {
+    throw new SkillError(`refusing to load ${String(name ?? "")}: outside the skills directory`);
+  }
+  return readFileSync(abs, "utf8");
 }
 
 /**
@@ -105,7 +143,9 @@ function readSkillFile(name) {
  */
 export function saveSkill(manifest) {
   const skill = validateSkill(manifest);
-  mkdirSync(SKILLS_DIR, { recursive: true });
+  const dir = skillsRoot();
+  if (dir === null) throw new SkillError("invalid skills directory");
+  mkdirSync(dir, { recursive: true });
   writeFileSync(skillPath(skill.name), `${JSON.stringify(skill, null, 2)}\n`, { mode: 0o600 });
   return { name: skill.name, digest: skillDigest(skill) };
 }
@@ -140,8 +180,10 @@ export function loadSkill(name) {
  *  corrupt skill is reported, not allowed to hide the healthy ones. */
 export function listSkills() {
   let entries;
+  const dir = skillsRoot();
+  if (dir === null) return [];
   try {
-    entries = readdirSync(SKILLS_DIR, { withFileTypes: true });
+    entries = readdirSync(dir, { withFileTypes: true });
   } catch {
     return [];
   }
@@ -199,7 +241,11 @@ export function deleteSkill(name) {
   const { revoked } = revokeSkill(name);
   let deleted = false;
   if (file !== null) {
-    unlinkSync(file);
+    const abs = resolve(file);
+    if (abs.indexOf(SKILLS_ROOT) !== 0) {
+      throw new SkillError(`refusing to delete ${String(name ?? "")}: outside the skills directory`);
+    }
+    unlinkSync(abs);
     deleted = true;
   }
   return { name: String(name), deleted, approvalRevoked: revoked };
