@@ -113,3 +113,39 @@ message the model receives and in the text the user reads.
 - **Not proof the action was the right one.** It proves the action produced the
   state the tool said it produced. Whether that state is what the user wanted is
   the preview and approval gate's job.
+
+## 7. From an action to a turn: receipts (issue #136)
+
+Section 5 covers one action that lied. This section covers twelve actions where
+three landed, because that is the shape a personal assistant actually fails in:
+not a tool inventing success, but a *summary* of real results going further than
+the results did.
+
+`src/agent/receipts.js` builds one receipt per tool call from what the tool
+returned — never from the text it printed. The batch file tools now carry a
+machine-readable `receipt` (`requested`, `applied`, `failed`, `notRun`, the
+failed items), so "3 of 12" is a number read off the batch. A tool with no such
+record is one operation if it succeeded and zero if it did not; a refused call is
+one operation that was never attempted. There is no code path that adds an
+operation to a receipt.
+
+Three things then follow, in order:
+
+| Layer | What it does | Where |
+|---|---|---|
+| Correction | one model turn with the numbers, tools withheld; the rewrite is accepted only if it is better supported, never merely different | `src/agent.js` |
+| Honesty flag | `receipt-count-mismatch` and `partial-failure-unreported` join the existing guard codes | `src/guard.js` |
+| Visible receipt footer | per-step truth, including the failed items and whether `undo_last` applies | `renderReceipts()` |
+
+The correction is bounded (`MAX_CLAIM_CORRECTIONS = 1`), cannot call a tool, and
+is skipped on a transport failure. When the model cannot be reached, the flag and
+the footer still tell the truth: the user-facing half never depends on the model
+agreeing to be corrected.
+
+```
+node --test test/agent-receipts.test.js
+```
+
+What this is **not**: it is not a plan executor, and it does not stop a plan when
+an action is contradicted — that belongs to the compiled-skill replay in
+`skill-01`. It checks the *answer*, not the sequencing.

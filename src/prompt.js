@@ -104,6 +104,24 @@ A step is an instruction a person could read and approve; a success check is a w
 }
 
 /**
+ * The multi-step contract (issue #136).
+ *
+ * Added to the agent prompt only when a turn has actually run more than one
+ * tool, so an ordinary question does not pay prefill for a counting rule it
+ * cannot break. The phrasing is the interesting part: the forbidden shapes are
+ * named, because "be accurate" is not checkable and "\"all twelve\" when nine
+ * failed" is. A code check enforces what this asks for — see
+ * `auditReceiptClaims()` in `src/agent/receipts.js`.
+ */
+export const RECEIPT_CONTRACT = `## Reporting work you did with tools
+- Count what happened from the tool results, not from the request. If 12 moves were planned and 3 succeeded, say "3 of 12 moved" and name what failed.
+- Forbidden when the receipts do not support it: "all", "every", "both", a bare count ("12 files moved"), or a bare "Done" over a partial result.
+- List failures per step, with the item and the reason. "9 failed" alone is not a report; "9 failed: a.txt (EEXIST), b.txt (source missing)" is.
+- If a plan was shown before the work, say which steps of it completed and which did not. Do not describe the plan as the result.
+- A plan is not permission. It authorises nothing; each tool call is still governed by the risk tiers and the approval gate.
+- Do not call a tool just to make a number true. If the receipts cannot back a claim, the answer is to say less, not to act more.`;
+
+/**
  * The approved plan, carried into the execution turn as data.
  *
  * Same rule as an attached document and a saved persona: a plan is a thing the
@@ -128,7 +146,7 @@ Start with step 1 and work in order. Every tool call is still subject to the ris
   };
 }
 
-export function buildSystemPrompt({ channel = "web", extra = "" } = {}) {
+export function buildSystemPrompt({ channel = "web", extra = "", multiStep = false } = {}) {
   const memory = loadMemory();
   const now = new Date().toLocaleString("en-GB", { timeZone: config.timezone });
   const profile = readProfile();
@@ -188,6 +206,7 @@ ${profile}
 Anything not in this section or in the facts above, you do not know about them. Ask.
 ` : ""}
 
+${multiStep ? `\n${RECEIPT_CONTRACT}\n` : ""}
 ## Current context
 - Date and time: ${now} (${config.timezone})
 - You are replying on: ${channel}

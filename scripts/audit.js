@@ -322,6 +322,81 @@ await check("inventory-readonly", "tool inventory never executes plugins or leak
   return "canary plugin untouched, secrets/paths redacted, symlinks refused";
 });
 
+// ── 2b. claims are checked against receipts, and a plan authorises nothing ──
+await check("receipts-refuse-inflated-claims", "a claim the tool records do not support is refused", async () => {
+  const { receiptFor, auditReceiptClaims, createReceiptLedger } = await import(
+    join(root, "src", "agent", "receipts.js")
+  );
+  const ledger = createReceiptLedger();
+  // A batch that says it applied 3 of 12, recorded the way the file tools now
+  // record it — per operation, not as a sentence.
+  ledger.addOutcome({
+    tool: "move_path",
+    args: { operations: Array.from({ length: 12 }, () => ({})) },
+    result: {
+      ok: true,
+      receipt: {
+        kind: "batch",
+        batchId: "b_audit",
+        requested: 12,
+        applied: 3,
+        failed: 9,
+        notRun: 0,
+        failedItems: [{ from: "notes.txt", to: "archive/notes.txt", reason: "EEXIST" }],
+      },
+    },
+  });
+  const receipts = ledger.list();
+  const inflated = auditReceiptClaims({ reply: "Done — I moved all twelve files.", receipts }).flags;
+  if (!inflated.some((f) => f.code === "receipt-count-mismatch")) {
+    throw new Error("a claim of twelve over three receipts was not refused");
+  }
+  const glossed = auditReceiptClaims({ reply: "All done — everything is in the archive.", receipts }).flags;
+  if (!glossed.some((f) => f.code === "partial-failure-unreported")) {
+    throw new Error("partial failure summarised as success was not refused");
+  }
+  const honest = auditReceiptClaims({ reply: "I moved 3 of 12; 9 failed, notes.txt first.", receipts }).flags;
+  if (honest.length) throw new Error(`a truthful partial report was flagged: ${honest.map((f) => f.code).join(",")}`);
+
+  // A receipt cannot be manufactured: the ledger has no way to assert one.
+  const forged = receiptFor({ tool: "move_path", args: { operations: [{}, {}] }, result: { ok: true } });
+  if (forged.applied !== 1) throw new Error("a plain tool result invented a batch count");
+  if (typeof ledger.approve !== "undefined" || typeof ledger.run !== "undefined") {
+    throw new Error("the receipt ledger exposes a way to act");
+  }
+  return "12 claimed / 3 recorded refused, partial failure named, truthful report clean";
+});
+
+await check("plan-is-not-authority", "a plan authorises nothing and stores nothing", async () => {
+  const { buildTurnPlan, PLAN_MIN_STEPS, renderReceipts } = await import(join(root, "src", "agent", "receipts.js"));
+  const plan = buildTurnPlan(
+    Array.from({ length: 5 }, (_, i) => ({ tool: "shell", label: `run: touch proof-${i}.txt` })),
+  );
+  if (!plan || plan.steps.length !== 5) throw new Error("a five-call turn did not produce a plan");
+  if (!/not an approval/i.test(plan.note)) throw new Error("the plan does not say it is not an approval");
+  if (buildTurnPlan([{ tool: "shell", label: "x" }]) !== null) throw new Error("a one-call turn produced a plan");
+  if (PLAN_MIN_STEPS !== 3) throw new Error("the plan threshold moved away from the documented three");
+
+  // The approval gate is unchanged by a plan: the classifier and the
+  // dangerous-tool set are the same objects, and a planned shell call is still
+  // dangerous. This is the half that would be a security bug if it drifted.
+  const { DANGEROUS, TOOL_MAP } = await import(join(root, "src", "tools.js"));
+  const { classifyToolAction } = await import(join(root, "src", "risk.js"));
+  if (!DANGEROUS.has("shell")) throw new Error("shell is no longer gated");
+  const planEntry = { tool: "shell", label: "run: rm -rf ./build" };
+  const planned = buildTurnPlan([planEntry, planEntry, planEntry]);
+  if (planned.steps.length !== 3) throw new Error("plan placeholder lost steps");
+  if (TOOL_MAP.get("shell")?.dangerous !== true) throw new Error("a planned tool stopped being dangerous");
+  if (classifyToolAction("move_path").tier !== "act") throw new Error("a planned file action lost its risk tier");
+  // The visible footer says per-step truth and never adds a claim of its own.
+  const footer = renderReceipts(
+    [{ requested: 2, applied: 1, failed: 1, notRun: 0, failedItems: [{ from: "a.txt", to: "b/a.txt", reason: "EEXIST" }] }],
+    { plan },
+  );
+  if (!/1 of 2 operation/.test(footer) || !/EEXIST/.test(footer)) throw new Error("the receipt footer hid a failure");
+  return "plan shown but grants nothing; shell still dangerous, file actions still act-tier";
+});
+
 // ── 3. the panel ────────────────────────────────────────────────────────────
 await check("panel-xss", "panel renderer cannot be escaped", async () => {
   const html = readFileSync(join(root, "public", "index.html"), "utf8");

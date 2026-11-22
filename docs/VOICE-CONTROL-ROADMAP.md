@@ -92,8 +92,8 @@ Thirty capabilities, grouped. "Today" is honest: **have**, **partial**, or
 
 | # | Requirement | Today | Item |
 |---|---|---|---|
-| 22 | Multi-step work is planned before it runs | **missing** | `reason-01` |
-| 23 | It never claims more than the tools returned | partial (honesty guard on prose) | `reason-01` |
+| 22 | Multi-step work is planned before it runs | have (a plan is shown before any turn that asks for three or more calls; built from the calls themselves, costs no model round-trip) | `reason-01` |
+| 23 | It never claims more than the tools returned | have (per-operation receipts; a claim the tools do not support is corrected once, then flagged) | `reason-01` |
 | 24 | Malformed tool arguments are repaired, not crashed on | **missing** | `reason-02` |
 | 25 | Destructive actions show a preview and need approval | have | `src/action-preview.js` |
 | 26 | A wake phrase is never authentication | have (documented) | `docs/VOICE.md` |

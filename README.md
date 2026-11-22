@@ -15,7 +15,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&labelColor=080d19" /></a>
   <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&labelColor=080d19" />
   <img alt="Zero runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-34d399?style=flat-square&labelColor=080d19" />
-  <img alt="817 tests passing" src="https://img.shields.io/badge/tests-817%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
+  <img alt="1003 tests passing" src="https://img.shields.io/badge/tests-1003%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
   <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&labelColor=080d19" /></a>
 </p>
 
@@ -118,7 +118,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 | Verified execution — fault-injection verdicts | **20/20 · 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` |
 | Retrieval — Recall@1 / Recall@5 · MRR@5 | **0.93 / 1.00 · 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` |
 | Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 70.0%** | 48 synthetic text utterances | `npm run speech` |
-| Full regression suite | **817/817 passed** | 67 test files, ~26 s | `node --test --test-concurrency=4` |
+| Full regression suite | **1003/1003 passed** | 79 test files, ~29 s | `node --test --test-concurrency=4` |
 
 ### Where Quasnooze loses — kept in the README on purpose
 
@@ -127,7 +127,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 - **Voice latency:** ~1.5 s+ to first sound, silence-only turn-taking — far behind ~200 ms full-duplex research systems. Scored honestly in [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md).
 - **Not measured at all:** physical-microphone accuracy, real-user phrasing, and any named model's intelligence (the conversation bench's live tier uses an in-process mock brain). The speech figures are hand-authored *text* hypotheses scored by the shipped router — no microphone, no acoustic model, no recordings.
 
-> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), first measured 5 November 2026 and re-verified 6 November 2026 (`817/817` tests and every evaluator below re-run). The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
+> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), first measured 5 November 2026 and re-verified 22 November 2026 (`1003/1003` tests and every evaluator below re-run). The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
 
 ## How it compares
 
@@ -253,7 +253,7 @@ Configuration uses `.env` or the process environment — prefer `QUASNOOZE_*` na
 ## Build and verify
 
 ```bash
-node --test --test-concurrency=4   # 817 tests across 67 files
+node --test --test-concurrency=4   # 1003 tests across 79 files
 node scripts/audit.js               # local audit
 npm run health                      # environment, baselines, speech-corpus freshness
 npm run verify                      # tests + audit together
