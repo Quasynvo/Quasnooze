@@ -1,0 +1,86 @@
+name: release
+
+# The release gate (roadmap F01, issue #202): a tag is not a release until the
+# suite, the audit and the Bench all say the published numbers are real. The
+# Bench (`scripts/bench.js --check`) fails this workflow if any number in
+# README.md or docs/RESULTS.md has drifted from what the repo measures.
+# Tag pushes come from the maintainer only; nothing here runs on PRs.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Full regression suite
+        run: node --test --test-concurrency=4
+
+      - name: Local audit probes
+        run: node scripts/audit.js
+
+      - name: Bench freshness — published numbers match reality
+        run: node scripts/bench.js --check
+
+      - name: Boot with the mock brain
+        env:
+          LLM_PROVIDER: mock
+          PINCH_KEY: ""
+          PINCH_PORT: "7777"
+          PINCH_WORKSPACE: ${{ github.workspace }}
+        run: |
+          node src/index.js > /tmp/quasnooze.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7777/api/health > /dev/null && break
+            sleep 1
+          done
+          cat /tmp/quasnooze.log
+
+      - name: Panel is served
+        run: curl -sf http://localhost:7777/ | grep -q "Quasnooze"
+
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Create the GitHub release
+        run: gh release create "$GITHUB_REF_NAME" --title "Quasnooze $GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  npm:
+    needs: verify
+    if: ${{ vars.NPM_PUBLISH == 'on' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: "Publish to npm (opt-in: set the NPM_PUBLISH variable and NPM_TOKEN secret)"
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

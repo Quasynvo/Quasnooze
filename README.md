@@ -15,7 +15,7 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-6ee7f9?style=flat-square&labelColor=080d19" /></a>
   <img alt="Node.js 22 or newer" src="https://img.shields.io/badge/Node.js-22%2B-a78bfa?style=flat-square&labelColor=080d19" />
   <img alt="Zero runtime dependencies" src="https://img.shields.io/badge/runtime%20deps-0-34d399?style=flat-square&labelColor=080d19" />
-  <img alt="1003 tests passing" src="https://img.shields.io/badge/tests-1003%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
+  <img alt="1043 tests passing" src="https://img.shields.io/badge/tests-1043%20passing-6ee7f9?style=flat-square&labelColor=080d19" />
   <a href="docs/VOICE.md"><img alt="Microphone access is opt in" src="https://img.shields.io/badge/microphone-opt--in-f0abfc?style=flat-square&labelColor=080d19" /></a>
 </p>
 
@@ -118,7 +118,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 | Verified execution — fault-injection verdicts | **20/20 · 0 silent wrong-successes** | 20 injected faults | `node --test test/verify.test.js` |
 | Retrieval — Recall@1 / Recall@5 · MRR@5 | **0.93 / 1.00 · 1.00** | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` |
 | Speech command accuracy — clean / accented / noisy / numbers-&-names | **100% / 75.0% / 66.7% / 70.0%** | 48 synthetic text utterances | `npm run speech` |
-| Full regression suite | **1003/1003 passed** | 79 test files, ~29 s | `node --test --test-concurrency=4` |
+| Full regression suite | **1043/1043 passed** | 82 test files, ~29 s | `node --test --test-concurrency=4` |
 
 ### Where Quasnooze loses — kept in the README on purpose
 
@@ -127,7 +127,7 @@ Every number below ships with its sample size, its method, and a one-command rep
 - **Voice latency:** ~1.5 s+ to first sound, silence-only turn-taking — far behind ~200 ms full-duplex research systems. Scored honestly in [docs/COMPETITIVE-FRONTIER.md](docs/COMPETITIVE-FRONTIER.md).
 - **Not measured at all:** physical-microphone accuracy, real-user phrasing, and any named model's intelligence (the conversation bench's live tier uses an in-process mock brain). The speech figures are hand-authored *text* hypotheses scored by the shipped router — no microphone, no acoustic model, no recordings.
 
-> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), first measured 5 November 2026 and re-verified 22 November 2026 (`1003/1003` tests and every evaluator below re-run). The committed baselines are the runners' own output — a test compares them byte-for-byte, so a stale number fails the build instead of sitting here looking measured.
+> Numbers are from the versioned corpora in `test-fixtures/` (speech corpus CC0-1.0), first measured 5 November 2026 and re-verified 22 November 2026 (`1043/1043` tests and every evaluator below re-run). The committed baselines are the runners' own output — a test compares them byte-for-byte (`npm run bench:check`), so a stale number fails the build instead of sitting here looking measured.
 
 ## How it compares
 
@@ -253,17 +253,18 @@ Configuration uses `.env` or the process environment — prefer `QUASNOOZE_*` na
 ## Build and verify
 
 ```bash
-node --test --test-concurrency=4   # 1003 tests across 79 files
+node --test --test-concurrency=4   # 1043 tests across 82 files
 node scripts/audit.js               # local audit
 npm run health                      # environment, baselines, speech-corpus freshness
-npm run verify                      # tests + audit together
+npm run bench:check                 # re-measures every published number; fails on drift
+npm run verify                      # tests + audit + bench together
 ```
 
 Every claim in this README is either linked to its evidence or tested: documentation examples are executed against the real risk classifier, CLI commands named here are asserted to exist, and measured baselines fail the build when stale. To rebuild README/brand assets, install Python 3 + Pillow as developer tools and run `python3 scripts/build-brand-assets.py`. The [validation record](docs/brand/VALIDATION.md) separates checks actually run from pending platform acceptance.
 
 ## Documentation
 
-[User guide](docs/GUIDE.md) · [Providers](docs/PROVIDERS.md) · [Results & reproduction](docs/RESULTS.md) · [Voice boundaries](docs/VOICE.md) · [Visualizer contract](docs/VISUALIZER.md) · [Channels](docs/CHANNELS.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Conversation bench](docs/CONVERSATION-BENCH.md) · [Retrieval evaluation](docs/RETRIEVAL-EVALUATION.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Product roadmap](docs/ROADMAP-PROPOSED.md) · [Runtime support](docs/SUPPORT.md) · [Tool inventory](docs/TOOL-INVENTORY.md)
+[User guide](docs/GUIDE.md) · [Providers](docs/PROVIDERS.md) · [Results & reproduction](docs/RESULTS.md) · [Voice boundaries](docs/VOICE.md) · [Visualizer contract](docs/VISUALIZER.md) · [Channels](docs/CHANNELS.md) · [Fast-path evaluation](docs/FAST-PATH-EVAL.md) · [Verified execution](docs/VERIFIED-EXECUTION.md) · [Skills (compiled turns)](docs/SKILLS.md) · [Conversation bench](docs/CONVERSATION-BENCH.md) · [Retrieval evaluation](docs/RETRIEVAL-EVALUATION.md) · [Competitive frontier](docs/COMPETITIVE-FRONTIER.md) · [Unbeatable roadmap](docs/UNBEATABLE-ROADMAP.md) · [Product roadmap](docs/ROADMAP-PROPOSED.md) · [Runtime support](docs/SUPPORT.md) · [Tool inventory](docs/TOOL-INVENTORY.md) · [Releasing](docs/RELEASE.md)
 
 ## Contribute
 
