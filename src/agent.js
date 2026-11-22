@@ -27,6 +27,7 @@ import { TOOL_MAP, DANGEROUS, toolSchemas, SafePathError, screenCommand, isClipb
 import { mintWriteApproval } from "./tracker/adapter.js";
 import { loadSession, appendMessage, loadMemory } from "./store.js";
 import { auditReply, renderGuardNote, sanitizeTraceEntry } from "./guard.js";
+import { parseCompileCommand, compileFromSession, compileOfferLine, offerForTurn } from "./agent/compile-offer.js";
 import { addressFor } from "./outbound.js";
 import { renderForPrompt } from "./attachments.js";
 import { normalizeStages, record } from "./telemetry.js";
@@ -466,6 +467,27 @@ export async function runAgent({
     }
     if (outcome.reply !== undefined) return simpleTurn(outcome.reply);
     workflowRun = outcome.execute || null;
+  }
+
+  // ── the in-chat compile offer (issue #207) ─────────────────────────────
+  // `/compile` is an owner-typed command, decided before the model ever sees
+  // the turn: it costs zero model calls and can only write an *unapproved*
+  // manifest through the skills registry door. A scheduled run cannot compile
+  // — reviewing and approving what gets saved needs a person who is here.
+  const compileCmd = attachments.length ? null : parseCompileCommand(text);
+  if (compileCmd) {
+    if (unattended) {
+      return simpleTurn("A scheduled run cannot compile a skill: reviewing and approving it needs a person who is here.");
+    }
+    if (!compileCmd.name) {
+      return simpleTurn("Give the skill a name: /compile <name> — lowercase letters, digits and dashes.");
+    }
+    const saved = compileFromSession({ sessionId, name: compileCmd.name });
+    return simpleTurn(saved.ok
+      ? `✦ Saved **${saved.manifest.name}** from the turn where I used ${saved.used.join(", ")} (${saved.steps} steps). ` +
+        `It is not approved yet — review it and approve it with \`quasnooze skills approve ${saved.manifest.name}\`. ` +
+        `It will not run until you do, and every replay re-checks current permissions.`
+      : `∿ Nothing was compiled: ${saved.reason}`);
   }
 
   const talk = workflowRun ? { kind: "act", reason: "workflow" } : classifyTalk(text, attachments);
@@ -1431,7 +1453,11 @@ export async function runAgent({
   }
 
   const storedTrace = trace.map(sanitizeTraceEntry);
-  appendMessage(sessionId, { role: "assistant", content: finalText, trace: storedTrace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
+  // The offer is one sentence and one data field — not authority. It appears
+  // only after work that actually ran and checked out (issue #207).
+  const skillOffer = offerForTurn({ trace: storedTrace, utterance: text, autonomy });
+  const finalTextWithOffer = skillOffer ? finalText + compileOfferLine(skillOffer) : finalText;
+  appendMessage(sessionId, { role: "assistant", content: finalTextWithOffer, trace: storedTrace, guard: guard.flags, ...((brainFailed || modelOutputFailed) ? { error: brainFailed ? "brain-unreachable" : "model-output-invalid" } : {}) });
 
   const ms = Date.now() - startedAt;
   markFirstToken();
@@ -1457,12 +1483,13 @@ export async function runAgent({
   }));
 
   return {
-    text: finalText,
+    text: finalTextWithOffer,
     firstTextMs,
     error: brainFailed ? "brain-unreachable" : modelOutputFailed ? "model-output-invalid" : null,
     trace: storedTrace,
     sessionId,
     guard: guard.flags,
+    ...(skillOffer ? { skillOffer } : {}),
     sources: sources.items.map((s) => ({ ...s, cited: citations.cited.includes(s.id) })),
     // The plan shown above this turn's steps, and the per-operation totals the
     // tools reported. Both are data the panel and channels may render; neither
