@@ -385,7 +385,10 @@ export function removeReminder(id) {
 }
 
 export function pendingReminders() {
-  return loadReminders().filter((r) => !r.fired && !r.cancelled);
+  // `enabled !== false`: rows restored from a backup arrive disabled (F10b) —
+  // the data survives a reinstall, but nothing fires until the owner
+  // deliberately re-enables it.
+  return loadReminders().filter((r) => !r.fired && !r.cancelled && r.enabled !== false);
 }
 
 /* ──────────────────────── schedules (unattended runs) ──────────────────── */

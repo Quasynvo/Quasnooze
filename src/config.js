@@ -151,6 +151,10 @@ export const config = Object.freeze({
   mcpTrusted: env.PINCH_MCP_TRUSTED || "",
   numCtx: Number(env.PINCH_NUM_CTX || 8192),
   numPredict: Number(env.PINCH_NUM_PREDICT || 2048),
+  // Daily spend cap in USD, enforced by src/control/gateway.js against the
+  // local cost ledger (src/cost.js). Over the cap, priced cloud backends are
+  // refused and local ones keep the assistant answering.
+  spendCapUsd: Number(env.QUASNOOZE_SPEND_CAP_USD || 5),
 
   telegram: Object.freeze({
     token: env.TELEGRAM_TOKEN || "",

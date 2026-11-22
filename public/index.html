@@ -288,6 +288,8 @@
   <div class="sheet">
     <h3>🧠 Memory &amp; status <span class="spacer"></span><button class="hbtn" id="closeDrawer">✕</button></h3>
     <div class="kvs" id="statusKvs"></div>
+    <h4>Cost</h4>
+    <div id="costView" style="display:flex;flex-direction:column;gap:7px"></div>
     <h4>Remembered facts</h4>
     <div id="facts" style="display:flex;flex-direction:column;gap:7px"></div>
     <form class="memform" id="memForm">
@@ -1509,6 +1511,36 @@ async function health() {
   }
 }
 
+/* ──────────────────────────────── cost ──────────────────────────────── */
+// What each recent turn would have cost, priced locally. Local models show
+// free; an unlisted model shows unknown — nothing is guessed to fill a gap.
+async function loadCost() {
+  try {
+    const res = await fetch("/api/cost", { headers: headers() });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    const spend = data.spend || {};
+    const usd = (n) => `$${Number(n || 0).toFixed(2)}`;
+    const rows = (data.ledger?.rows || []).slice(-8).reverse();
+    const table = rows.map((r) => {
+      const price = r.state === "priced" ? `${usd(r.low)}–${usd(r.high)}`
+        : r.state === "local" ? "free" : "unknown model";
+      return `<tr><td>${String(r.model).replace(/</g, "&lt;")}</td><td>${Number(r.tokens || 0).toLocaleString()}</td><td>${r.latencyMs ?? "–"} ms</td><td>${price}</td></tr>`;
+    }).join("");
+    const capLine = spend.overCap
+      ? `⚠️ daily spend cap reached — ${usd(spend.spentUsd)} of ${usd(spend.limitUsd)} used today. Priced requests are refused until tomorrow; local models keep answering.`
+      : `Today: ${usd(spend.spentUsd)} of the ${usd(spend.limitUsd)} daily cap (worst-case pricing).`;
+    $("costView").innerHTML = `
+      <div style="font-size:.82rem;color:${spend.overCap ? "var(--brand, #e6b34a)" : "var(--faint)"}">${capLine}</div>
+      <table style="width:100%;font-size:.78rem;border-collapse:collapse">
+        <tr style="color:var(--faint);text-align:left"><th>model</th><th>tokens</th><th>latency</th><th>would have cost</th></tr>
+        ${table || `<tr><td colspan="4" style="color:var(--faint)">No turns recorded yet.</td></tr>`}
+      </table>`;
+  } catch {
+    $("costView").innerHTML = `<div style="color:var(--faint);font-size:.8rem">Cost view unavailable — is the server running?</div>`;
+  }
+}
+
 /* ──────────────────────────────── memory ──────────────────────────────── */
 async function loadMemory() {
   try {
@@ -1540,7 +1572,7 @@ $("memForm").onsubmit = async (e) => {
   loadMemory();
 };
 
-const openDrawer = () => { $("drawer").classList.add("open"); loadMemory(); health(); };
+const openDrawer = () => { $("drawer").classList.add("open"); loadMemory(); loadCost(); health(); };
 $("memBtn").onclick = openDrawer;
 $("openMemory").onclick = openDrawer;
 $("closeDrawer").onclick = () => $("drawer").classList.remove("open");

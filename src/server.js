@@ -23,7 +23,7 @@ import {
 } from "./store.js";
 import { registerSender } from "./outbound.js";
 import { normalizeStages, stats as turnStats } from "./telemetry.js";
-import { costSummary } from "./cost.js";
+import { costSummary, costLedger, spendState } from "./cost.js";
 import { ctx as ctxWindow } from "./budget.js";
 
 const MIME = {
@@ -313,6 +313,17 @@ async function handleApi(req, res, url) {
       contextWindow: { tokens: ctxWindow.numCtx, reserveForReply: ctxWindow.numPredict },
       uptimeSeconds: Math.round((Date.now() - started) / 1000),
       workspace: config.workspaceRoots,
+    });
+  }
+
+  // The cost ledger: what each recent turn would have cost, priced locally,
+  // plus the spend cap the control plane enforces. Computed from the local
+  // telemetry log only — zero network bytes leave this machine.
+  if (path === "/api/cost" && req.method === "GET") {
+    return json(res, 200, {
+      ledger: costLedger({ limit: 50 }),
+      summary: costSummary({ days: 30 }),
+      spend: spendState({ limitUsd: config.spendCapUsd }),
     });
   }
 

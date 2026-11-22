@@ -16,6 +16,7 @@ import { AssistantTextStream, assistantText } from "./assistant-text.js";
 import { config } from "./config.js";
 import { fit, ctx } from "./budget.js";
 import { CODES, QuasError, classify, fromStatus, planFor } from "./failure.js";
+import { spendState } from "./cost.js";
 import { ResilientRouter } from "./router.js";
 
 const TIMEOUT_MS = 180_000;
@@ -285,6 +286,18 @@ const openai = {
     { tools = [], model, onDelta, maxTokens = ctx.numPredict, onBeforeContextTrim } = {},
   ) {
     if (!config.llm.openaiKey) throw new QuasError(CODES.NEED_AUTH, "OPENAI_API_KEY is not set", { provider: "openai" });
+    // The spend cap trips before money leaks: today's spend comes from the
+    // local ledger, and over the cap this priced request is refused before it
+    // is sent. SPEND_CAPPED is provider-specific, so the fallback chain hands
+    // the turn to a local model — which answers for free.
+    const spend = spendState({ limitUsd: config.spendCapUsd });
+    if (spend.overCap) {
+      throw new QuasError(
+        CODES.SPEND_CAPPED,
+        `daily spend cap of $${spend.limitUsd} reached ($${spend.spentUsd.toFixed(2)} today) — refusing to send a priced request`,
+        { provider: "openai" },
+      );
+    }
     const { fitted, dropped } = await fitWithTrimHook(messages, {
       tools,
       maxTokens,
