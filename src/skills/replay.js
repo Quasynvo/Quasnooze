@@ -14,20 +14,29 @@
  *   3. dangerous steps go through the approval gate again (a plan is not
  *      authority), and fresh-consent steps (type_text) cannot be waved
  *      through by any blanket approval;
- *   4. every applied step is verified by independent read-back (skill-02):
+ *   4. every step's preconditions are re-read from the system of record
+ *      first (F08, drift.js): if the world moved — the file is gone, the
+ *      task is closed, the reminder already exists — the replay repairs
+ *      with the owner's explicit choice or stops cleanly. It never guesses
+ *      a substitute target, and unattended runs stop on drift;
+ *   5. every applied step is verified by independent read-back (skill-02):
  *      a contradiction stops the replay and is reported as a contradiction,
  *      never as success.
  *
- * Stopping is the repair strategy (F08's "stop, don't guess"): when anything
- * is off — policy, result, verification — the replay halts with the steps it
- * actually ran and the exact reason it stopped. Nothing is skipped, nothing
- * is guessed, nothing is reported done that was not verified.
+ * Stopping is the default repair strategy (F08's "stop, don't guess"): when
+ * anything is off — policy, precondition, result, verification — the replay
+ * halts with the steps it actually ran and the exact reason it stopped.
+ * Nothing is skipped silently, nothing is guessed, nothing is reported done
+ * that was not verified. Every drift is recorded in the run ledger
+ * (src/agent/ledger.js) with its before/after state.
  */
 import { TOOL_MAP } from "../tools.js";
 import { classifyCommand, classifyToolAction, BLOCKED, ACT } from "../risk.js";
 import { verifyAction } from "../verify.js";
 import { config } from "../config.js";
 import { SkillError } from "./manifest.js";
+import { checkPreconditions, validateRepair } from "./drift.js";
+import { recordLedgerEvent } from "../agent/ledger.js";
 
 /**
  * Re-check one step against the policy of *today*.
@@ -95,9 +104,15 @@ function stepRecord(step, patch = {}) {
  * @param {(name, args, ctx, result) => Promise<object|null>} [options.verify]
  *   independent read-back; defaults to the shipped skill-02 verifier.
  * @param {object} [options.ctx] tool/verifier context (session, channel, …)
+ * @param {boolean} [options.unattended] nobody is present: drift stops the
+ *   run and no repair is ever attempted.
+ * @param {(drift) => Promise<object>|object} [options.repair] the owner gate
+ *   for drift (candidates, before/after). Answers: `{action:"stop"}`,
+ *   `{action:"satisfied"}` (already-applied drift), or `{action:"use", value}`
+ *   where the value must prove itself (see drift.js). Absent ⇒ stop on drift.
  * @returns {Promise<object>} a frozen replay report
  */
-export async function replaySkill(loaded, { execute, approve = null, freshConsent = false, verify = verifyAction, ctx = {} } = {}) {
+export async function replaySkill(loaded, { execute, approve = null, freshConsent = false, verify = verifyAction, ctx = {}, unattended = false, repair = null } = {}) {
   if (!loaded || typeof loaded !== "object" || !loaded.manifest) {
     throw new SkillError("replay needs a skill loaded through the registry (loadSkill) — a raw manifest has no approval state");
   }
@@ -106,6 +121,7 @@ export async function replaySkill(loaded, { execute, approve = null, freshConsen
   }
   const { manifest, approval } = loaded;
   const steps = [];
+  const driftEvents = [];
   const started = Date.now();
   const report = (status, reason = null) =>
     Object.freeze({
@@ -116,6 +132,9 @@ export async function replaySkill(loaded, { execute, approve = null, freshConsen
       steps: steps.map((s) => Object.freeze(s)),
       completed: steps.filter((s) => s.applied).length,
       total: manifest.steps.length,
+      drift: driftEvents.map((e) => Object.freeze({ ...e })),
+      repaired: driftEvents.filter((e) => e.repaired).length,
+      notRun: steps.filter((s) => s.notRun).length,
       ms: Date.now() - started,
     });
 
@@ -143,9 +162,66 @@ export async function replaySkill(loaded, { execute, approve = null, freshConsen
       }
     }
 
+    // Drift (F08): the compiled step is a statement about the world — this
+    // file was there, that task was open, this reminder was not yet set.
+    // Re-read the system of record *before* the step; on drift, repair with
+    // the owner's explicit choice or stop cleanly. Never guess.
+    const precondition = checkPreconditions(step.tool, step.args);
+    let execArgs = step.args;
+    if (!precondition.ok) {
+      const event = {
+        step: steps.length + 1,
+        tool: step.tool,
+        kind: precondition.kind,
+        expected: precondition.expected,
+        actual: precondition.actual,
+        before: JSON.stringify(step.args),
+      };
+      driftEvents.push(event);
+      recordLedgerEvent({
+        kind: "drift",
+        skill: manifest.name,
+        driftKind: precondition.kind,
+        step: event.step,
+        tool: event.tool,
+        expected: event.expected,
+        actual: event.actual,
+        before: event.before,
+      });
+      let answer = { action: "stop" };
+      if (!unattended && typeof repair === "function") {
+        try {
+          answer = (await repair({ ...event, repair: precondition.repair, candidates: precondition.candidates })) ?? { action: "stop" };
+        } catch {
+          answer = { action: "stop" };
+        }
+      }
+      const verdict = validateRepair(precondition, answer, step.tool, step.args);
+      if (verdict.satisfied) {
+        event.outcome = "accepted as already satisfied — not run";
+        recordLedgerEvent({ kind: "drift-satisfied", skill: manifest.name, driftKind: precondition.kind, step: event.step, tool: event.tool, before: event.before });
+        steps.push(stepRecord(step, { notRun: true, satisfied: true, drift: event }));
+        continue;
+      }
+      if (verdict.ok) {
+        execArgs = verdict.args;
+        event.repaired = { before: JSON.stringify(step.args), after: JSON.stringify(verdict.args) };
+        event.outcome = `repaired (${precondition.repair})`;
+        recordLedgerEvent({ kind: "repair", skill: manifest.name, driftKind: precondition.kind, step: event.step, tool: event.tool, before: event.repaired.before, after: event.repaired.after });
+      } else {
+        event.outcome = "not run";
+        recordLedgerEvent({ kind: "drift-stop", skill: manifest.name, driftKind: precondition.kind, step: event.step, tool: event.tool, before: event.before });
+        steps.push(stepRecord(step, { notRun: true, drift: event }));
+        return report("stopped", verdict.reason === "stop"
+          ? `drift at step ${steps.length} (${step.tool}): ${precondition.kind} — stopping, not guessing`
+          : `drift at step ${steps.length} (${step.tool}): ${precondition.kind} — ${verdict.reason}`);
+      }
+    }
+
     // Byte-identity: the executor receives an exact JSON copy of the compiled
-    // arguments — same bytes in, same bytes out.
-    const args = JSON.parse(JSON.stringify(step.args));
+    // arguments — same bytes in, same bytes out. A repaired step's bytes are
+    // the owner's, recorded as such in the step and drift records.
+    const args = JSON.parse(JSON.stringify(execArgs));
     let result;
     try {
       result = await execute(step.tool, args);
@@ -154,7 +230,7 @@ export async function replaySkill(loaded, { execute, approve = null, freshConsen
       return report("stopped", `step ${steps.length} (${step.tool}) threw: ${String(err?.message ?? err)}`);
     }
     const ok = Boolean(result?.ok);
-    const verification = ok ? await verify(step.tool, step.args, ctx, result) : null;
+    const verification = ok ? await verify(step.tool, args, ctx, result) : null;
     // "applied" follows the receipts model: a contradicted read-back means the
     // operation counts as not applied, whatever the tool claimed.
     const applied = ok && verification?.status !== "contradicted";
@@ -163,6 +239,7 @@ export async function replaySkill(loaded, { execute, approve = null, freshConsen
       applied,
       policy,
       verification: verification ? { status: verification.status, detail: verification.detail } : null,
+      ...(execArgs !== step.args ? { repairedArgsJson: JSON.stringify(execArgs) } : {}),
     }));
     if (!ok) {
       return report("stopped", `step ${steps.length} (${step.tool}) failed — stopping rather than guessing (details in the step record)`);

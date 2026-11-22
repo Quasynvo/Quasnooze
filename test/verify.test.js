@@ -344,7 +344,7 @@ test("the agent attaches a read-back to every action it reports", async () => {
   assert.equal(doneEvent?.verification?.status, VERIFIED);
 });
 
-test("a contradicted action reaches the model as a contradiction", async () => {
+test("a contradicted action stops the plan and is reported as a contradiction (F08)", async () => {
   const unverifiedEvents = [];
   const result = await runAgent({
     sessionId: "verify-liar",
@@ -362,6 +362,7 @@ test("a contradicted action reaches the model as a contradiction", async () => {
   // against something that exists, and the check fails.
   registerVerifier("__liar", async () => ({ status: "contradicted", detail: "ghost.txt does not exist" }));
   const contradictedEvents = [];
+  const startCalls = modelCalls.length;
   const second = await runAgent({
     sessionId: "verify-liar-2",
     text: "lie-about-it",
@@ -375,13 +376,11 @@ test("a contradicted action reaches the model as a contradiction", async () => {
   assert.equal(contradictedDone?.verification?.status, CONTRADICTED);
   assert.match(contradictedDone?.preview || "", /contradicted/);
 
-  const toolMessage = modelCalls
-    .flatMap((call) => call.messages)
-    .filter((m) => m.role === "tool" && m.content.includes("ghost.txt"));
-  assert.ok(
-    toolMessage.some((m) => m.content.includes("[verification: contradicted")),
-    "the model is told the action was contradicted, so it cannot describe it as done",
-  );
+  // F08: the plan is abandoned at the contradiction. There is no later model
+  // round that could describe the action as done — the model is not consulted
+  // again — and the user is told directly what was contradicted.
+  assert.equal(modelCalls.length - startCalls, 1, "the model is not consulted again after a contradiction");
+  assert.match(second.text, /stopped mid-plan/);
   assert.match(second.text, /could not be confirmed by an independent read-back/);
 });
 

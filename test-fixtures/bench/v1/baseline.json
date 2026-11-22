@@ -2,10 +2,10 @@
   "kind": "quasnooze-bench",
   "schema_version": 1,
   "suite": {
-    "tests": 1043,
-    "pass": 1043,
+    "tests": 1061,
+    "pass": 1061,
     "fail": 0,
-    "files": 82
+    "files": 83
   },
   "fast_path": {
     "corpus": 59,

@@ -39,7 +39,15 @@ every run; voice stacks converse with no memory of how work was done.
    read-back disagreed: the replay halts with the steps it actually ran and
    the exact reason. Nothing is skipped, nothing is guessed (F08 "stop, don't
    guess" is this behaviour, measured).
-7. **Simple chat never loads skills.** `src/agent.js`, `src/brain.js`,
+7. **Drift is repaired by the owner or not at all** (`src/skills/drift.js`).
+   Before each step the replay re-reads the system of record — the file is
+   still a regular file, the task is still open, the reminder is not already
+   set. On drift: the owner picks from candidates or supplies a value that
+   must point at something real, or the run stops cleanly. A swapped-in
+   symlink is never repairable; unattended runs stop on drift without asking.
+   Every drift lands in the run ledger (`src/agent/ledger.js`) with its
+   before/after state.
+8. **Simple chat never loads skills.** `src/agent.js`, `src/brain.js`,
    `src/fast-path.js` and `src/tools.js` cannot reach into `src/skills/` —
    proven by a static test, not by good intentions.
 

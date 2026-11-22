@@ -106,10 +106,13 @@ message the model receives and in the text the user reads.
 - **Not universal.** A `shell` command's exit code is the tool's own report, so
   it stays `unverified`. Saying so is more useful than a green tick that means
   nothing.
-- **Not a plan-level stop.** The tool loop is not force-stopped on a
-  contradiction: the model is told and the user is warned, but a compiled skill
-  with a plan to abandon needs `skill-01`'s replay to abandon it. That gap is
-  recorded in the roadmap item rather than papered over.
+- **Not a plan-level stop — that gap is closed (F08).** As of #208 the tool
+  loop *is* force-stopped on a contradiction: the remaining calls of the plan
+  are abandoned, the model is not consulted again, and the user is told which
+  action was contradicted and that nothing further ran. A compiled skill's
+  replay does the same, and additionally re-reads the system of record before
+  each step — drifted runs repair with the owner's explicit choice or stop
+  cleanly (`src/skills/drift.js`), and unattended runs always stop.
 - **Not proof the action was the right one.** It proves the action produced the
   state the tool said it produced. Whether that state is what the user wanted is
   the preview and approval gate's job.
