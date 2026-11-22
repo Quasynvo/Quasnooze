@@ -565,6 +565,11 @@ async function handleApi(req, res, url) {
         // What the turn actually read, and which of it the reply cited. The panel
         // renders this; a channel that only carries text gets the footer instead.
         sources: result.sources || [],
+        // What the turn planned and what the tools actually counted. The panel
+        // renders these beside the steps; a channel that only carries text
+        // already has the footer in `result.text` (issue #136).
+        ...(result.plan ? { plan: result.plan } : {}),
+        ...(result.receiptSummary ? { receiptSummary: result.receiptSummary } : {}),
         sessionId,
       });
     } catch (err) {

@@ -116,6 +116,16 @@ export async function routeMessage({ channel, text, send, sessionId, target = ""
     channel,
     target: target || sessionId || `${channel}-main`,
     onEvent: async (event) => {
+      // A text channel has one stream, so a plan travels as a short message
+      // before the answer would — labelled, and with the sentence that says it
+      // is not an approval. A plan that lists an action never authorises it.
+      if (event.type === "plan") {
+        const lines = [`⌁ Plan — ${event.steps.length} step${event.steps.length === 1 ? "" : "s"} (not an approval):`];
+        for (const step of event.steps.slice(0, 8)) lines.push(`  ${step.n}. ${String(step.label).slice(0, 90)}`);
+        if (event.steps.length > 8) lines.push(`  …and ${event.steps.length - 8} more`);
+        await send(lines.join("\n"));
+        return;
+      }
       if (event.type !== "approval") return;
       if (onApproval) await onApproval({ id: event.id, description: event.description, ...(event.preview ? { preview: event.preview } : {}) });
       else {

@@ -17,6 +17,31 @@ is still path-based validation, not an OS sandbox: a local process racing to
 replace path components between validation and use remains a residual risk.
 This hardening does not implement the reversible file actions in issue #129.
 
+## Follow-up: claims are checked against receipts (issue #136)
+
+`src/guard.js` caught the wrong *kind* of claim: a tool ran, so "I moved the
+files" counted as evidenced even when twelve were asked for and three landed.
+`src/agent/receipts.js` adds the missing half and touches no existing guard rail:
+one receipt per tool call, built from the tool's own per-operation record (the
+batch file tools now return `requested`/`applied`/`failed`/`notRun` as data, so a
+count is never parsed out of prose), one optional correction turn with tools
+withheld, and a visible footer stating per-step truth.
+
+Two new probes run in `npm run audit`:
+
+- `receipts-refuse-inflated-claims` — a reply claiming twelve over a batch that
+  recorded three is refused; a partial batch summarised as "everything is done"
+  is refused; a truthful partial report is not flagged; the ledger exposes no
+  way to add a receipt or act.
+- `plan-is-not-authority` — a plan is shown for a three-call turn and says it is
+  not an approval; `shell` is still in `DANGEROUS`, and a file action is still
+  `act`-tier, so a plan cannot widen what a call may do.
+
+Residual risk, stated rather than papered over: a reply can still be vague
+without being wrong ("done" over a partial batch with no countable noun escapes
+the count check and falls back to the action-claim heuristic), and receipts do
+not stop the tool loop on a contradicted action — that belongs to `skill-01`.
+
 ## Why this document exists
 
 The repository shipped with 35 passing tests and a green CI run. Then I stopped trusting

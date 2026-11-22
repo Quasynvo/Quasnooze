@@ -17,7 +17,7 @@ import { brain } from "./brain.js";
 import { QuasError, classify } from "./failure.js";
 import { assistantText } from "./assistant-text.js";
 import { buildSystemPrompt, buildConversationPrompt, buildTalkPrompt, isSocialTurn, buildPersonaMessage,
-  buildWorkflowDesignMessages, buildWorkflowPlanMessage } from "./prompt.js";
+  buildWorkflowDesignMessages, buildWorkflowPlanMessage, RECEIPT_CONTRACT } from "./prompt.js";
 import { createSources, addSource, listSources } from "./sources.js";
 import { validateCitations, renderSourceBlock } from "./citations.js";
 import { classifyCommand, classifySystemControl, classifyToolAction, describeTier, detectCommitProposal, READ as TIER_READ, BLOCKED as TIER_BLOCKED } from "./risk.js";
@@ -33,6 +33,8 @@ import { matchFastIntent, composeFastReply, FAST_TOOLS } from "./fast-path.js";
 import { parseWorkflowCommand, createWorkflow, submitDesign, approveDesign, beginExecution, finishExecution,
   cancelWorkflow, activeWorkflowFor, loadWorkflow, renderPlan, WorkflowStoreError, LIMITS as WORKFLOW_LIMITS } from "./agent/workflow.js";
 import { verifyAction, describeVerification, CONTRADICTED as VERIFY_CONTRADICTED } from "./verify.js";
+import { createReceiptLedger, buildTurnPlan, auditReceiptClaims, buildReceiptCorrection,
+  renderReceipts, summarizeTurn, MAX_CLAIM_CORRECTIONS } from "./agent/receipts.js";
 import { isArmed, freezeMessage } from "./control/killswitch.js";
 import { classifyTalk } from "./converse/talk-shape.js";
 
@@ -522,6 +524,13 @@ export async function runAgent({
       : {}),
   });
 
+  // ── the receipt ledger (issue #136) ────────────────────────────────────
+  // One turn, one append-only record of what the tools actually did. The
+  // model's final answer is checked against it, so a claim of N operations
+  // cannot outrun the N the tools reported. Nothing here can approve or run
+  // anything; see src/agent/receipts.js.
+  const receipts = createReceiptLedger();
+
   // ── deterministic turns ────────────────────────────────────────────────
   // "What time is it" has one correct reading and one correct tool. Sending it
   // through a model costs a prefill and a decode, and occasionally invents the
@@ -640,6 +649,10 @@ export async function runAgent({
         // A deterministic answer that cannot be confirmed is not an answer: hand
         // the turn to the model rather than return a claim nobody checked.
         if (fastResult?.ok && fastVerification?.status !== VERIFY_CONTRADICTED) {
+          // The deterministic path composes its own sentence from a result it
+          // has already verified, so it is not a model claim and needs no
+          // receipt. It runs before the ledger exists precisely so an everyday
+          // turn costs nothing extra (issue #136).
           let reply = composeFastReply(fast, fastResult.output);
           const fastTrace = [{
             tool: fast.name,
@@ -707,6 +720,8 @@ export async function runAgent({
 
   const trace = [];
   const toolOutputs = [];
+  /** Shown once per turn, before the first tool call it describes. */
+  let turnPlan = null;
   let finalText = "";
   let brainFailed = false, modelOutputFailed = false, firstTextMs = null;
   let rounds = 0;
@@ -731,6 +746,14 @@ export async function runAgent({
     clipboardTouched: false,
     clipboardReads: [],
   };
+
+  /**
+   * Record a call that never reached its tool. Every refusal is a receipt —
+   * a denied step is part of the turn's record, and an answer that omits it
+   * is answering from a transcript it did not finish reading.
+   */
+  const noteRefusal = (toolName, args, reason) =>
+    receipts.addOutcome({ tool: toolName, args, result: null, denied: true, verification: null, reason });
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     if (signal?.aborted) {
@@ -785,6 +808,31 @@ export async function runAgent({
 
     messages.push({ role: "assistant", content: out.content || "", toolCalls: out.toolCalls });
 
+    // A turn that asks for three or more calls gets a plan in the transcript
+    // before the first of them runs (issue #136). It is built from tool calls
+    // the model has already made, so it costs no extra model call and no
+    // latency, and it is shown *as a plan*: the panel and the CLI render it
+    // above the steps, never as the answer. It authorises nothing — the calls
+    // below still pass the risk classifier and the approval gate unchanged.
+    // At most once per turn, and never for a conversation turn.
+    if (!talkOnly && !turnPlan) {
+      turnPlan = buildTurnPlan(
+        out.toolCalls.map((call) => ({ tool: call.name, label: describeCall(call.name, call.arguments) })),
+      );
+      if (turnPlan) {
+        onEvent({ type: "plan", steps: turnPlan.steps, omitted: turnPlan.omitted, note: turnPlan.note });
+        for (const [i, message] of messages.entries()) {
+          if (message.role === "system") {
+            // The multi-step contract is only worth its prefill on a turn that
+            // is actually multi-step. The system message is replaced, never
+            // duplicated, so the budget still sees one system prompt.
+            messages[i] = { ...message, content: `${message.content}\n\n${RECEIPT_CONTRACT}` };
+            break;
+          }
+        }
+      }
+    }
+
     for (const call of out.toolCalls) {
       const tool = TOOL_MAP.get(call.name);
       const label = describeCall(call.name, call.arguments);
@@ -802,6 +850,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, frozen: true });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why.slice(0, 200) });
+        noteRefusal(tool.name, call.arguments, "frozen");
         continue;
       }
 
@@ -813,6 +862,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: invalid });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, invalid: true });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: invalid.slice(0, 200) });
+        noteRefusal(tool.name, call.arguments, "invalid-arguments");
         continue;
       }
 
@@ -820,6 +870,7 @@ export async function runAgent({
         const why = "Cancelled: this action was aborted before execution.";
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        noteRefusal(tool.name, call.arguments, "cancelled");
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
         continue;
       }
@@ -833,6 +884,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "disabled" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg });
+        noteRefusal(tool.name, call.arguments, "disabled");
         continue;
       }
 
@@ -841,6 +893,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "disabled" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg });
+        noteRefusal(tool.name, call.arguments, "disabled");
         continue;
       }
 
@@ -855,6 +908,7 @@ export async function runAgent({
           messages.push({ role: "tool", name: tool.name, toolCallId: call.id, content: why });
           trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: err?.code || "preview-failed" });
           onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why.slice(0, 200) });
+          noteRefusal(tool.name, call.arguments, "preview-failed");
           continue;
         }
       }
@@ -935,6 +989,7 @@ export async function runAgent({
         const why = "Cancelled: this action was aborted before execution.";
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        noteRefusal(tool.name, call.arguments, "cancelled");
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
         continue;
       }
@@ -945,6 +1000,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, failedClosed: true, reason });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg.slice(0, 200) });
+        noteRefusal(tool.name, call.arguments, "policy-error");
         continue;
       }
 
@@ -958,6 +1014,7 @@ export async function runAgent({
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: msg });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: msg.slice(0, 200) });
+        noteRefusal(tool.name, call.arguments, "policy");
         continue;
       }
 
@@ -979,6 +1036,7 @@ export async function runAgent({
         });
         trace.push({ tool: tool.name, args: call.arguments, denied: true, reason: "unattended" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: `refused (unattended): ${why}` });
+        noteRefusal(tool.name, call.arguments, "unattended");
         continue;
       }
 
@@ -995,6 +1053,7 @@ export async function runAgent({
         });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, reason: "screen", tier: "blocked" });
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: `refused: ${blockedRisk.why}` });
+        noteRefusal(tool.name, call.arguments, "screen");
         continue;
       }
 
@@ -1037,6 +1096,7 @@ export async function runAgent({
           messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
           trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
           onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
+          noteRefusal(tool.name, call.arguments, "cancelled");
           continue;
         }
         if (!allowed) {
@@ -1046,6 +1106,7 @@ export async function runAgent({
           });
           trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true });
           onEvent({ type: "tool_done", name: tool.name, ok: false, denied: true, preview: `denied: ${label}`.slice(0, 200) });
+          noteRefusal(tool.name, call.arguments, "denied");
           continue;
         }
         // A disclosed session-grantable approval was answered yes: remember it
@@ -1061,6 +1122,7 @@ export async function runAgent({
         const why = "Cancelled: this action was aborted before execution.";
         messages.push({ role: "tool", name: call.name, toolCallId: call.id, content: why });
         trace.push({ tool: tool.name, args: call.arguments, ok: false, denied: true, cancelled: true, reason: "cancelled" });
+        noteRefusal(tool.name, call.arguments, "cancelled");
         onEvent({ type: "tool_done", name: tool.name, ok: false, preview: why });
         continue;
       }
@@ -1097,6 +1159,12 @@ export async function runAgent({
       if (verification) {
         onEvent({ type: "verification", name: tool.name, status: verification.status, detail: verification.detail });
       }
+
+      // The receipt is written the instant the outcome is known, before
+      // anything else can happen to it. It is built from the tool's own
+      // per-operation record where the tool has one (the batch file actions)
+      // and from the call itself otherwise — never from the model's words.
+      const outcomeReceipt = receipts.addOutcome({ tool: tool.name, args: call.arguments || {}, result, verification });
 
       // Per call it was already capped at 12 000 chars; eight rounds of eight
       // calls could still push ~750 KB into one context. The budget is per
@@ -1151,6 +1219,11 @@ export async function runAgent({
         type: "tool_done",
         name: tool.name,
         ok: effectiveOk,
+        // The panel shows "3 of 12" beside the step, straight from the tool's
+        // record: the reader does not have to infer progress from a sentence.
+        ...(outcomeReceipt?.kind === "batch"
+          ? { progress: { applied: outcomeReceipt.applied, requested: outcomeReceipt.requested, failed: outcomeReceipt.failed } }
+          : {}),
         verification: verification ? { status: verification.status, detail: verification.detail } : null,
         preview:
           verification?.status === VERIFY_CONTRADICTED
@@ -1173,6 +1246,71 @@ export async function runAgent({
       "Ask me to continue and I'll pick up from here.";
   }
 
+  // ── the receipt check (issue #136) ─────────────────────────────────────
+  //
+  // The turn has its tool results; this is the one moment where the model's
+  // words can still be corrected instead of merely annotated. A draft that
+  // claims twelve completed operations when the receipts hold three is sent
+  // back **once** with the numbers, so the answer the person reads is true
+  // rather than true-with-a-warning. If the second draft still overruns, the
+  // guard below flags it and the visible footer states the real totals — the
+  // correction never loops, never runs a tool, and never approves anything.
+  //
+  // Skipped for a transport failure (there is no draft to correct), for a
+  // turn with no operations (nothing to count), and when PINCH_GUARD is off
+  // (the operator asked for no code-level audit at all).
+  const receiptList = receipts.list();
+  let claimMismatch = null;
+  if (
+    !config.disableGuard &&
+    !brainFailed &&
+    !modelOutputFailed &&
+    !signal?.aborted &&
+    receipts.hasOperations()
+  ) {
+    const firstAudit = auditReceiptClaims({ reply: finalText, receipts: receiptList });
+    if (firstAudit.mismatches.length) {
+      claimMismatch = firstAudit.mismatches[0];
+      for (let attempt = 0; attempt < MAX_CLAIM_CORRECTIONS; attempt += 1) {
+        const pendingText = assistantText(finalText).text || finalText;
+        const correction = buildReceiptCorrection({ receipts: receiptList, reply: pendingText });
+        const corrective = [
+          ...messages,
+          { role: "assistant", content: pendingText },
+          { role: "user", content: correction },
+        ];
+        let redraft;
+        try {
+          redraft = await brain.chat(corrective, {
+            selection: activeModel,
+            tools: [],
+            maxTokens: 700,
+            think: false,
+          });
+        } catch (err) {
+          // A model that vanished mid-correction leaves the first draft in
+          // place; the guard and the receipt footer still tell the truth about
+          // it. Failing the turn here would hide a real answer over a rewrite.
+          brainFailed = false;
+          break;
+        }
+        const candidate = assistantText(redraft?.content || "").text.trim();
+        tokens += redraft?.tokens || 0;
+        if (!candidate) break;
+        // Accepted only when it is *better supported*, not merely different:
+        // a rewrite that still overruns does not replace a draft that told the
+        // user more, and the guard will say so either way.
+        if (!auditReceiptClaims({ reply: candidate, receipts: receiptList }).mismatches.length) {
+          finalText = candidate;
+          claimMismatch = null;
+          onEvent({ type: "receipts", corrected: true, ...summarizeTurn({ receipts: receiptList, plan: turnPlan }).receipts });
+          break;
+        }
+        finalText = candidate;
+      }
+    }
+  }
+
   // Post-hoc honesty check: does the reply match what actually happened?
   // Citation validation runs on the model's own words, before the source block
   // is appended — otherwise the footer's URLs would look like invented links.
@@ -1192,6 +1330,9 @@ export async function runAgent({
       // honesty check gets switched off and stops catching the real thing.
       userText: attachmentBlock.text ? `${text}\n${attachmentBlock.text}` : text,
       toolOutput: toolOutputs.join("\n"),
+      // The counts behind check #8. Optional by design: a caller with no
+      // receipts gets exactly the checks it had before.
+      receipts: receiptList,
     });
     if (!guard.clean) {
       finalText += renderGuardNote(guard.flags);
@@ -1207,6 +1348,19 @@ export async function runAgent({
     finalText +=
       `\n\n⚠︎ ${contradicted.length === 1 ? "One action" : `${contradicted.length} actions`} could not be ` +
       `confirmed by an independent read-back: ${contradicted.map((t) => describeVerification(t.verification)).join("; ")}`;
+  }
+
+  // The receipt footer: per-step truth, in code, from the tools' own counts.
+  //
+  // It appears when the turn was multi-step or something did not land, and it
+  // is additive — the reply above keeps the model's words, and the footer
+  // states the totals the person can check. A turn that failed entirely has
+  // nothing to count and gets no footer; the visible guard note and the ⚠︎
+  // line above already carry that.
+  const receiptNote = brainFailed || modelOutputFailed ? "" : renderReceipts(receiptList, { plan: turnPlan });
+  if (receiptNote) {
+    finalText += `\n\n${receiptNote}`;
+    onEvent({ type: "receipts", ...summarizeTurn({ receipts: receiptList, plan: turnPlan }).receipts });
   }
 
   // The footer is evidence, so it appears only when the reply cites something.
@@ -1279,6 +1433,17 @@ export async function runAgent({
     sessionId,
     guard: guard.flags,
     sources: sources.items.map((s) => ({ ...s, cited: citations.cited.includes(s.id) })),
+    // The plan shown above this turn's steps, and the per-operation totals the
+    // tools reported. Both are data the panel and channels may render; neither
+    // is stored as memory, and neither authorises anything (issue #136).
+    ...(() => {
+      const summary = summarizeTurn({ receipts: receiptList, plan: turnPlan });
+      return {
+        ...(summary.plan ? { plan: summary.plan } : {}),
+        ...(receiptList.length ? { receiptSummary: summary.receipts } : {}),
+        ...(claimMismatch ? { claimMismatch } : {}),
+      };
+    })(),
     ms,
   };
 }

@@ -346,10 +346,37 @@ After every reply, plain JavaScript audits the claims against what actually happ
 | `unverified-link` | cites a URL that nothing fetched |
 | `memory-without-grounding` | says "you told me…" while memory is empty |
 | `denial-not-reported` | claims it cannot do a thing it demonstrably can |
+| `receipt-count-mismatch` | claims a number of finished operations the tool records do not support |
+| `partial-failure-unreported` | summarises a half-finished batch as a success |
 
 The mismatch is **shown to you, appended to the reply** — never silently rewritten, because a guard
 that edits the model's output is a second liar. This is a code-level check, not a prompt: `src/guard.js`,
 150 lines, entirely readable.
+
+### Receipts: what actually happened, counted by the tools
+
+The last two codes need a number the reply can be checked against, so the tools supply one
+instead of the guard reading prose. Each turn keeps a **receipt** per tool call — tool name,
+target, and for the file-action batch tools `requested`, `applied`, `failed` and `notRun` — built
+from the tool's own record (`src/agent/receipts.js`). Then:
+
+- a turn that asks for **three or more calls** shows a **plan** first, above the steps and outside
+  the answer. It is built from the calls the model already made, so it costs no extra model call,
+  it is never stored, and **it authorises nothing**: every step in it still meets the risk
+  classifier and the approval prompt.
+- a reply claiming more than the receipts support is sent back **once** with the numbers, tools
+  withheld, so the answer you read is corrected rather than annotated. If the rewrite is still
+  unsupported, the check above flags it and a receipt footer states the totals.
+- a partial batch is reported **per step**, naming each failure and its reason:
+
+  ```
+  🧾 Receipts: 3 of 12 operations completed — 9 failed.
+    • failed: notes.txt → archive/notes.txt (EEXIST)
+    • undo_last reverses what landed.
+  ```
+
+A small turn that went cleanly gets no receipt footer: the step rows already say what happened,
+and a footer that repeats them every turn is noise that teaches you to skip the one that matters.
 
 ---
 
@@ -868,7 +895,7 @@ Listed because the absence of this section is usually a lie:
 Issues and PRs welcome. The bar is simple:
 
 ```bash
-node --test     # full suite (817 tests, 67 files), must stay green
+node --test     # full suite (1003 tests, 79 files), must stay green
 ```
 
 - New tool? Add a test, and mark it `dangerous: true` if it changes anything.

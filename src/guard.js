@@ -14,6 +14,7 @@
  */
 
 import { citedIds as extractCitedIds } from "./citations.js";
+import { auditReceiptClaims } from "./agent/receipts.js";
 
 /** Verbs that assert a completed action, split by what kind of evidence they need. */
 const ACTION_CLAIMS = [
@@ -176,9 +177,10 @@ function overlap(a, b) {
  * @param {string} [input.toolOutput]   concatenated tool output (evidence)
  * @param {Array}  [input.sources]      what this turn retrieved (sources.js)
  * @param {Array}  [input.citedIds]     citation numbers that resolved to a source
+ * @param {Array}  [input.receipts]     per-call receipts from agent/receipts.js (issue #136)
  * @returns {{flags: Array<{code: string, message: string}>, clean: boolean}}
  */
-export function auditReply({ reply, trace = [], memoryFacts = [], userText = "", toolOutput = "", sources = [], citedIds = [] }) {
+export function auditReply({ reply, trace = [], memoryFacts = [], userText = "", toolOutput = "", sources = [], citedIds = [], receipts = null }) {
   const flags = [];
   const said = String(reply || "");
   if (!said.trim()) return { flags, clean: true };
@@ -302,6 +304,22 @@ export function auditReply({ reply, trace = [], memoryFacts = [], userText = "",
       code: "clipboard-memory-unrequested",
       message: "clipboard content was saved to memory even though you did not ask to remember it",
     });
+  }
+
+  // 8) A count that the receipts do not support (issue #136).
+  //
+  // The checks above catch the wrong *kind* of claim: a tool ran, so "I moved
+  // the files" is technically evidenced even when twelve were asked for and
+  // three landed. A receipt carries the per-operation outcome, so a number in
+  // the reply can be compared with a number the tool reported instead of with
+  // the tool's name.
+  //
+  // Receipts are strictly optional: a caller that has none gets exactly the
+  // behaviour it had before, and the checks below never invent one.
+  if (Array.isArray(receipts) && receipts.length) {
+    for (const flag of auditReceiptClaims({ reply: said, receipts }).flags) {
+      if (!flags.some((existing) => existing.code === flag.code)) flags.push(flag);
+    }
   }
 
   return { flags, clean: flags.length === 0 };

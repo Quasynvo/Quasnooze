@@ -99,6 +99,15 @@
   .bubble pre{background:#12080a;border:1px solid var(--line);border-radius:10px;padding:10px;overflow:auto;margin:.6em 0}
   .bubble pre code{border:0;background:none;padding:0}
   .steps{display:flex;flex-direction:column;gap:5px;margin:2px 0 0 40px}
+  /* A plan is shown as a plan: above the work, never in the reply's bubble, and
+     labelled so nobody reads it as the result (issue #136). */
+  .plan{
+    margin:2px 0 0 40px;background:#121a24;border:1px solid #24455f;border-radius:11px;
+    padding:8px 12px;font-size:.75rem;color:#b6d6ea;max-width:640px;line-height:1.55
+  }
+  .plan b{color:#7fb8dd;display:block;margin-bottom:3px;font-size:.72rem;letter-spacing:.02em}
+  .plan li{margin:0;list-style:none;font-family:var(--mono);font-size:.72rem;color:#9dc3da;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .plan .note{color:var(--faint);font-size:.68rem;margin-top:4px}
   .step{font-size:.74rem;color:var(--faint);font-family:var(--mono);display:flex;gap:7px;align-items:center}
   .step b{color:var(--dim);font-weight:600}
   .approval{
@@ -1248,6 +1257,7 @@ async function send() {
     let answer = "";
     const guardFlags = [];
     const turnSources = [];
+    let turnReceipts = null;
     const addGuardFlags = (items) => {
       for (const f of items || []) {
         if (f && !guardFlags.some((g) => g.code === f.code && g.message === f.message)) {
@@ -1282,6 +1292,20 @@ async function send() {
             row.innerHTML = `<span>🔧</span><b>${data.name}</b><span>${String(data.label || "").replace(/</g,"&lt;")}</span>`;
             steps.insertBefore(row, thinking);
             scrollDown();
+          } else if (data.type === "plan") {
+            // The plan the agent is about to carry out, shown before the work
+            // and outside the answer's bubble. It is a description, not a
+            // permission: nothing in it has run yet.
+            const box = document.createElement("div");
+            box.className = "plan";
+            const items = (data.steps || []).map((step) =>
+              `<li>${step.n}. ${String(step.label || step.tool).replace(/</g,"&lt;")}</li>`).join("");
+            box.innerHTML = `<b>⌁ Plan — ${(data.steps || []).length} step${(data.steps || []).length === 1 ? "" : "s"}</b>` +
+              `<ul style="margin:0;padding:0">${items}</ul>` +
+              (data.omitted ? `<div class="note">…and ${data.omitted} more</div>` : "") +
+              `<div class="note">${String(data.note || "Not an approval — every step still asks.").replace(/</g,"&lt;")}</div>`;
+            steps.insertBefore(box, thinking);
+            scrollDown();
           } else if (data.type === "tool_done") {
             const row = document.createElement("div");
             row.className = "step";
@@ -1289,7 +1313,12 @@ async function send() {
             const icon = !data.ok ? "✕" : vStatus === "unverified" ? "•" : "✓";
             row.style.color = !data.ok ? "var(--bad)" : vStatus === "unverified" ? "var(--gold)" : "var(--ok)";
             const prefix = vStatus === "verified" ? "verified · " : vStatus === "unverified" ? "unverified · " : "";
-            row.innerHTML = `<span>${icon}</span><span>${prefix}${String(data.preview || "").slice(0,110).replace(/</g,"&lt;")}</span>`;
+            // "3 of 12", from the tool's own per-operation record — never a
+            // number the panel worked out from the prose.
+            const progress = data.progress
+              ? ` <b>${data.progress.applied} of ${data.progress.requested}</b>${data.progress.failed ? ` · ${data.progress.failed} failed` : ""}`
+              : "";
+            row.innerHTML = `<span>${icon}</span><span>${prefix}${String(data.preview || "").slice(0,110).replace(/</g,"&lt;")}${progress}</span>`;
             steps.insertBefore(row, thinking);
             scrollDown();
           } else if (data.type === "approval") {
@@ -1310,10 +1339,13 @@ async function send() {
           } else if (data.type === "sources") {
             turnSources.length = 0;
             turnSources.push(...(data.items || []));
+          } else if (data.type === "receipts") {
+            turnReceipts = data;
           }
         } else if (event === "final") {
           answer = data.text;
           addGuardFlags(data.guard);
+          if (data.receiptSummary) turnReceipts = data.receiptSummary;
         } else if (event === "error") {
           answer = `⚠️ ${data.message}`;
         }
@@ -1323,6 +1355,22 @@ async function send() {
     thinking.remove();
     if (answer) finishLive(guardFlags.length ? withoutInlineGuard(answer) : answer);
     else if (!live) addMsg("assistant", "…I lost the thread there. Try again?");
+
+    // The receipt card: per-step truth, even when the reply's own footer was
+    // trimmed by the streaming path. Same source as the footer — the tool
+    // records — so the two cannot disagree.
+    if (turnReceipts && live && !(turnReceipts.failed === 0 && turnReceipts.notRun === 0 && turnReceipts.requested < 3)) {
+      const card = document.createElement("div");
+      card.className = "sources";
+      card.style.borderColor = turnReceipts.failed || turnReceipts.notRun ? "#6b4a20" : "#25455e";
+      const failed = turnReceipts.failed || 0, notRun = turnReceipts.notRun || 0;
+      card.innerHTML =
+        `<b>🧾 Receipts</b>` +
+        `${Number(turnReceipts.applied) || 0} of ${Number(turnReceipts.requested) || 0} operations completed` +
+        (failed || notRun ? ` — ${[failed ? `${failed} failed` : "", notRun ? `${notRun} not run` : ""].filter(Boolean).join(", ")}` : "") +
+        `. <span style="opacity:.7">Counted by the tools, not by the model.</span>`;
+      live.after(card);
+    }
 
     if (guardFlags.length && live) {
       const note = document.createElement("div");

@@ -310,15 +310,35 @@ async function moveToTrash(abs, { batchId, ctx }) {
   return { ok: true, target };
 }
 
-/** One step of a plan: { kind: "move"|"rename", src, dst, overwrite } or { kind: "trash", src }. */
+/**
+ * One step of a plan: { kind: "move"|"rename", src, dst, overwrite } or { kind: "trash", src }.
+ *
+ * Every step reports `{ ok, line, op }` where `op` is the machine-readable
+ * receipt — per-operation `from`, `to`, `action` and status. The prose `line`
+ * is what a person reads; `op` is what the turn's receipt set counts, because
+ * counting operations out of a sentence is how "3 of 12 moved" becomes "12
+ * moved". See src/agent/receipts.js (issue #136).
+ */
 async function applyFileStep(step, batchId, ctx) {
   if (step.kind === "trash") {
     const res = await moveToTrash(step.src, { batchId, ctx });
-    if (!res.ok) return { ok: false, line: `failed: ${showPath(step.src)} (${res.error})` };
-    return { ok: true, line: `trashed ${showPath(step.src)} → ${showPath(res.target)}` };
+    if (!res.ok) {
+      return {
+        ok: false,
+        line: `failed: ${showPath(step.src)} (${res.error})`,
+        op: { action: "trash", from: showPath(step.src), to: null, status: "failed", reason: String(res.error || "failed") },
+      };
+    }
+    return {
+      ok: true,
+      line: `trashed ${showPath(step.src)} → ${showPath(res.target)}`,
+      op: { action: "trash", from: showPath(step.src), to: showPath(res.target), status: "applied" },
+    };
   }
 
   const action = step.kind; // "move" | "rename"
+  const from = showPath(step.src);
+  const to = showPath(step.dst);
   if (step.overwrite && pathPresent(step.dst)) {
     // Overwrite never replaces: the existing destination goes to the trash
     // first, so the rename below still lands on a free path and stays undoable.
@@ -327,6 +347,7 @@ async function applyFileStep(step, batchId, ctx) {
       return {
         ok: false,
         line: `failed: could not move the existing ${showPath(step.dst)} to the trash (${cleared.error}); the ${action} did not run`,
+        op: { action, from, to, status: "failed", reason: `could not move the existing destination to the trash (${cleared.error})` },
       };
     }
   }
@@ -339,30 +360,79 @@ async function applyFileStep(step, batchId, ctx) {
   } catch (err) {
     const why = String(err.code || err.message).slice(0, 200);
     updateFileJournalEntry(entry.id, { status: "failed", error: why });
-    return { ok: false, line: `failed: ${showPath(step.src)} → ${showPath(step.dst)} (${why})` };
+    return {
+      ok: false,
+      line: `failed: ${from} → ${to} (${why})`,
+      op: { action, from, to, status: "failed", reason: why },
+    };
   }
   updateFileJournalEntry(entry.id, { status: "applied" });
-  return { ok: true, line: `${action === "rename" ? "renamed" : "moved"} ${showPath(step.src)} → ${showPath(step.dst)}` };
+  return {
+    ok: true,
+    line: `${action === "rename" ? "renamed" : "moved"} ${from} → ${to}`,
+    op: { action, from, to, status: "applied" },
+  };
 }
 
 /**
  * Apply a validated plan in order. The first failure stops the batch — a
  * half-applied plan that is journaled and undoable beats a fully-applied
  * plan whose later steps ran against a state we no longer understand.
+ *
+ * `applications` is the full per-operation record in plan order: every step
+ * that ran, plus the ones the stop prevented (`status: "not-run"`). A receipt
+ * that only knew about the steps that were attempted could not honestly say
+ * "3 of 12", which is the number the user needs.
  */
 async function applyFilePlan(steps, ctx) {
   const batchId = newBatchId();
   const lines = [];
-  for (const step of steps) {
-    const result = await applyFileStep(step, batchId, ctx);
-    if (!result.ok) return { batchId, total: steps.length, lines, failed: result.line };
+  const applications = [];
+  for (let i = 0; i < steps.length; i++) {
+    const result = await applyFileStep(steps[i], batchId, ctx);
+    applications.push(result.op);
+    if (!result.ok) {
+      const stoppedAt = i;
+      for (let j = i + 1; j < steps.length; j++) {
+        const step = steps[j];
+        applications.push({
+          action: step.kind,
+          from: showPath(step.src),
+          to: step.kind === "trash" ? null : showPath(step.dst),
+          status: "not-run",
+          reason: "stopped after an earlier operation failed",
+        });
+      }
+      return { batchId, total: steps.length, lines, applications, failed: result.line, stoppedAt };
+    }
     lines.push(result.line);
   }
-  return { batchId, total: steps.length, lines, failed: null };
+  return { batchId, total: steps.length, lines, applications, failed: null, stoppedAt: null };
 }
 
 function filePlanResult(outcome) {
-  const { batchId, total, lines, failed } = outcome;
+  const { batchId, total, lines, applications, failed } = outcome;
+  // The receipt is what the turn counts and the guard checks (issue #136).
+  // It says, per operation, what was asked for and what happened — so
+  // "applied 3 of 12" is a fact read off the batch, not a sentence parsed by
+  // a regex. Only the first few failures are named: a receipt is a record,
+  // not a second copy of the output.
+  const applied = applications.filter((op) => op.status === "applied").length;
+  const failedOps = applications.filter((op) => op.status === "failed");
+  const receipt = {
+    kind: "batch",
+    batchId,
+    requested: total,
+    applied,
+    failed: failedOps.length,
+    notRun: applications.filter((op) => op.status === "not-run").length,
+    undoable: applied > 0,
+    failedItems: failedOps.slice(0, 8).map((op) => ({
+      from: op.from,
+      to: op.to,
+      reason: String(op.reason || "failed").slice(0, 160),
+    })),
+  };
   if (!failed) {
     return {
       ok: true,
@@ -371,6 +441,7 @@ function filePlanResult(outcome) {
         ...lines.map((line) => `- ${line}`),
         `Journaled (batch ${batchId}). list_recent_changes shows it; undo_last reverses the whole batch.`,
       ].join("\n"),
+      receipt,
     };
   }
   if (!lines.length) {
@@ -381,6 +452,7 @@ function filePlanResult(outcome) {
         `Nothing was applied. If anything was journaled anyway (an overwrite preparing the trash), ` +
           `list_recent_changes shows it and undo_last reverses it.`,
       ].join("\n"),
+      receipt,
     };
   }
   // Partial batches are first-class: at least one mutation landed, it is in
@@ -394,6 +466,7 @@ function filePlanResult(outcome) {
       `- ${failed}`,
       `Journaled (batch ${batchId}). undo_last restores exactly what was applied and reports what it could not.`,
     ].join("\n"),
+    receipt,
   };
 }
 
@@ -576,7 +649,11 @@ async function undoLastBatch(ctx) {
     }
   }
   if (!batchId) {
-    return { ok: true, output: "Nothing to undo: no applied file-action batch is waiting to be reversed." };
+    return {
+      ok: true,
+      output: "Nothing to undo: no applied file-action batch is waiting to be reversed.",
+      receipt: { kind: "batch", batchId: null, action: "undo", requested: 0, applied: 0, failed: 0, notRun: 0, undoable: false, failedItems: [] },
+    };
   }
 
   const batch = journal.filter((entry) => entry.batchId === batchId);
@@ -668,7 +745,28 @@ async function undoLastBatch(ctx) {
       lines.push(`- ${showPath(entry.source)} → ${showPath(entry.destination)}: ${entry.error || "failed"}`);
     }
   }
-  return { ok: restored.length > 0, output: lines.join(nl) };
+  return {
+    ok: restored.length > 0,
+    output: lines.join(nl),
+    // An undo restores exactly what it restored — no more. The receipt counts
+    // against the batch's applied operations, so a reply that says "I undid
+    // all twelve" is caught the same way an inflated move is.
+    receipt: {
+      kind: "batch",
+      batchId,
+      action: "undo",
+      requested: targets.length,
+      applied: restored.length,
+      failed: problems.length,
+      notRun: 0,
+      undoable: false,
+      failedItems: problems.slice(0, 8).map((p) => ({
+        from: showPath(p.original),
+        to: showPath(p.current),
+        reason: String(p.reason || "not restored").slice(0, 160),
+      })),
+    },
+  };
 }
 
 /* ─────────────────────────── catastrophic command guard ────────────────── */
