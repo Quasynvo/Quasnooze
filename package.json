@@ -24,10 +24,12 @@
     "service": "node scripts/service.js",
     "supervise": "node scripts/supervise.js",
     "audit": "node scripts/audit.js",
+    "bench": "node scripts/bench.js",
+    "bench:check": "node scripts/bench.js --check",
     "tools": "node src/cli.js tools",
     "radar": "node scripts/tech-radar.js",
     "growth": "node scripts/growth.js",
-    "verify": "node --test && node scripts/audit.js",
+    "verify": "node --test && node scripts/audit.js && node scripts/bench.js --check --no-suite",
     "desktop": "node scripts/desktop.js",
     "desktop:doctor": "node scripts/desktop-doctor.js",
     "demo:site": "node scripts/build-demo-site.js"

@@ -1,0 +1,42 @@
+{
+  "kind": "quasnooze-bench",
+  "schema_version": 1,
+  "suite": {
+    "tests": 1043,
+    "pass": 1043,
+    "fail": 0,
+    "files": 82
+  },
+  "fast_path": {
+    "corpus": 59,
+    "matched": 31,
+    "positives": 31,
+    "negatives": 28,
+    "wrong_routes": 0
+  },
+  "conversation": {
+    "passed": 60,
+    "gated": 60,
+    "turns": 60,
+    "live": 16,
+    "recorded": 44
+  },
+  "retrieval": {
+    "answerable": 7,
+    "no_answer": 3,
+    "no_answer_empty": 3,
+    "false_positives": 0,
+    "recall_at_1": 0.9285714285714286,
+    "recall_at_5": 1,
+    "mrr_at_5": 1
+  },
+  "speech": {
+    "utterances": 48,
+    "overall_accuracy": 0.7917,
+    "wer": 0.0974,
+    "clean": 1,
+    "accented": 0.75,
+    "noisy": 0.6667,
+    "numbers_names": 0.7
+  }
+}

@@ -5,11 +5,13 @@
  *   node src/cli.js ask "explain this stack trace"
  *   node src/cli.js chat
  *   node src/cli.js tools [--json] [--strict]
+ *   node src/cli.js skills list|show|compile|approve|revoke|delete|replay
  *
  * Same agent, same memory, same approval flow — just a terminal.
  * `tools` inspects static capability and trust metadata without loading plugins.
  */
 import { createInterface } from "node:readline/promises";
+import { readFileSync } from "node:fs";
 import { stdin, stdout } from "node:process";
 
 const C = {
@@ -25,6 +27,121 @@ const TOOLS_USAGE =
   "Read-only capability and trust inventory across built-in tools, QUASNOOZE_TOOLS,\n" +
   "QUASNOOZE_TOOLS_DIR and QUASNOOZE_MCP. Never imports plugins, runs commands or spawns MCP servers.\n" +
   "See docs/TOOL-INVENTORY.md.";
+
+const SKILLS_USAGE = `quasnooze skills list [--json]
+quasnooze skills show <name>
+quasnooze skills compile <name> --from <turn.json> [--description <text>]
+quasnooze skills approve <name> | revoke <name> | delete <name>
+quasnooze skills replay <name> [--yes]
+Skills are compiled conversation turns: ordered tool calls with their exact
+arguments (docs/SKILLS.md). Replay makes zero model calls, re-checks every
+permission and verifies every applied step. Nothing runs before the owner
+approves the skill's content. --yes approves dangerous steps for that one
+replay and counts as fresh consent for typed input, because the owner typed it.`;
+
+/**
+ * The skills CLI. Executes tools through the real registry on replay — the
+ * one owner-facing surface where a compiled skill becomes a program again.
+ * Local plugins and MCP servers are not loaded here: a skill replays the
+ * built-in registry only, and only what current policy still allows.
+ */
+async function runSkillsCli(args) {
+  const [sub, name, ...rest] = args;
+  const has = (flag) => rest.includes(flag);
+  const valueAfter = (flag) => {
+    const i = rest.indexOf(flag);
+    return i >= 0 ? rest[i + 1] : null;
+  };
+  if (!sub || sub === "--help" || sub === "-h" || has("--help") || has("-h")) {
+    console.log(SKILLS_USAGE);
+    return;
+  }
+  const { loadSkill, saveSkill, listSkills, approveSkill, revokeSkill, deleteSkill } = await import("./skills/registry.js");
+  const renderError = (err) => {
+    console.error(`skills: ${err.message}`);
+    process.exitCode = 1;
+  };
+
+  try {
+    if (sub === "list") {
+      const rows = listSkills();
+      if (has("--json")) console.log(JSON.stringify(rows, null, 2));
+      else if (!rows.length) console.log("no skills yet — compile one from a recorded turn (see --help)");
+      else for (const row of rows) {
+        const state = row.error ? C.gold(`error: ${row.error}`) : row.approved ? C.teal("approved") : row.stale ? C.gold("approval stale — content changed") : "not approved";
+        console.log(`${C.bold(row.name.padEnd(24))} ${row.steps ?? "?"} steps  ${state}${row.description ? `  ${C.dim(row.description.slice(0, 60))}` : ""}`);
+      }
+      return;
+    }
+    if (sub === "show") {
+      const loaded = loadSkill(name);
+      console.log(JSON.stringify({ approval: loaded.approval, digest: loaded.digest, manifest: loaded.manifest }, null, 2));
+      return;
+    }
+    if (sub === "compile") {
+      const from = valueAfter("--from");
+      if (!name || !from) {
+        console.error("usage: quasnooze skills compile <name> --from <turn.json>");
+        process.exitCode = 1;
+        return;
+      }
+      const turn = JSON.parse(readFileSync(from, "utf8"));
+      const { compileSkill } = await import("./skills/compiler.js");
+      const skill = compileSkill({
+        name,
+        description: valueAfter("--description") ?? "",
+        utterance: turn?.utterance ?? "",
+        calls: turn?.calls ?? [],
+      });
+      const { digest } = saveSkill(skill);
+      console.log(`${C.teal("compiled")} ${skill.name} — ${skill.steps.length} steps, digest ${digest.slice(0, 12)}…`);
+      console.log(C.dim(`not approved yet: review with \`quasnooze skills show ${skill.name}\`, then \`quasnooze skills approve ${skill.name}\``));
+      return;
+    }
+    if (sub === "approve") {
+      const { digest } = approveSkill(name);
+      console.log(`${C.teal("approved")} ${name} — content digest ${digest.slice(0, 12)}… (editing the skill invalidates this)`);
+      return;
+    }
+    if (sub === "revoke") {
+      const result = revokeSkill(name);
+      console.log(result.revoked ? `approval revoked for ${name} (the file stays)` : `${name} had no approval`);
+      return;
+    }
+    if (sub === "delete") {
+      const result = deleteSkill(name);
+      console.log(result.deleted ? `deleted ${name}` : `no such skill: ${name}`);
+      return;
+    }
+    if (sub === "replay") {
+      const loaded = loadSkill(name);
+      const { replaySkill } = await import("./skills/replay.js");
+      const { TOOL_MAP } = await import("./tools.js");
+      const yes = has("--yes");
+      const report = await replaySkill(loaded, {
+        execute: async (tool, toolArgs) => {
+          const impl = TOOL_MAP.get(tool);
+          if (!impl) return { ok: false, output: `no such tool: ${tool}` };
+          return impl.run(toolArgs, {});
+        },
+        approve: () => yes,
+        freshConsent: yes, // the owner typed this command: that is fresh consent
+      });
+      for (const step of report.steps) {
+        const verdict = step.verification ? ` — ${step.verification.status}: ${step.verification.detail}` : step.notRun ? " — not run" : "";
+        console.log(`  ${step.applied ? C.teal("✓") : step.ok ? C.gold("~") : "✗"} ${step.tool} ${C.dim(step.argsJson.slice(0, 100))}${C.dim(verdict.slice(0, 120))}`);
+      }
+      const line = `${report.status}${report.reason ? ` — ${report.reason}` : ""} (${report.completed}/${report.total} steps, ${report.ms} ms)`;
+      console.log(report.status === "completed" ? C.teal(line) : C.gold(line));
+      if (report.status !== "completed") process.exitCode = 1;
+      return;
+    }
+    console.error(`unknown skills subcommand "${sub}" — see --help`);
+    process.exitCode = 1;
+  } catch (err) {
+    renderError(err);
+  }
+}
 
 async function runToolsInventoryCli(args) {
   if (args.includes("--help") || args.includes("-h")) {
@@ -200,6 +317,7 @@ async function main() {
   if (mode === "scout") { await runScoutCli(rest); return; }
   if (mode === "tracker") { await runTrackerCli(rest); return; }
   if (mode === "providers") { await runProvidersCli(rest); return; }
+  if (mode === "skills") { await runSkillsCli(rest); return; }
   if (mode === "tools" || mode === "tool-inventory") {
     await runToolsInventoryCli(rest);
     return;
