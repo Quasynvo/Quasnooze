@@ -114,7 +114,6 @@ export function listSkills() {
   } catch {
     return [];
   }
-  const approvals = readApprovals();
   const rows = [];
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isFile() || !entry.name.endsWith(".json") || entry.name === "approvals.json") continue;
