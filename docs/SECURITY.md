@@ -62,7 +62,13 @@ Quasnooze is an agent with a shell. Read this before you leave it running.
 9. **Timeouts kill the process group** — a command that backgrounds children is killed with
    `process.kill(-pid, 'SIGKILL')`, so nothing survives the 120 s cap.
 10. **Resource bounds** — 8 tool rounds per turn, 120 s per command, stdout capped at 60 KB,
-   sessions capped at 200 messages, memory at 500 facts.
+    sessions capped at 200 messages, memory at 500 facts.
+11. **Chat-channel allowlists fail closed** — `createAllowList()` (`src/channels/auth.js`) treats
+    an empty allowlist as *nobody*, not everybody. Telegram refuses and echoes the sender's id
+    once per ten minutes so you can add it; Discord and WhatsApp do not connect at all until
+    `DISCORD_CHANNEL_IDS` / `WHATSAPP_ALLOWED_NUMBERS` are filled. A stranger who finds a public
+    bot username, or invites a public bot to their server, gets silence — not a shell.
+    `test/channel-auth.test.js` holds both halves of that promise.
 
 ## Known risks you accept by running it
 

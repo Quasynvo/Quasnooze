@@ -32,6 +32,12 @@ or WhatsApp/Signal-style transports you trust.
 5. Enable **Developer Mode** (Settings → Advanced), right-click your channel → **Copy Channel ID**.
 6. `DISCORD_BOT_TOKEN=…` and `DISCORD_CHANNEL_IDS=…` in `.env`.
 
+**Why the allowlist matters.** A Discord bot is public by default: anyone who has the
+application's client id can invite it to their own server. Quasnooze therefore answers in
+the channels listed in `DISCORD_CHANNEL_IDS` and nowhere else — DMs included — and while
+that list is empty the bridge does not connect at all. Empty means *no channels*, never
+*every channel*.
+
 Quasnooze uses its **own WebSocket client** (`src/channels/ws.js`) — no `discord.js`, no
 dependency tree, about 120 lines implementing exactly the RFC 6455 client features the
 gateway needs, including resume.
@@ -58,6 +64,11 @@ WHATSAPP_ALLOWED_NUMBERS=919876543210,447700900123
 
 Then `npm install` (pulls `@whiskeysockets/baileys`) and restart. A QR code prints in the
 terminal the first time; scan it with **WhatsApp → Settings → Linked devices**.
+
+`WHATSAPP_ALLOWED_NUMBERS` is required: with it empty the bridge refuses to connect, because
+a paired account receives DMs from anyone who has the number. Numbers are compared as digits
+with the country code, so `+91 98765 43210` and `919876543210` are the same person. Group
+chats are not answered — a group has no number to match, and there is no group allowlist.
 
 **The honest warnings:**
 
