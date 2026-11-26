@@ -7,6 +7,7 @@
  */
 import { WebSocketClient } from "./ws.js";
 import { config } from "../config.js";
+import { createAllowList } from "./auth.js";
 import { routeMessage } from "./router.js";
 import { registerSender } from "../outbound.js";
 
@@ -29,7 +30,22 @@ function chunk(text, size = 1900) {
 export function startDiscord(log = console) {
   if (!config.discord.token) return null;
 
-  const allowed = new Set(config.discord.channelIds.map(String));
+  const allowed = createAllowList(config.discord.channelIds);
+  // Fail closed, and say why rather than booting a listener that answers anybody.
+  //
+  // This used to read `allowed.size && !allowed.has(channel)`, so an empty
+  // DISCORD_CHANNEL_IDS — the state `.env.example` ships in — meant every channel
+  // the bot could see, DMs included. Discord bots are public by default: anyone
+  // who invites yours to their own server could then type at a shell. Slack has
+  // always refused to start without channel ids; Discord now matches it.
+  if (!allowed.configured) {
+    log.warn?.(
+      "discord: DISCORD_CHANNEL_IDS is empty — not connecting. Enable Developer Mode, right-click each channel " +
+        "the bot may answer in, Copy Channel ID, put the ids in .env and restart."
+    );
+    return null;
+  }
+
   let ws = null;
   let heartbeatTimer = null;
   let seq = null;
@@ -66,7 +82,9 @@ export function startDiscord(log = console) {
     const message = payload.d;
     if (!message || message.author?.bot) return;
     if (botUserId && message.author?.id === botUserId) return;
-    if (allowed.size && !allowed.has(String(message.channel_id))) return;
+    // No `allowed.size &&` short-circuit: the list is non-empty by construction,
+    // and if it ever is not, the answer must be silence, not everything.
+    if (!allowed.has(String(message.channel_id))) return;
 
     const text = String(message.content || "")
       .replace(new RegExp(`<@!?${botUserId}>`, "g"), "")
