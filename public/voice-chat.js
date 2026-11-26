@@ -41,12 +41,18 @@ export async function* readSse(response) {
   }
 }
 
+// Imported by `node --test`, which exercises readSse in a bare V8 context with
+// no DOM. Reading browser globals at module scope made the whole file fail to
+// load under Node — `sessionStorage is not defined` — so the parser above is
+// pure and the wiring below only runs where a document exists.
+const hasDom = typeof document !== "undefined";
 const $ = (id) => document.getElementById(id);
-const sessionId = sessionStorage.getItem("quasnooze.voice.session") || `voice-${crypto.randomUUID()}`;
-sessionStorage.setItem("quasnooze.voice.session", sessionId);
+const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
+const sessionId = storage?.getItem("quasnooze.voice.session") || `voice-${globalThis.crypto.randomUUID()}`;
+storage?.setItem("quasnooze.voice.session", sessionId);
 let activeRequest = null;
 let recognition = null;
-let recognitionConsented = sessionStorage.getItem("quasnooze.voice.speech-consent") === "yes";
+let recognitionConsented = storage?.getItem("quasnooze.voice.speech-consent") === "yes";
 let listening = false;
 let sentThisUtterance = false;
 let lastAssistantText = "";
@@ -209,29 +215,31 @@ async function sendMessage(text) {
   }
 }
 
-$("composer").addEventListener("submit", (event) => { event.preventDefault(); void sendMessage($("message").value); });
-$("mic").addEventListener("click", () => { if (listening) { try { recognition?.stop(); } catch {} setListening(false); } else startListening(); });
-$("stop").addEventListener("click", stopVoice);
-$("message").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("composer").requestSubmit(); } });
-window.addEventListener("pagehide", () => { try { recognition?.abort(); } catch {} window.speechSynthesis?.cancel(); activeRequest?.abort(); });
+if (hasDom) {
+  $("composer").addEventListener("submit", (event) => { event.preventDefault(); void sendMessage($("message").value); });
+  $("mic").addEventListener("click", () => { if (listening) { try { recognition?.stop(); } catch {} setListening(false); } else startListening(); });
+  $("stop").addEventListener("click", stopVoice);
+  $("message").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("composer").requestSubmit(); } });
+  window.addEventListener("pagehide", () => { try { recognition?.abort(); } catch {} window.speechSynthesis?.cancel(); activeRequest?.abort(); });
 
-async function checkReady() {
-  try {
-    const response = await fetch("/api/health", { headers: apiHeaders() });
-    const health = await response.json();
-    if (!response.ok) throw new Error(health.error || `Local server returned HTTP ${response.status}`);
-    if (health.provider === "mock") {
-      setStatus("Connected to mock mode · configure Ollama for real AI", "error");
+  async function checkReady() {
+    try {
+      const response = await fetch("/api/health", { headers: apiHeaders() });
+      const health = await response.json();
+      if (!response.ok) throw new Error(health.error || `Local server returned HTTP ${response.status}`);
+      if (health.provider === "mock") {
+        setStatus("Connected to mock mode · configure Ollama for real AI", "error");
+        $("setupNotice").hidden = false;
+      } else {
+        setStatus(`Local server ready · ${health.provider} · ${health.model || "model configured"}`, "ready");
+      }
+    } catch (error) {
+      setStatus(`Local assistant is unreachable: ${error.message}`, "error");
       $("setupNotice").hidden = false;
-    } else {
-      setStatus(`Local server ready · ${health.provider} · ${health.model || "model configured"}`, "ready");
     }
-  } catch (error) {
-    setStatus(`Local assistant is unreachable: ${error.message}`, "error");
-    $("setupNotice").hidden = false;
   }
+  if ("speechSynthesis" in window) window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+    if ($("speak").checked && !localVoice()) setStatus("No installed local speech voice; replies will stay on screen", "error");
+  });
+  checkReady();
 }
-if ("speechSynthesis" in window) window.speechSynthesis.addEventListener?.("voiceschanged", () => {
-  if ($("speak").checked && !localVoice()) setStatus("No installed local speech voice; replies will stay on screen", "error");
-});
-checkReady();

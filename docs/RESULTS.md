@@ -6,9 +6,9 @@
 > test fails — the speech and retrieval baselines are compared byte-for-byte
 > against their runners.
 
-Measured 5 November 2026; re-verified 22 November 2026 (full suite and every evaluator re-run). Test-suite count re-measured 22 November 2026 on
-`arena/3dce51a5-quasnooze`: **1099 tests, 1099 passed, 0 failed**
-(`node --test --test-concurrency=4`, ~31 s, 86 test files;
+Measured 5 November 2026; re-verified 26 November 2026 (full suite and every evaluator re-run). Test-suite count re-measured 26 November 2026 on
+`arena/3365a313-quasnooze`: **1127 tests, 1127 passed, 0 failed**
+(`node --test --test-concurrency=4`, ~31 s, 90 test files;
 the project requires Node ≥ 22 — see `package.json`).
 
 ## 1. Headline results
@@ -23,7 +23,7 @@ the project requires Node ≥ 22 — see `package.json`).
 | 6 | Read-back cost (2 KB file write) | **p50 0.28 ms, p95 0.69 ms** (contract allowed 50 ms p95) | 100 | `node --test test/verify.test.js` | [VERIFIED-EXECUTION.md](VERIFIED-EXECUTION.md) |
 | 7 | Retrieval Recall@1 / Recall@5, MRR@5; no-answer | **0.93 / 1.00, 1.00; 3/3 empty, 0 false positives** (coverage gate) | 7 answerable + 3 no-answer queries | `node scripts/evaluate-retrieval.js` | [RETRIEVAL-BASELINE-V1.md](RETRIEVAL-BASELINE-V1.md) |
 | 8 | Speech command accuracy (synthetic text hypotheses) | **79.2% overall, 9.7% WER** (digit-group joining: numbers-names 60% → 70%) | 48 utterances | `node scripts/evaluate-speech.js` (`npm run speech`) | [SPEECH-BASELINE-V1.md](SPEECH-BASELINE-V1.md) |
-| 9 | Full regression suite | **1099/1099 passed** | 86 test files | `node --test --test-concurrency=4` | §4 below |
+| 9 | Full regression suite | **1127/1127 passed** | 90 test files | `node --test --test-concurrency=4` | §4 below |
 
 ## 2. Speech, by condition — including where it is worst
 
@@ -59,7 +59,7 @@ router. Anyone quoting "77.1%" without that sentence is misquoting this repo.
 
 ```bash
 git clone https://github.com/Quasynvo/Quasnooze.git && cd Quasnooze
-node --test --test-concurrency=4        # 1099 tests
+node --test --test-concurrency=4        # 1127 tests
 node scripts/fast-path-eval.js          # rows 1–2
 node scripts/evaluate-conversation.js   # row 4 (runs in well under a minute)
 node scripts/evaluate-retrieval.js      # row 7

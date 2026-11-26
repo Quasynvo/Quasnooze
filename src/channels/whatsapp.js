@@ -14,12 +14,25 @@
  * Everything else about Quasnooze stays local; enable this only if you accept it.
  */
 import { config } from "../config.js";
+import { createAllowList, digitsOnly } from "./auth.js";
 import { routeMessage } from "./router.js";
 import { registerSender } from "../outbound.js";
 
 export async function startWhatsApp(log = console) {
   if (!config.whatsapp.enabled) return null;
 
+  // Fail closed before pairing, not after. An empty WHATSAPP_ALLOWED_NUMBERS
+  // (the shipped default) used to mean "any DM this account receives", and the
+  // only thing standing between a stranger and `shell` was that they had to know
+  // the number. Checked here so a misconfigured bridge never links an account.
+  const allowed = createAllowList(config.whatsapp.allowedNumbers, { normalize: digitsOnly });
+  if (!allowed.configured) {
+    log.warn?.(
+      "whatsapp: WHATSAPP_ALLOWED_NUMBERS is empty — not connecting. Pairing an account with no allowlist " +
+        "lets any of its contacts drive this assistant. List the numbers (digits, country code first) and restart."
+    );
+    return null;
+  }
   let baileys;
   let qrcode;
   try {
@@ -48,7 +61,6 @@ export async function startWhatsApp(log = console) {
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
 
-  const allowed = new Set(config.whatsapp.allowedNumbers.map((n) => n.replace(/\D/g, "")));
   let stopped = false;
   let sock;
 
@@ -93,6 +105,21 @@ export async function startWhatsApp(log = console) {
         const number = jidNumber(from);
         const isGroup = from.endsWith("@g.us");
 
+        // A group's jid is the group id, not a person's number, so an allowlist of
+        // people cannot authorise one — and there is no group allowlist to fall
+        // back on. Refused deliberately, before any read or reply.
+        if (isGroup) {
+          log.warn?.(`whatsapp: ignoring group message (${number || "unknown group"}) — groups are not supported`);
+          continue;
+        }
+
+        // Authorise before the audio note gets an answer: an unauthorised sender
+        // should not learn that the bridge is running.
+        if (!allowed.has(number)) {
+          log.warn?.("whatsapp: ignoring message from a number that is not on WHATSAPP_ALLOWED_NUMBERS");
+          continue;
+        }
+
         const text =
           msg.message.conversation ||
           msg.message.extendedTextMessage?.text ||
@@ -106,12 +133,6 @@ export async function startWhatsApp(log = console) {
           }
           continue;
         }
-
-        if (allowed.size && !allowed.has(number)) {
-          log.warn?.(`whatsapp: ignoring unauthorised number ${number}`);
-          continue;
-        }
-        if (isGroup && !allowed.size) continue; // never answer random groups when unlocked
 
         await sock.readMessages([msg.key]).catch(() => {});
         try {
