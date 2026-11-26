@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d19">
+  <title>Quasnooze · Voice conversation</title>
+  <link rel="icon" href="/brand/voice-engine.svg" type="image/svg+xml">
+  <style>
+    :root{color-scheme:dark;--bg:#080d19;--panel:#111d30;--line:#29364d;--text:#edf4ff;--muted:#a8bbce;--cyan:#6ee7f9;--violet:#a78bfa;--amber:#ffbf69;--red:#fb7185}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 50% -20%,#26395d 0,transparent 70%),var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;justify-content:center}
+    main{width:min(820px,100%);min-height:100vh;padding:24px 18px;display:flex;flex-direction:column;gap:16px}.top,.controls,.composer,.row{display:flex;align-items:center;gap:10px}.top{border-bottom:1px solid var(--line);padding-bottom:14px}.brand{font-weight:750;font-size:1.15rem}.spacer{flex:1}.status{font-size:.83rem;color:var(--muted)}.status[data-state=ready]{color:var(--cyan)}.status[data-state=error]{color:var(--red)}
+    .notice{border:1px solid #6b5128;background:#211b13;border-radius:12px;padding:12px 14px;color:#ffe0ad;font-size:.86rem}.notice[hidden]{display:none}.thread{flex:1;min-height:300px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0}.message{max-width:90%;padding:12px 15px;border:1px solid var(--line);border-radius:16px;background:var(--panel);white-space:pre-wrap;overflow-wrap:anywhere}.message.user{align-self:flex-end;background:#182742}.message.assistant{align-self:flex-start}.message.error{border-color:#713b4a;color:#ffc2cb}.message.pending{color:var(--muted);font-style:italic}.approval{border:1px solid #6b5128;background:#211b13;border-radius:12px;padding:12px}.approval button{margin:10px 8px 0 0}
+    .composer textarea{flex:1;min-height:52px;max-height:160px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:#10182a;color:var(--text);padding:12px;font:inherit}.composer textarea:focus{outline:2px solid var(--cyan);outline-offset:2px}button{border:1px solid var(--line);background:#131d30;color:var(--text);border-radius:12px;padding:11px 15px;font:inherit;cursor:pointer}button:hover{border-color:var(--cyan)}button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.primary{background:linear-gradient(135deg,#6ee7f9,#a78bfa);border:0;color:#08111f;font-weight:700}.mic[aria-pressed=true]{border-color:var(--red);color:var(--red)}.controls{justify-content:space-between;font-size:.85rem;color:var(--muted);flex-wrap:wrap}.controls label{display:flex;align-items:center;gap:7px}.foot{font-size:.78rem;color:var(--muted);text-align:center}.foot a{color:var(--cyan)}@media(max-width:520px){main{padding:16px 12px}.message{max-width:96%}.composer{align-items:stretch}.composer textarea{min-width:0}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <img src="/brand/voice-engine.svg" width="34" height="34" alt="">
+    <div><div class="brand">Quasnooze Voice</div><div class="status" id="status" data-state="checking" role="status" aria-live="polite">Checking local assistant…</div></div>
+    <span class="spacer"></span><a href="/index.html" style="color:var(--cyan)">Open full chat</a>
+  </header>
+  <section class="notice" id="speechNotice" hidden>
+    Browser speech recognition may send microphone audio to the browser’s speech provider. It is not guaranteed to stay on this device. Continue only if you accept that; for on-device recognition use the Windows voice host or configure a local transcription engine.
+  </section>
+  <section class="notice" id="setupNotice" hidden>
+    The local assistant is not ready yet. Start Ollama, download a model, then run <code>npm run setup</code>, <code>npm run doctor</code>, and <code>npm run brain</code>. This page must be opened from Quasnooze at <code>http://localhost:7777/voice.html</code>, not from GitHub Pages.
+  </section>
+  <section class="thread" id="thread" aria-label="Conversation" aria-live="polite"></section>
+  <form class="composer" id="composer">
+    <button class="mic" id="mic" type="button" title="Start voice input" aria-label="Start voice input" aria-pressed="false">🎙️</button>
+    <textarea id="message" rows="2" placeholder="Ask your local assistant…" aria-label="Your message"></textarea>
+    <button class="primary" id="send" type="submit">Send</button>
+  </form>
+  <div class="controls">
+    <label><input id="speak" type="checkbox"> Speak replies with an installed local voice</label>
+    <label><input id="continue" type="checkbox"> Continue listening after each reply</label>
+    <button id="stop" type="button">Stop voice</button>
+  </div>
+  <footer class="foot">Local AI runs through your Quasnooze server. Speech recognition privacy depends on your selected speech engine. <a href="/docs/VOICE.md">Voice and privacy details</a></footer>
+</main>
+<script type="module" src="/voice-chat.js"></script>
+</body>
+</html>
