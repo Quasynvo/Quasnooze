@@ -28,6 +28,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, resolve as resolvePath } from "node:path";
+import { isWithin } from "./path-containment.js";
 
 export const READ = "read";
 export const ACT = "act";
@@ -101,7 +102,20 @@ function insideWorkspace(path, roots) {
   } catch {
     // It may not exist yet; fall back to the literal path for the prefix test.
   }
-  return roots.some((root) => path === root || path.startsWith(root + "/") || real === root || real.startsWith(root + "/"));
+  return roots.some((root) => {
+    // Separator- and case-aware: on Windows `C:\ws\a.txt` does not literally
+    // start with `C:\ws/`, and a prefix test that ignores that made every
+    // in-workspace path look like an escape. The root is also canonicalised,
+    // because the workspace itself can be reached through a symlink or a
+    // differently-cased drive letter.
+    if (isWithin(root, path) || isWithin(root, real)) return true;
+    try {
+      const realRoot = realpathSync(root);
+      return isWithin(realRoot, path) || isWithin(realRoot, real);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
