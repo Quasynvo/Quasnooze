@@ -237,7 +237,7 @@ async function setup() {
 
   console.log(C.coral(`
    ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-      ✦  ${C.bold("P I N C H")} ${C.dim("setup")}
+      ✦  ${C.bold("Q U A S N O O Z E")} ${C.dim("setup")}
    ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀`));
   console.log(`
    Seven short steps. Everything is optional except your name and a brain.

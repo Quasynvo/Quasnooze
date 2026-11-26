@@ -265,7 +265,7 @@ test("an empty access key and auto-approval are both reported", async () => {
   assert.equal(row.status, STATUS.WARN);
   assert.match(row.detail, /no access key/);
   assert.match(row.detail, /auto-approved/);
-  assert.match(row.hint, /PINCH_AUTO_APPROVE/);
+  assert.match(row.hint, /QUASNOOZE_AUTO_APPROVE/, "the hint names the variable .env.example documents");
 });
 
 test("a world-readable data directory is a warning with the chmod in it", async () => {
@@ -275,8 +275,17 @@ test("a world-readable data directory is a warning with the chmod in it", async 
   const report = await runDoctor({ cfg, probes: probesWith(), plan: plan(cfg), nodeVersion: "v22.11.0" });
 
   const row = byId(report, "data");
-  assert.equal(row.status, STATUS.WARN);
-  assert.match(row.hint, /chmod 700/);
+  if (process.platform === "win32") {
+    // NTFS does not publish permissions in mode bits: Node reports 0o666 for the
+    // directory whatever its ACL is. Warning on that file would fire on every
+    // Windows machine and advise `chmod 700`, which the platform does not have.
+    assert.equal(row.status, STATUS.OK);
+    assert.match(row.detail, /NTFS ACLs/);
+    assert.doesNotMatch(row.hint || "", /chmod 700/);
+  } else {
+    assert.equal(row.status, STATUS.WARN);
+    assert.match(row.hint, /chmod 700/);
+  }
 });
 
 test("an old Node is a failure, not a warning", async () => {

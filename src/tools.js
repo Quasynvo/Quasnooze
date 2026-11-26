@@ -27,6 +27,7 @@ import {
 import { parseWhen, humaniseDuration, formatClock } from "./timeparse.js";
 import { addSchedule, listSchedules, deleteSchedule } from "./schedules.js";
 import { SESSION_GRANTABLE_SYSTEM_CONTROL } from "./risk.js";
+import { isWithin, looksAbsolute } from "./path-containment.js";
 import { guardClipboardMemory } from "./guard.js";
 import { TrackerError, TRACKER_CODES, assertWriteApproval } from "./tracker/adapter.js";
 
@@ -111,8 +112,11 @@ export function isProtected(target) {
       return target;
     }
   })();
-  return PROTECTED.some((p) => target === p || target.startsWith(p + "/") ||
-    real === p || real.startsWith(p + "/"));
+  // `startsWith(p + "/")` is the POSIX spelling of containment and it is wrong
+  // on Windows, where these paths are `C:\Users\…\.ssh`. It did not fail
+  // closed there, it failed *silently*: with the default workspace of $HOME the
+  // credential list matched nothing at all.
+  return PROTECTED.some((p) => isWithin(p, target) || isWithin(p, real));
 }
 
 export function resolveInWorkspace(input) {
@@ -806,13 +810,18 @@ export function describeEscapes(command) {
   // Absolute paths, plus the two forms that expand into one. The old pattern
   // matched only `/word/...`, so `cp ~/.aws/credentials ./creds` — the exact
   // shape of a credential exfiltration — produced no warning at all, and
-  // neither did `cd $HOME`.
-  const candidates = String(command).match(/(?:^|[\s'"=])((?:~|\$HOME|\$\{HOME\})[\w./@+-]*|\/[\w.\-+@]+(?:\/[\w.\-+@]*)*)/g) || [];
+  // neither did `cd $HOME`. It also never looked at Windows arguments, where
+  // every absolute path starts `C:\` or `\\server\`, so on that platform the
+  // warning could not fire however far the command reached.
+  const POSIX = /(?:^|[\s'"=])((?:~|\$HOME|\$\{HOME\})[\w./@+-]*|\/[\w.\-+@]+(?:\/[\w.\-+@]*)*)/g;
+  const WINDOWS = /(?:^|[\s'"=])((?:[A-Za-z]:[\\/]|\\\\)[^\s'";|&<>()]*)/g;
+  const text = String(command);
+  const candidates = [...(text.match(POSIX) || []), ...(text.match(WINDOWS) || [])];
 
   for (const raw of candidates) {
     let path = raw.trim().replace(/^[\s'"=]/, "");
-    path = path.replace(/^(~|\$HOME|\$\{HOME\})(?=$|\/)/, homedir());
-    if (!path.startsWith("/")) continue;
+    path = path.replace(/^(~|\$HOME|\$\{HOME\})(?=$|[\\/])/, homedir());
+    if (!looksAbsolute(path)) continue;
     if (/^\/(dev|proc|sys)\b/.test(path)) continue;
 
     const real = (() => {
@@ -823,8 +832,19 @@ export function describeEscapes(command) {
       }
     })();
 
-    const inside = roots.some((root) => path === root || path.startsWith(root + "/") ||
-      real === root || real.startsWith(root + "/"));
+    // Separator- and case-aware: a Windows root is `C:\ws`, not `C:/ws`, and
+    // NTFS does not care which case either side was typed in. The old
+    // `startsWith(root + "/")` answered "outside" for every path on that
+    // platform, including the ones sitting inside the workspace.
+    const inside = roots.some((root) => {
+      if (isWithin(root, path) || isWithin(root, real)) return true;
+      try {
+        const realRoot = realpathSync(root);
+        return isWithin(realRoot, path) || isWithin(realRoot, real);
+      } catch {
+        return false;
+      }
+    });
     if (!inside) outside.add(path);
   }
   // `cd ../../..` cannot be resolved without knowing the cwd, and pretending

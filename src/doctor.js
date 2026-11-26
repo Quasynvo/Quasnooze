@@ -162,9 +162,13 @@ export async function runDoctor({
   /* ── security posture: the two settings that bite ────────────────────── */
   const keySet = Boolean(cfg.authKey);
   const autoApprove = Boolean(cfg.autoApprove);
+  // Name the variables the way .env.example and `npm run setup` spell them.
+  // config.js reads the legacy PINCH_* names, so both work (brand-config.js
+  // mirrors them), but a hint the user cannot find in their own .env is a hint
+  // that costs them a search.
   const accessProblems = [
-    keySet ? null : "PINCH_KEY is empty, so anything that can reach the port can use the assistant. Set one in .env.",
-    autoApprove ? "PINCH_AUTO_APPROVE=true lets the assistant act without asking. Turn it off unless you are watching." : null,
+    keySet ? null : "QUASNOOZE_KEY is empty, so anything that can reach the port can use the assistant. Set one in .env.",
+    autoApprove ? "QUASNOOZE_AUTO_APPROVE=true lets the assistant act without asking. Turn it off unless you are watching." : null,
   ].filter(Boolean);
   checks.push(
     accessProblems.length
@@ -183,11 +187,19 @@ export async function runDoctor({
     mkdirSync(cfg.dataDir, { recursive: true, mode: 0o700 });
     accessSync(cfg.dataDir, constants.W_OK);
     const mode = statSync(cfg.dataDir).mode & 0o777;
-    const open = (mode & 0o077) !== 0;
+    // Mode bits are a POSIX idea. On Windows, Node reports 0o666 for essentially
+    // anything on NTFS regardless of its ACL, so this check warned on every
+    // Windows machine and then advised `chmod 700` — a command that platform
+    // does not have. Reporting "cannot tell" is honest; a permanent false alarm
+    // teaches people to ignore the doctor.
+    const posix = process.platform !== "win32";
+    const open = posix && (mode & 0o077) !== 0;
     checks.push(
       open
         ? check("data", "Data directory", STATUS.WARN, `${cfg.dataDir} is mode ${mode.toString(8)}`, `Sessions and memory are readable by other users on this machine. chmod 700 ${cfg.dataDir}`)
-        : check("data", "Data directory", STATUS.OK, `${cfg.dataDir} writable, mode ${mode.toString(8)}`),
+        : posix
+          ? check("data", "Data directory", STATUS.OK, `${cfg.dataDir} writable, mode ${mode.toString(8)}`)
+          : check("data", "Data directory", STATUS.OK, `${cfg.dataDir} writable · permissions are NTFS ACLs here, not mode bits`),
     );
   } catch (err) {
     checks.push(check("data", "Data directory", STATUS.FAIL, `${cfg.dataDir} is not writable: ${err.message}`, "Fix the path or its permissions in .env (PINCH_DATA); nothing can be saved until this works."));
