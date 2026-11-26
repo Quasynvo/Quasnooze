@@ -9,6 +9,7 @@
 import { brain } from "../src/brain.js";
 import { config } from "../src/config.js";
 import { toolSchemas } from "../src/tools.js";
+import { wordsPerSecond } from "../src/metrics.js";
 
 const C = {
   coral: (s) => `\x1b[38;5;87m${s}\x1b[0m`,
@@ -50,9 +51,16 @@ try {
 }
 const total = Date.now() - t0;
 const ttft = firstTokenAt ? firstTokenAt - t0 : null;
-const tps = reply.content ? Math.round((reply.content.split(/\s+/).length / total) * 60000) : 0;
+const tps = reply.content ? wordsPerSecond(reply.content, total) : 0;
+// A canned reply is not a model: the mock brain answers in ~2 ms, which divides
+// out to five figures of "words/s" and describes nothing. Say so rather than
+// print a number that would look impressive in a screenshot and mean nothing.
+const rate =
+  config.llm.provider === "mock"
+    ? "rate n/a (mock brain — canned replies)"
+    : `~${tps} words/s`;
 
-console.log(`  ${C.teal("✔")} first token ${ttft === null ? "n/a (no streaming)" : `${ttft} ms`} · full reply ${total} ms · ~${tps} words/s`);
+console.log(`  ${C.teal("✔")} first token ${ttft === null ? "n/a (no streaming)" : `${ttft} ms`} · full reply ${total} ms · ${rate}`);
 
 // ── 2. tool calling ───────────────────────────────────────────────────────
 process.stdout.write(`  ${C.dim("tool calling …")}\r`);
