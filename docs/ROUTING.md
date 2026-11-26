@@ -96,8 +96,8 @@ in [docs/DIAGNOSTICS.md](DIAGNOSTICS.md).
 | Check | What it observes |
 |---|---|
 | `runtime` | Node version against the `engines` floor |
-| `security` | empty `PINCH_KEY`, `PINCH_AUTO_APPROVE=true` |
-| `data` | data directory writable, and not group/world-readable |
+| `security` | empty `QUASNOOZE_KEY`, `QUASNOOZE_AUTO_APPROVE=true` (the legacy `PINCH_*` names are accepted and mean the same) |
+| `data` | data directory writable, and not group/world-readable — the mode check is POSIX-only; on Windows the row reports NTFS ACLs instead of a false alarm |
 | `brain` | the selected provider and model |
 | `provider.ollama` | **real request** to `/api/tags`: status, latency, model count, whether the selected model is installed |
 | `provider.openai` | **real request** to `/models`: status, latency. A 404/405 is "reachable, this endpoint has no model list", not a failure |
