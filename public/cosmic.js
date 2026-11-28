@@ -1,6 +1,7 @@
 /** Quasnooze conversation UI: no browser speech/recording, third-party scripts or auto approvals. */
 import { createVisualizer, nativeSignal } from "./visualizer.js";
 import { createDemoSignal } from "./demo-signal.js";
+import { voiceEventBus } from '../src/voice/event-bus.js';
 export function consumeFrames(buffer) {
   const normalized = buffer.replace(/\r\n/g, "\n");
   const parts = normalized.split("\n\n"),
@@ -99,6 +100,12 @@ function init() {
     $("stateTitle").textContent = details[phase]?.[0] || details.idle[0];
     $("stateDetail").textContent =
       detail || details[phase]?.[1] || details.idle[1];
+    
+    // Handle barge-in events
+    if (phase === "speaking" && voiceEventBus.getLastEvent('speech-start')) {
+      // User started speaking during assistant playback
+      handleBargeIn();
+    }
   }
   function later(fn, ms) {
     const id = setTimeout(() => {
@@ -107,6 +114,28 @@ function init() {
     }, ms);
     timers.add(id);
   }
+  function handleBargeIn() {
+    // Cancel current speech generation
+    if (pending && pending.kind === "web") {
+      pending = null;
+      $("approval").hidden = true;
+    }
+    
+    // Stop native speech if active
+    if (native && native.phase === "speaking") {
+      api("/api/desktop", { action: "stop_speech" });
+    }
+    
+    // Emit barge-in event
+    voiceEventBus.emit('barge-in', {
+      timestamp: performance.now(),
+      cancelledTurn: true
+    });
+    
+    // Reset state
+    state("listening");
+  }
+  
   function controls() {
     $("send").disabled =
       busy || nativeBusy || previewing || (!demo && !connected);
