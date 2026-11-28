@@ -1,4 +1,6 @@
 /** Optional local Whisper HTTP adapter. Deadlines include response body consumption. */
+import { voiceEventBus } from './voice/event-bus.js';
+
 export const AUDIO_MAX_BYTES = 10_000_000;
 export const WHISPER_TIMEOUT_MS = 5_000;
 export const AUDIO_TYPES = new Set(["audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/flac"]);
@@ -20,6 +22,9 @@ export function cleanPrompt(value) {
   return text ? text.slice(-PROMPT_MAX_CHARS) : "";
 }
 
+/**
+ * Enhanced transcription function with barge-in detection
+ */
 export async function transcribeAudio(bytes, mime, url, { prompt } = {}) {
   const signal = AbortSignal.timeout(WHISPER_TIMEOUT_MS);
   const form = new FormData();
@@ -29,21 +34,53 @@ export async function transcribeAudio(bytes, mime, url, { prompt } = {}) {
   // boundary; the previous chunk's text is what puts them back.
   const context = cleanPrompt(prompt);
   if (context) form.append("prompt", context);
-  const response = await fetch(url, { method: "POST", body: form, signal });
-  if (!response.ok) { await response.body?.cancel(); throw new Error(`Whisper returned HTTP ${response.status}; check WHISPER_URL and its server logs.`); }
-  // Bound a malicious/misconfigured upstream response too.
-  let text = "", count = 0;
-  const decoder = new TextDecoder();
-  for await (const chunk of response.body) {
-    count += chunk.byteLength;
-    if (count > 1_000_000) throw new Error("Whisper response exceeded 1 MB.");
-    text += decoder.decode(chunk, { stream: true });
+  
+  // Emit transcription start event
+  voiceEventBus.emit('transcription-start', {
+    timestamp: performance.now(),
+    context: context
+  });
+  
+  let bargeDetected = false;
+  
+  // Subscribe to barge-in events during transcription
+  const unsubscribeBarge = voiceEventBus.on('barge-in', () => {
+    bargeDetected = true;
+    signal?.abort();
+  });
+  
+  try {
+    const response = await fetch(url, { method: "POST", body: form, signal });
+    if (!response.ok) { await response.body?.cancel(); throw new Error(`Whisper returned HTTP ${response.status}; check WHISPER_URL and its server logs.`); }
+    // Bound a malicious/misconfigured upstream response too.
+    let text = "", count = 0;
+    const decoder = new TextDecoder();
+    for await (const chunk of response.body) {
+      // Check for barge-in during streaming
+      if (bargeDetected) {
+        break;
+      }
+      count += chunk.byteLength;
+      if (count > 1_000_000) throw new Error("Whisper response exceeded 1 MB.");
+      text += decoder.decode(chunk, { stream: true });
+    }
+    text += decoder.decode();
+    let data;
+    try { data = JSON.parse(text); } catch { throw new Error("Whisper returned invalid JSON; check the transcription endpoint."); }
+    if (typeof data.text !== "string") throw new Error("Whisper response has no text field; use an OpenAI-compatible transcription endpoint.");
+    
+    // Emit transcription completion event
+    voiceEventBus.emit('transcription-complete', {
+      timestamp: performance.now(),
+      text: data.text,
+      bargeDetected
+    });
+    
+    return data.text;
+  } finally {
+    // Clean up event listener
+    unsubscribeBarge();
   }
-  text += decoder.decode();
-  let data;
-  try { data = JSON.parse(text); } catch { throw new Error("Whisper returned invalid JSON; check the transcription endpoint."); }
-  if (typeof data.text !== "string") throw new Error("Whisper response has no text field; use an OpenAI-compatible transcription endpoint.");
-  return data.text;
 }
 
 /** Doctor is not permission to contact an arbitrary destination from a file.

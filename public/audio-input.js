@@ -115,6 +115,9 @@ export const ENDPOINTER_DEFAULTS = Object.freeze({
  * @param {{speechThreshold?: number, silenceThreshold?: number, onsetFrames?: number,
  *          silenceMs?: number, minSpeechMs?: number, maxUtteranceMs?: number}} [options]
  */
+/** Import the voice event bus for barge-in detection */
+import { voiceEventBus } from '../src/voice/event-bus.js';
+
 export function createEndpointer(options = {}) {
   const cfg = { ...ENDPOINTER_DEFAULTS, ...options };
   let speaking = false, loud = 0, speechStart = 0, lastVoiceAt = 0, silenceSince = 0, now = 0;
@@ -150,12 +153,26 @@ export function createEndpointer(options = {}) {
         speaking = true;
         lastVoiceAt = now;
         silenceSince = 0;
+        // Emit speech-start event via the voice event bus
+        voiceEventBus.emit('speech-start', {
+          timestamp: now,
+          level: value
+        });
         return { type: "speech-start", at: now };
       }
       if (value >= cfg.silenceThreshold) { lastVoiceAt = now; silenceSince = 0; }
       else if (silenceSince === 0) silenceSince = now;
       if (lastVoiceAt - speechStart >= cfg.maxUtteranceMs) return end("max-length", now);
-      if (silenceSince !== 0 && now - lastVoiceAt >= cfg.silenceMs) return end("silence", now);
+      if (silenceSince !== 0 && now - lastVoiceAt >= cfg.silenceMs) {
+        // Emit endpoint event via the voice event bus
+        voiceEventBus.emit('speech-endpoint', {
+          reason: 'silence',
+          timestamp: now,
+          speechMs: lastVoiceAt - speechStart,
+          endpointMs: now - lastVoiceAt
+        });
+        return end("silence", now);
+      }
       return null;
     },
     get speaking() { return speaking; },
